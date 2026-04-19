@@ -32,7 +32,7 @@ cast to TV
 ### Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ironhide
+git clone https://github.com/Manteh/ironhide
 cd ironhide
 ./setup.sh
 ```
