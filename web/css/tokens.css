@@ -8,9 +8,9 @@
 }
 :root, [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0a0b10; --bg-elev: #10121a; --surface: #141722; --surface-2: #1b1f2d; --hover: rgba(255,255,255,.05);
-  --border: rgba(255,255,255,.08); --border-strong: rgba(255,255,255,.15);
-  --text: #f3f4f8; --text-2: #b6bacb; --muted: #7e8396;
+  --bg: #0d0d0e; --bg-elev: #121213; --surface: #171718; --surface-2: #232325; --hover: rgba(255,255,255,.05);
+  --border: rgba(255,255,255,.07); --border-strong: rgba(255,255,255,.12);
+  --text: #f4f4f5; --text-2: #b9b9c0; --muted: #7c7c86;
   --shadow: 0 24px 60px -24px rgba(0,0,0,.85); --scrim: rgba(4,5,9,.72);
   --glow-a: transparent; --glow-b: transparent;
 }
@@ -30,16 +30,16 @@
   --glow-a: transparent; --glow-b: transparent;
   --ok: #17a367; --warn: #c9800b; --err: #d93a40;
 }
-[data-accent="indigo"]  { --accent: #6d6af6; --accent-2: #5b58e8; --on-accent: #fff; }
+[data-accent="indigo"]  { --accent: #5b57e6; --accent-2: #4a45d6; --on-accent: #fff; }
 [data-accent="orange"]  { --accent: #ff7a2e; --accent-2: #ea6414; --on-accent: #fff; }
 [data-accent="emerald"] { --accent: #10b981; --accent-2: #0a9d6c; --on-accent: #fff; }
 [data-accent="rose"]    { --accent: #f43f5e; --accent-2: #e11d48; --on-accent: #fff; }
 [data-accent="sky"]     { --accent: #0ea5e9; --accent-2: #0284c7; --on-accent: #fff; }
 :root { --accent-soft: color-mix(in srgb, var(--accent) 15%, transparent); --accent-line: color-mix(in srgb, var(--accent) 55%, transparent); }
 
-[data-radius="sharp"] { --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-xl: 10px; }
-[data-radius="round"], :root { --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px; }
-[data-radius="pill"]  { --r-sm: 12px; --r-md: 18px; --r-lg: 24px; --r-xl: 30px; }
+[data-radius="sharp"] { --r-sm: 5px; --r-md: 7px; --r-lg: 9px; --r-xl: 12px; }
+[data-radius="round"], :root { --r-sm: 10px; --r-md: 14px; --r-lg: 18px; --r-xl: 24px; }
+[data-radius="pill"]  { --r-sm: 14px; --r-md: 20px; --r-lg: 26px; --r-xl: 32px; }
 
 :root { --card-pad: var(--s5); --gap: var(--s4); --row-pad: 12px 14px; --btn-h: 38px; --page-pad: var(--s7); }
 [data-density="compact"] { --card-pad: var(--s4); --gap: var(--s3); --row-pad: 8px 12px; --btn-h: 32px; --page-pad: var(--s5); }

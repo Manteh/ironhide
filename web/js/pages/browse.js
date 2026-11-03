@@ -101,14 +101,14 @@ async function loadTab(reset = true) {
   if (my !== st.token) return;
   st.items = items; st.busy = false;
   grid.innerHTML = items.length ? items.map(card).join('') : `<div class="empty">${st.tab === 'shelf' ? 'Your shelf is empty. Open a title and tap Save.' : st.tab === 'continue' ? 'Nothing in progress yet.' : 'Nothing here right now.'}</div>`;
-  more.innerHTML = st.more ? '<button class="pill ghost2" id="loadMore">Load more</button>' : '';
+  more.innerHTML = st.more ? '<button class="btn" id="loadMore">Load more</button>' : '';
   $('#loadMore', root)?.addEventListener('click', () => loadTab(false));
 }
 
 function paintChrome() {
   $('#tabs', root).innerHTML = TABS.map((t) => `<a href="${hrefOf(t)}" class="${t[0] === st.tab ? 'on' : ''}">${t[1]}${t[0] === 'shelf' && wl.size ? `<em>${wl.size}</em>` : ''}</a>`).join('');
   const isFeed = !['home', 'continue', 'shelf', 'boxoffice'].includes(st.tab);
-  $('#tools', root).innerHTML = isFeed ? `<select id="gsel" class="gsel" aria-label="Genre"><option value="">All genres</option>${genres.map((g) => `<option ${g === st.genre ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select>` : '';
+  $('#tools', root).innerHTML = isFeed ? `<select id="gsel" class="sel" aria-label="Genre"><option value="">All genres</option>${genres.map((g) => `<option ${g === st.genre ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select>` : '';
   $('#gsel', root)?.addEventListener('change', (e) => { st.genre = e.target.value; loadTab(true); });
   $('.on', $('#tabs', root))?.scrollIntoView({ inline: 'center', block: 'nearest' });
   // recent rail
