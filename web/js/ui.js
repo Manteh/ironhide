@@ -64,12 +64,18 @@ export function toast(msg, kind = '') {
   setTimeout(() => el.remove(), 3800);
 }
 
+export const wl = new Set(); // imdb ids on the watchlist, filled at boot
+
+// Poster card. Whole poster links to the title; hover buttons play or save in one click.
 export function card(item, extra = '') {
   const type = item.type === 'tv' ? 'series' : item.type;
-  return `<a class="card" href="#/title/${esc(type)}/${esc(item.imdbId)}">
-    <div class="img" style="background-image:url('${esc(item.poster || posterOf(item.imdbId))}')">${extra}</div>
-    <div class="t">${esc(item.title)}</div>
-    <div class="m">${esc(item.year || '')}${item.rating ? ' · ★ ' + esc(item.rating) : ''}</div></a>`;
+  const href = `#/title/${esc(type)}/${esc(item.imdbId)}`;
+  const data = `data-id="${esc(item.imdbId)}" data-type="${esc(type)}" data-title="${esc(item.title)}" data-year="${esc(item.year || '')}" data-poster="${esc(item.poster || '')}" data-rating="${esc(item.rating || '')}"`;
+  return `<div class="card" ${data}>
+    <a class="img" href="${href}" aria-label="${esc(item.title)}" style="background-image:url('${esc(item.poster || posterOf(item.imdbId))}')">${extra}</a>
+    <div class="ov"><button class="ob play" data-qp aria-label="Play ${esc(item.title)}">${icon('play')}</button><button class="ob save ${wl.has(item.imdbId) ? 'on' : ''}" data-wl aria-label="Save to watchlist">${icon('bookmark')}</button></div>
+    <a class="t" href="${href}">${esc(item.title)}</a>
+    <div class="m">${esc(item.year || '')}${item.rating ? ' · ★ ' + esc(item.rating) : ''}</div></div>`;
 }
 
 // Apply appearance settings to <html> and cache them for a flash-free next load.

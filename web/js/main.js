@@ -1,7 +1,7 @@
 import { api, post } from './api.js';
-import { $, $$, esc, icon, avatar, LOGO, applyAppearance, fmtTime, toast } from './ui.js';
+import { $, $$, esc, icon, avatar, LOGO, applyAppearance, fmtTime, toast, wl } from './ui.js';
 
-export const store = { settings: null, nodes: [] };
+export const store = { settings: null, nodes: [], history: [] };
 const routes = [];
 let leaveFns = [];
 export const onLeave = (fn) => leaveFns.push(fn);
@@ -15,57 +15,74 @@ export function route(pattern, loader) {
 export async function saveSettings(patch) {
   store.settings = await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
   applyAppearance(store.settings.appearance);
-  renderNav();
+  renderChrome();
   return store.settings;
 }
 
+// ---------- Actions shared by every page ----------
+export async function quickPlay(item) {
+  toast(`Finding the best stream for ${item.title}…`);
+  try {
+    const r = await post('/api/quickplay', item);
+    const ep = r.played?.season ? ` S${String(r.played.season).padStart(2, '0')}E${String(r.played.episode).padStart(2, '0')}` : '';
+    toast(`Playing ${item.title}${ep}`, 'ok');
+    setTimeout(() => { window.pollRemote?.(); refreshHistory(); }, 3000);
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function toggleSave(item, btn) {
+  const r = await post('/api/watchlist/toggle', item);
+  r.saved ? wl.add(item.imdbId) : wl.delete(item.imdbId);
+  btn?.classList.toggle('on', r.saved);
+  toast(r.saved ? 'Saved to watchlist' : 'Removed from watchlist', 'ok');
+  renderChrome();
+}
+
+document.addEventListener('click', (e) => {
+  const qp = e.target.closest('[data-qp]'), sv = e.target.closest('[data-wl]');
+  if (!qp && !sv) return;
+  const c = e.target.closest('[data-id]'); if (!c) return;
+  e.preventDefault(); e.stopPropagation();
+  const item = { imdbId: c.dataset.id, type: c.dataset.type, title: c.dataset.title, year: c.dataset.year, poster: c.dataset.poster, rating: c.dataset.rating };
+  if (qp) {
+    const s = qp.dataset.season ? { season: +qp.dataset.season, episode: +qp.dataset.episode } : {};
+    quickPlay({ ...item, ...s });
+  } else toggleSave(item, sv);
+}, true);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); $('#q')?.focus(); }
+});
+
 // ---------- Shell ----------
+const NAV = [['/', 'Home', 'home', /^#\/?$/], ['/browse/movies', 'Movies', 'film', /^#\/browse\/movies/], ['/browse/series', 'Series', 'tv', /^#\/browse\/series/], ['/library', 'Library', 'bookmark', /^#\/library/]];
+
 function renderShell() {
-  $('#app').innerHTML = `<header class="nav" id="nav"></header><main id="view"></main>`;
-  renderNav();
+  $('#app').innerHTML = `<div class="shell"><aside class="side" id="side"></aside><div class="main"><header class="topbar" id="topbar"></header><main id="view"></main></div></div><nav class="tabbar" id="tabbar" aria-label="Main"></nav>`;
+  renderChrome();
 }
 
-function renderNav() {
-  const s = store.settings, p = s.profile;
+function renderChrome() {
+  const s = store.settings, p = s.profile, hash = location.hash || '#/';
   const online = store.nodes.filter((n) => n.status === 'online').length;
-  const hash = location.hash || '#/';
-  const on = (m) => (m.test(hash) ? 'on' : '');
+  const recent = []; const seen = new Set();
+  for (const h of store.history) { if (!seen.has(h.imdbId)) { seen.add(h.imdbId); recent.push(h); } if (recent.length >= 5) break; }
   const q = hash.startsWith('#/search/') ? decodeURIComponent(hash.slice(9)) : '';
-  const nav = $('#nav');
-  const hadFocus = document.activeElement?.id === 'q';
-  nav.innerHTML = `
-    <a class="brand" href="#/">${LOGO}<span>IronHide</span></a>
-    <nav class="nav-links">
-      <a href="#/" class="${on(/^#\/?$/)}">Home</a>
-      <a href="#/library" class="${on(/^#\/library/)}">Library</a>
-    </nav>
-    <div class="nav-spacer"></div>
-    <form class="search" id="searchForm" role="search">${icon('search')}<input id="q" type="search" placeholder="Search movies and shows" autocomplete="off" value="${esc(q)}" aria-label="Search" /></form>
-    <a class="pill-btn" id="nodePill" href="#/settings/nodes" title="Nodes"><span class="dot ${online ? 'online' : 'offline'}"></span><b class="cnt">${online}</b><span class="lbl">online</span></a>
-    <button class="avatar-btn" id="avBtn" aria-label="Account menu" aria-haspopup="true">${avatar(p, 34)}</button>`;
-  $('#searchForm').onsubmit = (e) => { e.preventDefault(); const v = $('#q').value.trim(); if (v) location.hash = '#/search/' + encodeURIComponent(v); };
-  $('#avBtn').onclick = (e) => { e.stopPropagation(); toggleMenu(); };
-  if (hadFocus) { const i = $('#q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
-}
 
-function toggleMenu() {
-  const old = $('#menu'); if (old) return old.remove();
-  const s = store.settings, p = s.profile, th = s.appearance.theme;
-  const m = document.createElement('div');
-  m.className = 'menu'; m.id = 'menu';
-  m.innerHTML = `<div class="who">${avatar(p, 40)}<div><b>${esc(p.name)}</b><span>Private library</span></div></div><hr>
-    <a href="#/settings/profile">${icon('user')} Profile</a>
-    <a href="#/settings/appearance">${icon('palette')} Appearance</a>
-    <a href="#/settings/connectors">${icon('plug')} Connectors</a>
-    <a href="#/settings/nodes">${icon('nodes')} Nodes</a><hr>
-    <div class="seg-mini" role="group" aria-label="Theme">
-      ${[['dark', 'moon'], ['light', 'sun'], ['system', 'monitor']].map(([t, ic]) => `<button data-t="${t}" class="${th === t ? 'on' : ''}" aria-label="${t}">${icon(ic)}</button>`).join('')}
+  $('#side').innerHTML = `
+    <a class="brand" href="#/">${LOGO}<span>IronHide</span></a>
+    <nav class="sidenav" aria-label="Main">${NAV.map(([h, l, ic, re]) => `<a href="#${h}" class="${re.test(hash) ? 'on' : ''}">${icon(ic)}<span>${l}</span>${l === 'Library' && wl.size ? `<em class="count" style="font-style:normal">${wl.size}</em>` : ''}</a>`).join('')}</nav>
+    ${recent.length ? `<div><h4>Recently watched</h4><div class="recent">${recent.map((h) => `<a href="#/title/${h.type === 'tv' ? 'series' : 'movie'}/${esc(h.imdbId)}"><i style="background-image:url('https://images.metahub.space/poster/small/${esc(h.imdbId)}/img')"></i><span>${esc(h.title)}</span></a>`).join('')}</div></div>` : ''}
+    <div class="side-foot">
+      <a class="status-chip" href="#/settings/nodes" title="Nodes">${`<span class="dot ${online ? 'online' : 'offline'}" style="margin:0"></span>`}<b>${online} node${online === 1 ? '' : 's'} online</b></a>
+      <div class="me"><a href="#/settings/profile" aria-label="Profile">${avatar(p, 34)}</a><div class="nm"><b>${esc(p.name)}</b><small>Private library</small></div>
+        <a class="btn ghost icon" href="#/settings/profile" aria-label="Settings">${icon('sliders')}</a></div>
     </div>`;
-  document.body.appendChild(m);
-  m.onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) { saveSettings({ appearance: { theme: b.dataset.t } }).then(() => { m.remove(); }); } else if (e.target.closest('a')) m.remove(); };
+  $('#topbar').innerHTML = `<form class="search" id="searchForm" role="search">${icon('search')}<input id="q" type="search" placeholder="Search movies and series" autocomplete="off" value="${esc(q)}" aria-label="Search"><kbd>/</kbd></form>`;
+  $('#searchForm').onsubmit = (e) => { e.preventDefault(); const v = $('#q').value.trim(); if (v) location.hash = '#/search/' + encodeURIComponent(v); };
+  $('#tabbar').innerHTML = [...NAV.map(([h, l, ic, re]) => [h, l, ic, re.test(hash)]), ['/settings/profile', 'Settings', 'user', /^#\/settings/.test(hash)]]
+    .map(([h, l, ic, on]) => `<a href="#${h}" class="${on ? 'on' : ''}">${icon(ic)}<span>${l}</span></a>`).join('');
 }
-document.addEventListener('click', (e) => { const m = $('#menu'); if (m && !m.contains(e.target)) m.remove(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#menu')?.remove(); });
 
 // ---------- Router ----------
 async function navigate() {
@@ -78,9 +95,9 @@ async function navigate() {
     const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
     view.innerHTML = '<div class="page"><div class="note">Loading…</div></div>';
     window.scrollTo(0, 0);
+    renderChrome();
     try { await (await r.loader()).default(view, params); }
     catch (e) { view.innerHTML = `<div class="page"><div class="note">${esc(e.message)}</div></div>`; }
-    renderNav();
     return;
   }
   view.innerHTML = '<div class="page"><div class="note">Page not found</div></div>';
@@ -108,11 +125,10 @@ function setupRemote() {
   window.pollRemote = poll;
 }
 
-async function refreshNodes() {
-  try { store.nodes = await api('/api/nodes'); renderNav(); } catch {}
-}
+async function refreshNodes() { try { store.nodes = await api('/api/nodes'); renderChrome(); } catch {} }
+async function refreshHistory() { try { store.history = await api('/api/history'); renderChrome(); } catch {} }
+window.refreshNodes = refreshNodes;
 
-// ---------- Boot ----------
 function splash() {
   const g = $('#gate');
   if (sessionStorage.getItem('ih-in')) return g.remove();
@@ -122,6 +138,7 @@ function splash() {
 }
 
 route('/', () => import('./pages/home.js'));
+route('/browse/:kind', () => import('./pages/browse.js'));
 route('/library', () => import('./pages/library.js'));
 route('/search/:q', () => import('./pages/search.js'));
 route('/title/:type/:id', () => import('./pages/title.js'));
@@ -129,11 +146,11 @@ route('/settings', () => import('./pages/settings.js'));
 route('/settings/:section', () => import('./pages/settings.js'));
 
 (async function boot() {
-  store.settings = await api('/api/settings');
-  applyAppearance(store.settings.appearance);
+  const [settings, list, history] = await Promise.all([api('/api/settings'), api('/api/watchlist').catch(() => []), api('/api/history').catch(() => [])]);
+  store.settings = settings; store.history = history; list.forEach((w) => wl.add(w.imdbId));
+  applyAppearance(settings.appearance);
   matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => applyAppearance(store.settings.appearance));
   splash(); renderShell(); setupRemote();
   window.addEventListener('hashchange', navigate);
   navigate(); refreshNodes(); setInterval(refreshNodes, 30000);
-  window.refreshNodes = refreshNodes;
 })();

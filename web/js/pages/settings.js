@@ -77,10 +77,9 @@ function playback(body) {
       row('HDR / Dolby Vision', 'Needs a capable display.', seg('hdr', [['prefer', 'Prefer'], ['any', 'No preference'], ['avoid', 'Avoid']], p.hdr)) +
       row('Remux releases', 'Largest files, untouched quality.', seg('remux', [['prefer', 'Prefer'], ['any', 'No preference'], ['avoid', 'Avoid']], p.remux)) +
       row('Maximum file size', '0 means no limit.', `<div style="display:flex;align-items:center;gap:8px"><input id="maxsz" class="input" type="number" min="0" max="500" value="${p.maxSizeGb}" style="width:90px"><span class="muted">GB</span></div>`) +
-      row('Cached streams only', 'Skip downloads that are not instantly available.', `<button class="switch ${p.cachedOnly ? 'on' : ''}" id="cached" role="switch" aria-checked="${p.cachedOnly}" aria-label="Cached only"></button>`) +
-      row('Default play target', 'Where Play sends the stream.', seg('target', [['mac', 'This Mac', 'laptop'], ['tv', 'Samsung TV', 'tv']], p.target)),
+      row('Cached streams only', 'Skip downloads that are not instantly available.', `<button class="switch ${p.cachedOnly ? 'on' : ''}" id="cached" role="switch" aria-checked="${p.cachedOnly}" aria-label="Cached only"></button>`),
       foot: `<span>Applies to the web app and Claude tools.</span><button class="btn primary" id="savePb">Save changes</button>` });
-    ['quality', 'hdr', 'remux', 'target'].forEach((k) => bindSeg(body, k, (v) => { p[k] = v; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); }));
+    ['quality', 'hdr', 'remux'].forEach((k) => bindSeg(body, k, (v) => { p[k] = v; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); }));
     $('#cached', body).onclick = () => { p.cachedOnly = !p.cachedOnly; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); };
     $('#savePb', body).onclick = () => { p.maxSizeGb = +$('#maxsz', body).value || 0; saveSettings({ playback: p }).then(() => toast('Playback preferences saved', 'ok')); };
   };
@@ -155,7 +154,7 @@ async function nodes(body) {
 async function about(body) {
   const h = await api('/api/health').catch(() => ({}));
   body.innerHTML =
-    card({ title: 'IronHide', desc: 'A private media hub for your Mac, TV and Claude.', body:
+    card({ title: 'IronHide', desc: 'A private media hub for your Mac and Claude.', body:
       row('Service', 'Local daemon', `<span class="badge ok">Running · pid ${esc(h.pid || '?')}</span>`) +
       row('Address', 'Only reachable from this Mac', `<span class="t2">${esc(location.host)}</span>`) +
       row('Config folder', 'Settings, history and keys', `<span class="t2">~/.config/ironhide</span>`) }) +
@@ -163,7 +162,7 @@ async function about(body) {
       foot: `<span>This cannot be undone.</span><button class="btn danger" id="reset">Reset to defaults</button>` });
   $('#reset', body).onclick = async () => {
     if (!confirm('Reset appearance and playback to defaults?')) return;
-    await saveSettings({ appearance: { theme: 'dark', accent: 'indigo', density: 'comfortable', radius: 'round', motion: 'full', posterSize: 'm' }, playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true, target: 'mac' } });
+    await saveSettings({ appearance: { theme: 'dark', accent: 'indigo', density: 'comfortable', radius: 'round', motion: 'full', posterSize: 'm' }, playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true } });
     toast('Defaults restored', 'ok');
   };
 }

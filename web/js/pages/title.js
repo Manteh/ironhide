@@ -11,7 +11,7 @@ export default async function title(el, { type, id }) {
     api(`/api/title/${id}?type=${type}`), api('/api/history').catch(() => []), api('/api/watchlist').catch(() => []),
   ]);
   const prefs = store.settings.playback;
-  const st = { season: null, episode: null, cat: 'best', target: prefs.target, streams: null, saved: watchlist.some((w) => w.imdbId === id) };
+  const st = { season: null, episode: null, cat: 'best', streams: null, saved: watchlist.some((w) => w.imdbId === id) };
 
   const watched = (s, e) => history.find((h) => h.imdbId === id && h.season === s && h.episode === e);
   if (type === 'series') {
@@ -22,7 +22,6 @@ export default async function title(el, { type, id }) {
     st.episode = last ? ((last.percent || 0) >= 90 ? last.episode + 1 : last.episode) : null;
     if (st.episode && !(meta.seasons[st.season] || []).some((x) => x.episode === st.episode)) { st.season = Math.min(st.season + 1, seasons.at(-1)); st.episode = 1; }
   }
-  const tvOnline = () => store.nodes.some((n) => n.id === 'tv' && n.status === 'online');
 
   function draw() {
     const seasons = Object.keys(meta.seasons || {}).map(Number).sort((a, b) => a - b);
@@ -82,8 +81,7 @@ export default async function title(el, { type, id }) {
     if (!st.streams) { loadStreams(); return; }
     const list = view(st.streams).slice(0, 30);
     box.innerHTML = `<div class="streams-head"><h2 style="margin:0">Streams <span class="muted" style="font-weight:400">${st.streams.length}</span></h2>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="muted">Play on</span>
-        <div class="seg"><button data-tg="mac" class="${st.target === 'mac' ? 'on' : ''}">${icon('laptop')} This Mac</button><button data-tg="tv" class="${st.target === 'tv' ? 'on' : ''}">${icon('tv')} Samsung TV ${tvOnline() ? '' : '<span class="dot offline"></span>'}</button></div></div></div>
+</div>
       <div class="seg" style="margin-bottom:12px">${CATS.map(([k, l]) => `<button data-c="${k}" class="${st.cat === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       ${list.length ? list.map((s) => `<div class="stream ${s.best ? 'best' : ''}"><div class="res">${esc(s.resolution || '—')}</div>
         <div><div class="line">${s.best ? '<span class="badge acc">Best match</span>' : ''}${s.cached ? '<span class="badge ok">' + icon('bolt') + ' Cached</span>' : '<span class="badge warn">Download</span>'}
@@ -91,13 +89,12 @@ export default async function title(el, { type, id }) {
           <div class="q" title="${esc(s.quality)}">${esc(s.quality)}</div></div>
         <div class="acts"><button class="btn primary" data-p="${s.index}">${icon('play')} Play</button></div></div>`).join('') : '<div class="note">No streams for this filter.</div>'}`;
     $$('[data-c]', box).forEach((b) => (b.onclick = () => { st.cat = b.dataset.c; renderStreams(); }));
-    $$('[data-tg]', box).forEach((b) => (b.onclick = () => { st.target = b.dataset.tg; renderStreams(); }));
     $$('[data-p]', box).forEach((b) => (b.onclick = () => play(+b.dataset.p)));
   }
 
   async function play(index) {
     try {
-      const r = await post('/api/play', { index, target: st.target });
+      const r = await post('/api/play', { index });
       toast((r.content?.[0]?.text || 'Started').split('\n')[0].slice(0, 100), 'ok');
       setTimeout(() => window.pollRemote?.(), 2500);
     } catch (e) { toast(e.message, 'err'); }

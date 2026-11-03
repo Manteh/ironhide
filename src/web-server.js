@@ -154,10 +154,32 @@ async function handleApi(req, res, urlPath) {
       })));
     }
 
+    // One-click play: pick the best stream for the user's preferences and start it.
+    if (method === 'POST' && urlPath === '/api/quickplay') {
+      const body = await parseBody(req);
+      const type = body.type === 'series' || body.type === 'tv' ? 'tv' : 'movie';
+      const playback = (await getSettings()).playback;
+      let { season, episode } = body, resumeFrom;
+      const hist = await getHistory(200);
+      if (type === 'tv' && !(season && episode)) {
+        const last = hist.find(h => h.imdbId === body.imdbId && h.season);
+        if (last) { season = last.season; episode = (last.percent || 0) >= 90 ? last.episode + 1 : last.episode; if (episode === last.episode) resumeFrom = last.position; }
+        else { season = 1; episode = 1; }
+      } else if (type === 'movie') {
+        const last = hist.find(h => h.imdbId === body.imdbId);
+        if (last && (last.percent || 0) < 90 && last.position > 30) resumeFrom = last.position;
+      }
+      await tools.ironhide_streams.handler({ imdbId: body.imdbId, title: body.title || '', type, season, episode });
+      const { streams } = getLoadedStreams();
+      const best = pickBest(streams, playback);
+      if (!best) return errorResponse(res, 'No streams found for this title', 404);
+      const out = await tools.ironhide_play.handler({ index: best, resumeFrom });
+      return jsonResponse(res, { ...out, played: { season, episode, resumeFrom: resumeFrom || 0 } });
+    }
+
     if (method === 'POST' && urlPath === '/api/play') {
       const body = await parseBody(req);
-      const tool = body.target === 'tv' ? tools.ironhide_cast_tv : tools.ironhide_play;
-      return jsonResponse(res, await tool.handler({ index: Number(body.index), resumeFrom: body.resumeFrom }));
+      return jsonResponse(res, await tools.ironhide_play.handler({ index: Number(body.index), resumeFrom: body.resumeFrom }));
     }
 
     if (method === 'POST' && urlPath === '/api/control') {

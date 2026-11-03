@@ -5,7 +5,6 @@ import { join } from 'path';
 import { userInfo } from 'os';
 import { CONFIG_DIR, getConfig, saveConfig } from './config.js';
 import { isMpvRunning, getNowPlaying } from './mpv-ipc.js';
-import { isTVConnectedAsync } from './tizen-bridge.js';
 
 const FILE = join(CONFIG_DIR, 'settings.json');
 const WATCHLIST = join(CONFIG_DIR, 'watchlist.json');
@@ -13,7 +12,7 @@ const WATCHLIST = join(CONFIG_DIR, 'watchlist.json');
 const defaults = () => ({
   profile: { name: cap(userInfo().username), avatar: { icon: 'film', color: 'indigo' } },
   appearance: { theme: 'dark', accent: 'indigo', density: 'comfortable', radius: 'round', motion: 'full', posterSize: 'm' },
-  playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true, target: 'mac' },
+  playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true },
 });
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : 'You');
 
@@ -30,7 +29,6 @@ const ALLOWED = {
     quality: ['auto', '2160p', '1080p', '720p'],
     hdr: ['prefer', 'any', 'avoid'],
     remux: ['prefer', 'any', 'avoid'],
-    target: ['mac', 'tv'],
   },
 };
 
@@ -174,9 +172,8 @@ export async function getNodes(force = false) {
   const cfg = getConfig();
   const active = cfg.debrid_provider;
 
-  const [mpvRunning, tv, torbox, realdebrid, alldebrid, cinemeta, torrentio, comet, subtitles, trakt] = await Promise.all([
+  const [mpvRunning, torbox, realdebrid, alldebrid, cinemeta, torrentio, comet, subtitles, trakt] = await Promise.all([
     Promise.resolve(isMpvRunning()).catch(() => false),
-    isTVConnectedAsync().catch(() => false),
     testConnector('torbox'), testConnector('realdebrid'), testConnector('alldebrid'),
     testConnector('cinemeta'), testConnector('torrentio'), testConnector('comet'), testConnector('subtitles'),
     testConnector('trakt'),
@@ -187,7 +184,6 @@ export async function getNodes(force = false) {
   const debrid = { torbox, realdebrid, alldebrid };
   const nodes = [
     { id: 'mac', group: 'players', name: 'This Mac', sub: 'mpv player', status: mpvPath ? 'online' : 'error', detail: np ? `Playing: ${np.title}` : mpvPath ? 'Idle' : 'mpv not installed', busy: !!np },
-    { id: 'tv', group: 'players', name: 'Samsung TV', sub: 'TizenBrew app', status: tv ? 'online' : 'offline', detail: tv ? 'Connected' : 'Open IronHide on the TV to connect' },
     ...['torbox', 'realdebrid', 'alldebrid'].map((id) => ({
       id, group: 'debrid', name: { torbox: 'TorBox', realdebrid: 'Real-Debrid', alldebrid: 'AllDebrid' }[id], sub: id === active ? 'Active debrid' : 'Debrid',
       ...debrid[id], active: id === active, configurable: true,
