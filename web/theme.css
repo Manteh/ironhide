@@ -1,25 +1,44 @@
-/* IronHide "members only" theme — overrides tokens on every page. */
+/* IronHide theme: soft, premium dark UI. Overrides tokens on every page. */
 :root {
-  --bg: #050507; --card: #0d0d11; --sidebar: #08080b;
-  --accent: #c6ff3d; --accent-hover: #ddff7a; --text: #e9e9ec; --muted: #6f6f7a; --border: #1a1a21;
-  --radius: 2px; --radius-sm: 2px;
-  --serif: "Bodoni 72", "Didot", "Bodoni MT", "Playfair Display", Georgia, serif;
-  --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --bg: #090a0f; --card: #11131b; --sidebar: #0c0d13; --raised: #161925;
+  --accent: #6d6af6; --accent-hover: #8481ff; --accent-soft: rgba(109,106,246,.14);
+  --warm: #ff7a2e; --warm-soft: rgba(255,122,46,.13);
+  --text: #f2f3f8; --muted: #8b8fa0; --border: rgba(255,255,255,.07);
+  --success: #5bd17f; --success-soft: rgba(91,209,127,.13);
+  --radius: 16px; --radius-sm: 10px;
+  --sans: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
+  --ease: cubic-bezier(.2,.7,.2,1);
 }
-body { font-family: var(--sans); font-size: 13px; -webkit-font-smoothing: antialiased; }
-body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 999; opacity: .05;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); }
-.brand-name { font-family: var(--serif); font-size: 20px; letter-spacing: .28em; font-weight: 700; color: var(--accent); }
-.brand-sub { text-transform: uppercase; letter-spacing: .2em; font-size: 10px; color: var(--muted); }
-.header-nav a { text-transform: uppercase; letter-spacing: .18em; font-size: 11px; }
-.header-nav a.active { color: var(--accent); }
+body {
+  font-family: var(--sans); font-size: 14px; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01";
+  background:
+    radial-gradient(900px 420px at 85% -10%, rgba(109,106,246,.10), transparent 60%),
+    radial-gradient(700px 380px at 0% 110%, rgba(255,122,46,.06), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
 button, input { font-family: var(--sans); }
-h1, h2, .hero h1, .row h2, .card .t { font-family: var(--serif); }
 
-/* Access splash, shown once per browser session */
-#gate { position: fixed; inset: 0; background: var(--bg); z-index: 1000; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 14px; transition: opacity .6s ease, visibility .6s; }
+.app-header { background: rgba(9,10,15,.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); gap: 8px; }
+.header-brand { display: flex; align-items: center; gap: 10px; }
+.header-brand svg { width: 24px; height: 24px; flex-shrink: 0; }
+.brand-name { font-size: 17px; font-weight: 650; letter-spacing: -.01em; color: var(--text); text-transform: none; }
+.brand-sub { font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--accent); background: var(--accent-soft);
+  padding: 2px 9px; border-radius: 999px; }
+.header-nav { display: flex; gap: 4px; margin-left: 24px; margin-right: auto; padding: 3px; background: rgba(255,255,255,.04); border-radius: 999px; }
+.header-nav a { color: var(--muted); text-decoration: none; font-weight: 500; font-size: 13px; letter-spacing: 0; text-transform: none;
+  padding: 6px 16px; border-radius: 999px; transition: color .2s var(--ease), background .2s var(--ease); }
+.header-nav a:hover { color: var(--text); }
+.header-nav a.active { color: var(--text); background: var(--raised); box-shadow: 0 0 0 1px var(--border); }
+
+/* Entry splash, once per session */
+#gate { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: radial-gradient(600px 400px at 50% 45%, rgba(109,106,246,.16), transparent 70%), var(--bg);
+  transition: opacity .7s var(--ease), visibility .7s; }
 #gate.out { opacity: 0; visibility: hidden; }
-#gate .lock { font-size: 11px; letter-spacing: .5em; color: var(--muted); text-transform: uppercase; }
-#gate .ok { font-family: var(--serif); font-style: italic; font-size: 30px; letter-spacing: .04em; color: var(--accent); }
-@media (prefers-reduced-motion: reduce) { #gate { transition: none; } }
+#gate svg { width: 64px; height: 64px; animation: rise .9s var(--ease) both; filter: drop-shadow(0 8px 30px rgba(109,106,246,.5)); }
+#gate .ok { font-size: 20px; font-weight: 600; letter-spacing: -.01em; animation: rise .9s .15s var(--ease) both; }
+#gate .lock { font-size: 13px; color: var(--muted); animation: rise .9s .3s var(--ease) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes fadeup { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
