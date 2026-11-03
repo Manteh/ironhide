@@ -138,9 +138,16 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom) {
     if (!location) return { status: 'not_cached', progressFile: null };
     if (/failed_|error|denied/i.test(location)) return { status: 'not_cached', progressFile: null };
 
-    const startArg = resumeFrom > 0 ? `--start=${Math.floor(resumeFrom)}` : '';
+    const mpvArgs = [
+      '--really-quiet', `--script=${LUA_SCRIPT}`, '--alang=eng,en,lit,lt,swe,sv',
+      `--input-ipc-server=${ipcSocket}`,
+      ...(resumeFrom > 0 ? [`--start=${Math.floor(resumeFrom)}`] : []),
+      ...subs.map(x => `--sub-file=${x.path}`),
+      location,
+    ];
     launchScript([
-      `nohup /opt/homebrew/bin/mpv --really-quiet ${startArg} ${sh(location)} > /dev/null 2>&1 &`,
+      `export IRONHIDE_PROGRESS_FILE=${sh(progressFile)}`,
+      `nohup /opt/homebrew/bin/mpv ${mpvArgs.map(sh).join(' ')} > /dev/null 2>&1 &`,
     ]);
 
     const interval = watchMpvProcess(progressFile, onFinish);

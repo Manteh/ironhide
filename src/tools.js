@@ -23,6 +23,7 @@ import {
   stopProxy, hmsToSeconds, secondsToHMS,
 } from "./dlna.js";
 import { spawn } from "child_process";
+import { getConfig } from "./config.js";
 import {
   startBridge, isTVConnected, isTVConnectedAsync,
   tvPlay as nativePlay, tvPause as nativePause, tvResume as nativeResume,
@@ -360,11 +361,11 @@ server.registerTool(
     const langs = parseLangs(stream.quality);
     const langInfo = langs.length > 0 ? ` | Audio: ${langs.join(", ")}` : "";
     const subInfo = globalSubs.length > 0 ? ` | Subs: ${globalSubs.map((s) => s.lang).join(", ")}` : "";
-    const mode = stream.isRD ? "Real-Debrid (instant)" : "torrent stream";
+    const mode = stream.isRD ? ({ torbox: "TorBox", realdebrid: "Real-Debrid", alldebrid: "AllDebrid" }[getConfig().debrid_provider] || "debrid") + (stream.cached ? " (instant)" : "") : "torrent stream";
     const watcherHint = `\n\nIMPORTANT: You MUST now run this background task to detect when mpv closes:\nBash(command: "while echo '{}' | nc -U -w1 /tmp/ironhide-mpv.sock >/dev/null 2>&1; do sleep 2; done; rm -f /tmp/ironhide-mpv.sock; echo IRONHIDE_MPV_CLOSED", run_in_background: true)\nWhen notified it completed, call ironhide_status and proactively ask the user to rate what they watched.`;
 
     // Torrent streams (magnet/webtorrent) take minutes to buffer before mpv opens — skip the mpv check
-    if (result.status === "playing") {
+    if (result.status === "playing" && !stream.isRD) {
       return {
         content: [{
           type: "text",
