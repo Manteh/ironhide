@@ -29,24 +29,24 @@ h1.title { font-size: 30px; font-weight: 700; letter-spacing: -.03em; line-heigh
 .note { color: var(--muted); padding: var(--s8) 0; text-align: center; }
 
 /* ---------- Controls (rounded rectangles, like the reference) ---------- */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: var(--r-sm); border: 1px solid var(--border-strong);
-  background: var(--surface-2); color: var(--text); font-weight: 560; font-size: 14px; white-space: nowrap; transition: background .2s, border-color .2s, transform .15s var(--ease), filter .2s; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--surface-2); box-shadow: inset 0 1px 0 rgba(255,255,255,.05); color: var(--text); font-weight: 520; font-size: 15px; white-space: nowrap; transition: background .2s, border-color .2s, transform .15s var(--ease), filter .2s; }
 .btn:hover { background: color-mix(in srgb, var(--surface-2) 82%, var(--text)); }
 .btn:active { transform: scale(.985); }
 .btn svg { font-size: 15px; }
 .btn.primary { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent) 45%, var(--accent-2)); color: var(--on-accent);
-  border-color: color-mix(in srgb, var(--accent) 60%, #fff); box-shadow: inset 0 1px 0 rgba(255,255,255,.22); padding: 0 22px; }
+  border-color: color-mix(in srgb, var(--accent) 60%, #fff); box-shadow: inset 0 1px 0 rgba(255,255,255,.22); padding: 0 24px; }
 .btn.primary:hover { filter: brightness(1.08); background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent) 45%, var(--accent-2)); }
 .btn.primary svg { fill: currentColor; stroke: none; }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); } .btn.ghost:hover { background: var(--hover); color: var(--text); }
 .btn.danger { background: transparent; color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, transparent); } .btn.danger:hover { background: color-mix(in srgb, var(--err) 12%, transparent); }
-.btn.icon { width: 40px; padding: 0; }
+.btn.icon { width: 44px; padding: 0; }
 .btn:disabled { opacity: .45; pointer-events: none; }
 
 /* Segmented control: dark track, raised selected tile. */
-.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: calc(var(--r-sm) + 4px); background: var(--surface); border: 1px solid var(--border); max-width: 100%; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 16px; background: var(--bg-elev); border: 1px solid var(--border); max-width: 100%; }
 .seg.full { display: flex; width: 100%; } .seg.full button { flex: 1; justify-content: center; }
-.seg button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border-radius: var(--r-sm); border: 1px solid transparent; background: none; color: var(--muted); font-size: 14px; font-weight: 520; white-space: nowrap; transition: background .2s, color .2s, border-color .2s; }
+.seg button { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 18px; border-radius: 12px; border: 1px solid transparent; background: none; color: var(--muted); font-size: 14px; font-weight: 520; white-space: nowrap; transition: background .2s, color .2s, border-color .2s; }
 .seg button:hover { color: var(--text); }
 .seg button.on { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); box-shadow: 0 1px 2px rgba(0,0,0,.25); }
 
@@ -58,7 +58,7 @@ h1.title { font-size: 30px; font-weight: 700; letter-spacing: -.03em; line-heigh
 .chips button.on { background: var(--surface-2); color: var(--text); border-color: color-mix(in srgb, var(--text) 45%, transparent); }
 
 /* Inputs and selects (with trailing chevron). */
-.input, select.input, .sel { height: 40px; padding: 0 14px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-sm); outline: none; min-width: 0; width: 100%; color: var(--text); transition: border-color .2s; }
+.input, select.input, .sel { height: 44px; padding: 0 16px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,.05); font-size: 15px; outline: none; min-width: 0; width: 100%; color: var(--text); transition: border-color .2s; }
 .input:focus, .sel:focus { border-color: color-mix(in srgb, var(--text) 50%, transparent); }
 select.input, .sel { appearance: none; -webkit-appearance: none; padding-right: 38px; cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
@@ -102,7 +102,7 @@ select.input, .sel { appearance: none; -webkit-appearance: none; padding-right: 
 .snav a { display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: var(--muted); font-weight: 560; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .2s; }
 .snav a:hover { color: var(--text); } .snav a.on { color: var(--text); border-bottom-color: var(--text); }
 .scol { display: flex; flex-direction: column; gap: var(--s6); max-width: 860px; }
-.scard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+.scard { background: var(--surface); border: 0; border-radius: 22px; overflow: hidden; }
 .scard.danger { border-color: color-mix(in srgb, var(--err) 45%, transparent); }
 .scard .body { padding: var(--card-pad); }
 .scard h3 { font-size: 17px; font-weight: 650; letter-spacing: -.015em; }

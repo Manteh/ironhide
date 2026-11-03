@@ -35,12 +35,12 @@ export function continueItems(history, max = 40) {
 // ---------- Cards ----------
 function card(it, i = 0) {
   const type = it.type === 'tv' ? 'series' : it.type;
-  const label = it.tag || it.label || '';
-  const sub = [it.year, (it.genres || []).slice(0, 2).join(' · ')].filter(Boolean).join(' · ');
+  const sub = [it.year, (it.genres || []).slice(0, 1).join('')].filter(Boolean).join(' · ');
+  const right = it.left || (it.rating ? '★ ' + it.rating : it.tag || '');
   return `<article class="bc" tabindex="0" style="--i:${Math.min(i, 24)}" data-id="${esc(it.imdbId)}" data-type="${esc(type)}" data-title="${esc(it.title)}" data-poster="${esc(it.poster || posterOf(it.imdbId))}" ${it.season ? `data-season="${it.season}" data-episode="${it.episode}"` : ''}>
-    <div class="bimg" style="background-image:url('${esc(it.poster || posterOf(it.imdbId))}')"></div>
-    ${(it.pct || it.rating || it.left) ? `<div class="btop">${it.pct ? `<div class="bprog"><i style="width:${Math.min(100, Math.max(4, Math.round(it.pct)))}%"></i></div>` : ''}<span class="bright">${it.left ? esc(it.left) : it.rating ? '★ ' + esc(it.rating) : ''}</span></div>` : ''}
-    <div class="bover"><span class="blabel">${esc(label)}</span><h3>${esc(it.title)}</h3><div class="bmeta"><span>${esc(sub)}</span><button class="bplay" data-play aria-label="Play ${esc(it.title)}">Play ${icon('fwd')}</button></div></div></article>`;
+    <div class="bposter"><div class="bimg" style="background-image:url('${esc(it.poster || posterOf(it.imdbId))}')"></div>
+      ${it.pct ? `<div class="bprog"><i style="width:${Math.min(100, Math.max(4, Math.round(it.pct)))}%"></i></div>` : ''}</div>
+    <div class="binfo"><h3>${esc(it.title)}</h3><div class="bmeta"><span>${esc(it.tag && it.rating ? it.tag : sub)}</span>${right ? `<em>${esc(right)}</em>` : ''}</div></div></article>`;
 }
 const skeleton = (n = 8) => Array.from({ length: n }, () => '<div class="bc sk"></div>').join('');
 
@@ -60,14 +60,15 @@ async function renderHero(items) {
   const meta = await api(`/api/title/${pick.imdbId}?type=${type}`).catch(() => null);
   const bg = meta?.background || meta?.poster || posterOf(pick.imdbId);
   const kick = cont ? (cont.pct ? 'Continue watching' : 'Next up') : 'Trending';
+  const facts = [meta?.year, meta?.runtime || (type === 'series' ? 'Series' : ''), meta?.rating && '★ ' + meta.rating, ...(meta?.genres || []).slice(0, 2)].filter(Boolean);
   return `<section class="hero2" data-id="${esc(pick.imdbId)}" data-type="${type}" data-title="${esc(pick.title)}" ${pick.season ? `data-season="${pick.season}" data-episode="${pick.episode}"` : ''} data-bg="${esc(bg)}">
     <div class="h2bg" style="background-image:url('${esc(bg)}')"></div>
     <div class="h2in">
-      <span class="chip2">${icon('bolt')} ${kick}${cont?.tag ? ' · ' + esc(cont.tag) : ''}</span>
+      <span class="kick">${kick}${cont?.tag ? ' · ' + esc(cont.tag) : ''}</span>
       <h2>${esc(pick.title)}</h2>
-      <p>${esc((meta?.overview || '').slice(0, 190))}${(meta?.overview || '').length > 190 ? '…' : ''}</p>
-      <div class="stats">${meta?.rating ? `<div><b>★ ${esc(meta.rating)}</b><span>Rating</span></div>` : ''}<div><b>${esc(meta?.year || '—')}</b><span>Year</span></div><div><b>${esc(meta?.runtime || (type === 'series' ? 'Series' : 'Film'))}</b><span>${meta?.runtime || type !== 'series' ? 'Runtime' : 'Format'}</span></div>
-        <button class="pill" data-hero-play>Play ${icon('fwd')}</button></div>
+      <div class="facts">${facts.map((f) => `<span>${esc(f)}</span>`).join('')}</div>
+      <p>${esc((meta?.overview || '').slice(0, 170))}${(meta?.overview || '').length > 170 ? '…' : ''}</p>
+      <div class="hbtns"><button class="pill" data-hero-play>${icon('play')} Play</button><a class="pill ghost2" href="#/title/${type}/${esc(pick.imdbId)}">Details</a></div>
     </div></section>`;
 }
 
@@ -134,7 +135,6 @@ export async function mount(el) {
   el.addEventListener('click', (e) => {
     if (e.target.closest('[data-hero-play]')) { const h = e.target.closest('.hero2'); quickPlay({ imdbId: h.dataset.id, type: h.dataset.type, title: h.dataset.title, ...(h.dataset.season ? { season: +h.dataset.season, episode: +h.dataset.episode } : {}) }); return; }
     const c = e.target.closest('.bc[data-id]'); if (!c) return;
-    if (e.target.closest('[data-play]')) { e.stopPropagation(); quickPlay({ imdbId: c.dataset.id, type: c.dataset.type, title: c.dataset.title, ...(c.dataset.season ? { season: +c.dataset.season, episode: +c.dataset.episode } : {}) }); return; }
     location.hash = `#/title/${c.dataset.type}/${c.dataset.id}`;
   });
   el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const c = e.target.closest?.('.bc[data-id]'); if (c) location.hash = `#/title/${c.dataset.type}/${c.dataset.id}`; } });
