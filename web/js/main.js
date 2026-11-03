@@ -114,7 +114,7 @@ async function navigate() {
     } else {
       browseEl.classList.add('hidden'); page.classList.remove('hidden');
       browse?.handle('away');
-      page.innerHTML = `<header class="mini"><a class="back" href="#/">${icon('back')} Home</a><span>${esc(params.section ? params.section[0].toUpperCase() + params.section.slice(1) : 'Settings')}</span></header><div id="pg"></div>`;
+      page.innerHTML = '<div id="pg"></div>';
       window.scrollTo(0, 0);
       try { await (await import(`./pages/${r.loader}.js`)).default($('#pg'), params); }
       catch (e) { $('#pg').innerHTML = `<div class="page"><div class="note">${esc(e.message)}</div></div>`; }

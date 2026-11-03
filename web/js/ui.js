@@ -1,7 +1,7 @@
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-export const posterOf = (id) => `https://images.metahub.space/poster/medium/${id}/img`;
+export const posterOf = (id) => `https://images.metahub.space/poster/large/${id}/img`;
 export const pad = (n) => String(n).padStart(2, '0');
 export function fmtTime(s) {
   s = Math.max(0, Math.floor(s || 0));

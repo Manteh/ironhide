@@ -24,7 +24,7 @@ async function getJson(url, headers = {}, timeoutMs = 8000) {
   return res.json();
 }
 
-const poster = (imdbId) => `https://images.metahub.space/poster/medium/${imdbId}/img`;
+const poster = (imdbId) => `https://images.metahub.space/poster/large/${imdbId}/img`;
 
 function fromCinemeta(m, type) {
   const imdbId = m.imdb_id || m.id;

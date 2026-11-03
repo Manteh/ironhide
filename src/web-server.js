@@ -150,7 +150,7 @@ async function handleApi(req, res, urlPath) {
         size: s.size,
         sizeGb: s.sizeBytes / 1e9,
         seeds: s.seeds,
-        resolution: (s.quality.match(/2160p|4k|1080p|720p|480p/i) || [''])[0].replace(/4k/i, '2160p'),
+        resolution: (s.quality.match(/2160p|4k|1080p|720p|480p/i) || [''])[0].toLowerCase().replace('4k', '2160p'),
         tags: streamTags(s.quality),
       })));
     }

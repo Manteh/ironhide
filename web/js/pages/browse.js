@@ -14,13 +14,20 @@ const FEED_NAME = { trending_movies: 'Trending', trending_shows: 'Trending serie
 let root, feeds = [], genres = [];
 const st = { tab: 'home', genre: '', items: [], more: false, busy: false, token: 0 };
 
+const leftLabel = (h) => {
+  const sec = (h.duration || 0) - (h.position || 0);
+  if (!(sec > 60)) return '';
+  const m = Math.round(sec / 60);
+  return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m left` : `${m}m left`;
+};
+
 export function continueItems(history, max = 40) {
   const seen = new Set(), out = [];
   for (const h of history) {
     if (seen.has(h.imdbId)) continue; seen.add(h.imdbId);
     const pct = h.percent || 0, tv = h.type === 'tv' || h.type === 'series';
     if (tv && pct >= 90) out.push({ imdbId: h.imdbId, type: 'series', title: h.title, poster: posterOf(h.imdbId), season: h.season, episode: h.episode + 1, tag: `Next · S${pad(h.season)}E${pad(h.episode + 1)}`, pct: 0 });
-    else if (pct > 3 && pct < 90) out.push({ imdbId: h.imdbId, type: tv ? 'series' : 'movie', title: h.title, poster: posterOf(h.imdbId), season: h.season, episode: h.episode, tag: tv ? `S${pad(h.season)}E${pad(h.episode)}` : 'Resume', pct });
+    else if (pct > 3 && pct < 90) out.push({ imdbId: h.imdbId, type: tv ? 'series' : 'movie', title: h.title, poster: posterOf(h.imdbId), season: h.season, episode: h.episode, tag: tv ? `S${pad(h.season)}E${pad(h.episode)}` : 'Resume', pct, left: leftLabel(h) });
   }
   return out.slice(0, max);
 }
@@ -32,8 +39,7 @@ function card(it, i = 0) {
   const sub = [it.year, (it.genres || []).slice(0, 2).join(' · ')].filter(Boolean).join(' · ');
   return `<article class="bc" tabindex="0" style="--i:${Math.min(i, 24)}" data-id="${esc(it.imdbId)}" data-type="${esc(type)}" data-title="${esc(it.title)}" data-poster="${esc(it.poster || posterOf(it.imdbId))}" ${it.season ? `data-season="${it.season}" data-episode="${it.episode}"` : ''}>
     <div class="bimg" style="background-image:url('${esc(it.poster || posterOf(it.imdbId))}')"></div>
-    ${it.pct ? `<div class="bprog"><i style="width:${Math.min(100, Math.round(it.pct))}%"></i></div>` : ''}
-    ${it.rating ? `<span class="brate">★ ${esc(it.rating)}</span>` : ''}
+    ${(it.pct || it.rating || it.left) ? `<div class="btop">${it.pct ? `<div class="bprog"><i style="width:${Math.min(100, Math.max(4, Math.round(it.pct)))}%"></i></div>` : ''}<span class="bright">${it.left ? esc(it.left) : it.rating ? '★ ' + esc(it.rating) : ''}</span></div>` : ''}
     <div class="bover"><span class="blabel">${esc(label)}</span><h3>${esc(it.title)}</h3><div class="bmeta"><span>${esc(sub)}</span><button class="bplay" data-play aria-label="Play ${esc(it.title)}">Play ${icon('fwd')}</button></div></div></article>`;
 }
 const skeleton = (n = 8) => Array.from({ length: n }, () => '<div class="bc sk"></div>').join('');
@@ -60,7 +66,7 @@ async function renderHero(items) {
       <span class="chip2">${icon('bolt')} ${kick}${cont?.tag ? ' · ' + esc(cont.tag) : ''}</span>
       <h2>${esc(pick.title)}</h2>
       <p>${esc((meta?.overview || '').slice(0, 190))}${(meta?.overview || '').length > 190 ? '…' : ''}</p>
-      <div class="stats"><div><b>${meta?.rating ? '★ ' + esc(meta.rating) : '—'}</b><span>Rating</span></div><div><b>${esc(meta?.year || '—')}</b><span>Year</span></div><div><b>${esc(meta?.runtime || (type === 'series' ? 'Series' : 'Film'))}</b><span>${type === 'series' ? 'Format' : 'Runtime'}</span></div>
+      <div class="stats"><div><b>${meta?.rating ? '★ ' + esc(meta.rating) : '—'}</b><span>Rating</span></div><div><b>${esc(meta?.year || '—')}</b><span>Year</span></div><div><b>${esc(meta?.runtime || (type === 'series' ? 'Series' : 'Film'))}</b><span>${meta?.runtime || type !== 'series' ? 'Runtime' : 'Format'}</span></div>
         <button class="pill" data-hero-play>Play ${icon('fwd')}</button></div>
     </div></section>`;
 }
@@ -139,10 +145,10 @@ export async function mount(el) {
 
 export function handle(kind, params = {}) {
   if (kind === 'away') return;
-  if (kind === 'title') { openDossier({ type: params.type, id: params.id }); return; }
+  if (kind === 'title') { if (!st.items.length && !st.busy) { st.tab = 'home'; paintChrome(); loadTab(true).then(() => ambient($('.hero2', root)?.dataset.bg || '')); } openDossier({ type: params.type, id: params.id }); return; }
   closeDossier();
   const tab = kind === 'feed' ? params.feed : kind === 'continue' ? 'continue' : kind === 'shelf' ? 'shelf' : 'home';
   if (kind === 'search') { import('../palette.js').then((m) => m.openPalette(params.q || '')); }
-  if (tab !== st.tab || !st.items.length || kind === 'home' && !$('.hero2', root)) { st.tab = tab; st.genre = ''; paintChrome(); loadTab(true).then(() => ambient($('.hero2', root)?.dataset.bg || '')); }
+  if (tab !== st.tab || !st.items.length || kind === 'home' && !$('.hero2', root)) { st.tab = tab; st.genre = ''; window.scrollTo({ top: 0, behavior: 'instant' }); paintChrome(); loadTab(true).then(() => ambient($('.hero2', root)?.dataset.bg || '')); }
   else paintChrome();
 }

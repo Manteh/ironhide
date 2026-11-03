@@ -89,10 +89,10 @@ export async function openDossier({ type, id }) {
     if (!st.open) { out.innerHTML = '<div class="muted" style="font-size:13px">Play picks the best stream for your quality settings automatically.</div>'; return; }
     if (!st.streams) { out.innerHTML = '<div class="note" style="padding:var(--s5) 0">Searching…</div>'; return; }
     const list = view(st.streams).slice(0, 25);
-    out.innerHTML = `<div class="chips" style="margin:0 0 var(--s3)">${CATS.map(([k, l]) => `<button data-c="${k}" class="${st.cat === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    out.innerHTML = `<div class="chips" style="margin:0 0 var(--s4)">${CATS.map(([k, l]) => `<button data-c="${k}" class="${st.cat === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       ${list.length ? list.map((s) => `<div class="stream ${s.best ? 'best' : ''}"><div class="res">${esc(s.resolution || '—')}</div>
         <div><div class="line">${s.best ? '<span class="badge acc">Best</span>' : ''}${s.cached ? '<span class="badge ok">Cached</span>' : '<span class="badge warn">Download</span>'}${s.tags.map((t) => `<span class="badge ${t.toLowerCase()}">${t}</span>`).join('')}<span class="muted">${esc(s.size)} · ↑${s.seeds}</span></div><div class="q" title="${esc(s.quality)}">${esc(s.quality)}</div></div>
-        <div class="acts"><button class="btn primary" data-p="${s.index}">${icon('play')}</button></div></div>`).join('') : '<div class="note">No streams for this filter.</div>'}`;
+        <div class="acts"><button class="btn primary" data-p="${s.index}">${icon('play')} Play</button></div></div>`).join('') : '<div class="note">No streams for this filter.</div>'}`;
     $$('[data-c]', out).forEach((b) => (b.onclick = () => { st.cat = b.dataset.c; renderList(); }));
     $$('[data-p]', out).forEach((b) => (b.onclick = async () => {
       try { const r = await post('/api/play', { index: +b.dataset.p }); toast((r.content?.[0]?.text || 'Started').split('\n')[0].slice(0, 90), 'ok'); setTimeout(() => window.pollRemote?.(), 2500); }
