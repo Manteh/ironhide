@@ -139,6 +139,7 @@ function splash() {
 
 route('/', () => import('./pages/home.js'));
 route('/browse/:kind', () => import('./pages/browse.js'));
+route('/browse/:kind/:feed', () => import('./pages/browse.js'));
 route('/library', () => import('./pages/library.js'));
 route('/search/:q', () => import('./pages/search.js'));
 route('/title/:type/:id', () => import('./pages/title.js'));

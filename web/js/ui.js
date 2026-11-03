@@ -71,11 +71,12 @@ export function card(item, extra = '') {
   const type = item.type === 'tv' ? 'series' : item.type;
   const href = `#/title/${esc(type)}/${esc(item.imdbId)}`;
   const data = `data-id="${esc(item.imdbId)}" data-type="${esc(type)}" data-title="${esc(item.title)}" data-year="${esc(item.year || '')}" data-poster="${esc(item.poster || '')}" data-rating="${esc(item.rating || '')}"`;
+  const saved = wl.has(item.imdbId);
   return `<div class="card" ${data}>
-    <a class="img" href="${href}" aria-label="${esc(item.title)}" style="background-image:url('${esc(item.poster || posterOf(item.imdbId))}')">${extra}</a>
-    <div class="ov"><button class="ob play" data-qp aria-label="Play ${esc(item.title)}">${icon('play')}</button><button class="ob save ${wl.has(item.imdbId) ? 'on' : ''}" data-wl aria-label="Save to watchlist">${icon('bookmark')}</button></div>
+    <a class="img" href="${href}" aria-label="${esc(item.title)}" style="--p:url('${esc(item.poster || posterOf(item.imdbId))}')">${extra}</a>
+    <div class="ov"><button class="ob play" data-qp aria-label="Play ${esc(item.title)}">${icon('play')}<span>Play</span></button><button class="ob save ${saved ? 'on' : ''}" data-wl aria-label="${saved ? 'Remove from' : 'Save to'} watchlist">${icon('bookmark')}</button></div>
     <a class="t" href="${href}">${esc(item.title)}</a>
-    <div class="m">${esc(item.year || '')}${item.rating ? ' · ★ ' + esc(item.rating) : ''}</div></div>`;
+    <div class="m">${esc(item.year || '')}${item.rating ? '<i></i>' + esc(item.rating) : ''}</div></div>`;
 }
 
 // Apply appearance settings to <html> and cache them for a flash-free next load.

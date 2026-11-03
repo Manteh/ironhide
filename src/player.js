@@ -127,7 +127,7 @@ function sh(s) {
   return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
-export async function playDetached(stream, subs = [], onFinish, resumeFrom) {
+export async function playDetached(stream, subs = [], onFinish, resumeFrom, title) {
   const progressFile = PROGRESS_FILE;
   const ipcSocket = '/tmp/ironhide-mpv.sock';
   try { unlinkSync(ipcSocket); } catch {}
@@ -141,6 +141,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom) {
     const mpvArgs = [
       '--really-quiet', `--script=${LUA_SCRIPT}`, '--alang=eng,en,lit,lt,swe,sv',
       `--input-ipc-server=${ipcSocket}`,
+      ...(title ? [`--force-media-title=${title}`] : []),
       ...(resumeFrom > 0 ? [`--start=${Math.floor(resumeFrom)}`] : []),
       ...subs.map(x => `--sub-file=${x.path}`),
       location,

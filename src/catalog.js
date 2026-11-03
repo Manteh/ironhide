@@ -6,16 +6,17 @@ const CINEMETA = 'https://v3-cinemeta.strem.io';
 const TTL_MS = 10 * 60 * 1000;
 const cache = new Map();
 
-const traktClientId = () => getConfig().trakt_client_id;
-
 export const FEEDS = [
-  { id: 'trending_movies', label: 'Movies', type: 'movie', trakt: '/movies/trending' },
-  { id: 'trending_shows', label: 'Series', type: 'series', trakt: '/shows/trending' },
-  { id: 'popular_movies', label: 'Popular', type: 'movie', trakt: '/movies/popular' },
-  { id: 'popular_shows', label: 'TV Hits', type: 'series', trakt: '/shows/popular' },
-  { id: 'watched_weekly', label: 'Trending', type: 'movie', trakt: '/movies/watched/weekly' },
-  { id: 'anticipated', label: 'Upcoming', type: 'movie', trakt: '/movies/anticipated' },
+  { id: 'trending_movies', label: 'Trending', kind: 'movies', type: 'movie' },
+  { id: 'popular_movies', label: 'Popular', kind: 'movies', type: 'movie' },
+  { id: 'watched_weekly', label: 'Most watched this week', short: 'Most watched', kind: 'movies', type: 'movie' },
+  { id: 'anticipated', label: 'Most anticipated', short: 'Upcoming', kind: 'movies', type: 'movie' },
+  { id: 'boxoffice', label: 'Box office top 10', short: 'Box office', kind: 'movies', type: 'movie', noGenre: true },
+  { id: 'trending_shows', label: 'Trending', kind: 'series', type: 'series' },
+  { id: 'popular_shows', label: 'Popular', kind: 'series', type: 'series' },
 ];
+
+const harvester = () => getConfig().harvester_url;
 
 async function getJson(url, headers = {}, timeoutMs = 8000) {
   const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
@@ -39,22 +40,6 @@ function fromCinemeta(m, type) {
   };
 }
 
-function fromTrakt(entry, type) {
-  const media = entry.movie || entry.show || entry;
-  const imdbId = media.ids?.imdb;
-  if (!imdbId) return null;
-  return {
-    imdbId,
-    type,
-    title: media.title,
-    year: media.year ? String(media.year) : '',
-    rating: media.rating ? media.rating.toFixed(1) : '',
-    genres: (media.genres || []).map(g => g[0].toUpperCase() + g.slice(1)),
-    overview: media.overview || '',
-    poster: poster(imdbId),
-  };
-}
-
 async function cached(key, fn) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
@@ -63,28 +48,38 @@ async function cached(key, fn) {
   return value;
 }
 
-export async function getFeed(feedId) {
+// Feeds come from the user's Trakt harvester (a Stremio catalog addon). Render's free tier
+// can take ~40s to wake, so use a long timeout, cache results and serve stale on failure.
+const stale = new Map();
+export async function getFeed(feedId, { genre = '', skip = 0 } = {}) {
   const feed = FEEDS.find(f => f.id === feedId);
   if (!feed) return null;
-  return cached(`feed:${feedId}`, async () => {
-    const clientId = traktClientId();
-    if (clientId) {
-      try {
-        const raw = await getJson(
-          `https://api.trakt.tv${feed.trakt}?extended=full&limit=40`,
-          { 'trakt-api-key': clientId, 'trakt-api-version': '2' },
-        );
-        const items = raw.map(e => fromTrakt(e, feed.type)).filter(Boolean);
-        if (items.length) return items;
-      } catch { /* fall through to Cinemeta */ }
-    }
-    try {
+  const g = feed.noGenre ? '' : genre;
+  const extra = [g && `genre=${encodeURIComponent(g)}`, skip && `skip=${Number(skip)}`].filter(Boolean).join('&');
+  const key = `feed:${feedId}:${extra}`;
+  try {
+    return await cached(key, async () => {
+      const url = `${harvester()}/catalog/${feed.type}/trakt_${feedId}${extra ? '/' + extra : ''}.json`;
+      const data = await getJson(url, {}, 45000);
+      const items = (data.metas || []).map(m => fromCinemeta(m, feed.type));
+      if (items.length) stale.set(key, items);
+      return items;
+    });
+  } catch {
+    if (stale.has(key)) return stale.get(key);
+    if (g || skip) return [];
+    try { // last resort: Cinemeta top list
       const data = await getJson(`${CINEMETA}/catalog/${feed.type}/top.json`);
       return (data.metas || []).slice(0, 40).map(m => fromCinemeta(m, feed.type));
-    } catch {
-      return [];
-    }
-  });
+    } catch { return []; }
+  }
+}
+
+export async function getGenres() {
+  return cached('genres', async () => {
+    const m = await getJson(`${harvester()}/manifest.json`, {}, 45000);
+    return m.catalogs?.find(c => c.extra?.some(e => e.name === 'genre'))?.extra.find(e => e.name === 'genre')?.options || [];
+  }).catch(() => []);
 }
 
 export async function search(query) {

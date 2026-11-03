@@ -326,7 +326,8 @@ server.registerTool(
       }
     };
 
-    const result = await playDetached(stream, globalSubs, onFinish, resumeFrom);
+    const epTag = globalMeta.season ? ` S${String(globalMeta.season).padStart(2, "0")}E${String(globalMeta.episode).padStart(2, "0")}` : "";
+    const result = await playDetached(stream, globalSubs, onFinish, resumeFrom, globalMeta.title ? `${globalMeta.title}${epTag}` : undefined);
 
     if (result.status === "not_cached") {
       return { content: [{ type: "text", text: "⏳ Not cached on Real-Debrid yet. Pick another stream." }] };
@@ -683,7 +684,8 @@ server.registerTool(
       }
     };
 
-    const result = await playDetached(stream, subs, onFinish, resumeFrom);
+    const resumeTag = entry.season ? ` S${String(entry.season).padStart(2, "0")}E${String(entry.episode).padStart(2, "0")}` : "";
+    const result = await playDetached(stream, subs, onFinish, resumeFrom, `${entry.title}${resumeTag}`);
 
     if (result.status === "not_cached") {
       return { content: [{ type: "text", text: "⏳ Stream no longer cached on Real-Debrid. Use ironhide_streams to find a new one." }] };

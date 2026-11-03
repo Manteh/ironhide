@@ -15,7 +15,7 @@ export function getConfig() {
     torbox_api_key: env.TORBOX_API_KEY || file.torbox_api_key || '',
     rd_api_key: env.RD_API_KEY || file.rd_api_key || '',
     ad_api_key: env.AD_API_KEY || file.ad_api_key || '',
-    trakt_client_id: env.TRAKT_CLIENT_ID || file.trakt_client_id || '',
+    harvester_url: (env.HARVESTER_URL || file.harvester_url || 'https://stremio-trakt-stealth-harvester.onrender.com').replace(/\/+$/, ''),
   };
   // Which debrid service to use. Explicit choice wins; otherwise first key found.
   let provider = file.debrid_provider;

@@ -83,7 +83,7 @@ export const CONNECTORS = [
   { id: 'realdebrid', label: 'Real-Debrid', kind: 'debrid', field: 'rd_api_key', help: 'Alternative debrid. Key from real-debrid.com/apitoken.' },
   { id: 'alldebrid', label: 'AllDebrid', kind: 'debrid', field: 'ad_api_key', help: 'Alternative debrid.' },
   { id: 'tmdb', label: 'TMDB', kind: 'metadata', field: 'tmdb_api_key', help: 'Used for search in MCP tools. Free key at themoviedb.org.' },
-  { id: 'trakt', label: 'Trakt', kind: 'metadata', field: 'trakt_client_id', help: 'Optional. Enables real trending and anticipated feeds.' },
+  { id: 'harvester', label: 'Trakt harvester', kind: 'metadata', field: 'harvester_url', url: true, help: 'Your Trakt catalog service. Powers trending, popular, box office and genres.' },
 ];
 
 export function connectorsView() {
@@ -93,7 +93,8 @@ export function connectorsView() {
     items: CONNECTORS.map((c) => ({
       id: c.id, label: c.label, kind: c.kind, help: c.help,
       configured: !!cfg[c.field],
-      masked: mask(cfg[c.field]),
+      url: !!c.url,
+      masked: c.url ? cfg[c.field] : mask(cfg[c.field]),
       active: c.kind === 'debrid' && cfg.debrid_provider === c.id,
     })),
   };
@@ -120,7 +121,7 @@ async function timed(fn) {
   try { const r = await fn(); return { ...r, latencyMs: Date.now() - t }; }
   catch (e) { return { status: 'error', detail: e.name === 'TimeoutError' ? 'Timed out' : 'Unreachable', latencyMs: Date.now() - t }; }
 }
-const get = (url, headers) => fetch(url, { headers, signal: AbortSignal.timeout(6000) });
+const get = (url, headers, ms = 6000) => fetch(url, { headers, signal: AbortSignal.timeout(ms) });
 
 const TESTS = {
   async torbox(key) {
@@ -146,10 +147,11 @@ const TESTS = {
     const r = await get(`https://api.themoviedb.org/3/configuration?api_key=${encodeURIComponent(key)}`);
     return r.ok ? { status: 'online', detail: 'Key valid' } : { status: 'error', detail: 'Invalid key' };
   },
-  async trakt(key) {
-    if (!key) return { status: 'unconfigured', detail: 'Using Cinemeta fallback' };
-    const r = await get('https://api.trakt.tv/movies/trending?limit=1', { 'trakt-api-key': key, 'trakt-api-version': '2' });
-    return r.ok ? { status: 'online', detail: 'Client ID valid' } : { status: 'error', detail: 'Invalid client ID' };
+  async harvester(url) {
+    const r = await get(`${(url || getConfig().harvester_url).replace(/\/+$/, '')}/manifest.json`, {}, 45000);
+    if (!r.ok) return { status: 'error', detail: `HTTP ${r.status}` };
+    const m = await r.json();
+    return m.catalogs ? { status: 'online', detail: `${m.catalogs.length} categories` } : { status: 'error', detail: 'Not a catalog service' };
   },
   async cinemeta() { const r = await get('https://v3-cinemeta.strem.io/manifest.json'); return r.ok ? { status: 'online', detail: 'Catalog & metadata' } : { status: 'error', detail: `HTTP ${r.status}` }; },
   async torrentio() { const r = await get('https://torrentio.strem.fun/manifest.json'); return r.ok ? { status: 'online', detail: 'Stream index' } : { status: 'error', detail: `HTTP ${r.status}` }; },
@@ -172,11 +174,11 @@ export async function getNodes(force = false) {
   const cfg = getConfig();
   const active = cfg.debrid_provider;
 
-  const [mpvRunning, torbox, realdebrid, alldebrid, cinemeta, torrentio, comet, subtitles, trakt] = await Promise.all([
+  const [mpvRunning, torbox, realdebrid, alldebrid, cinemeta, torrentio, comet, subtitles, harvester] = await Promise.all([
     Promise.resolve(isMpvRunning()).catch(() => false),
     testConnector('torbox'), testConnector('realdebrid'), testConnector('alldebrid'),
     testConnector('cinemeta'), testConnector('torrentio'), testConnector('comet'), testConnector('subtitles'),
-    testConnector('trakt'),
+    testConnector('harvester'),
   ]);
   const np = mpvRunning ? await getNowPlaying().catch(() => null) : null;
   const mpvPath = ['/opt/homebrew/bin/mpv', '/usr/local/bin/mpv'].find(existsSync);
@@ -189,7 +191,7 @@ export async function getNodes(force = false) {
       ...debrid[id], active: id === active, configurable: true,
     })).filter((n) => n.status !== 'unconfigured' || n.active),
     { id: 'cinemeta', group: 'sources', name: 'Cinemeta', sub: 'Catalog', ...cinemeta },
-    { id: 'trakt', group: 'sources', name: 'Trakt', sub: 'Trending feeds', ...trakt, configurable: true },
+    { id: 'harvester', group: 'sources', name: 'Trakt harvester', sub: 'Category feeds', ...harvester, configurable: true },
     { id: 'torrentio', group: 'sources', name: 'Torrentio', sub: 'Streams', ...torrentio },
     { id: 'comet', group: 'sources', name: 'Comet', sub: 'Streams', ...comet },
     { id: 'subtitles', group: 'sources', name: 'OpenSubtitles', sub: 'Subtitles', ...subtitles },

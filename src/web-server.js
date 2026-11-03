@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { z } from 'zod';
 import { tools, getLoadedStreams } from './tools.js';
-import { FEEDS, getFeed, search as catalogSearch, getTitle } from './catalog.js';
+import { FEEDS, getFeed, getGenres, search as catalogSearch, getTitle } from './catalog.js';
 import { getHistory } from './history.js';
 import {
   getSettings, updateSettings, connectorsView, setConnectorKey, setDebridProvider, testConnector,
@@ -105,12 +105,13 @@ async function handleApi(req, res, urlPath) {
 
   try {
     if (method === 'GET' && urlPath === '/api/catalog/feeds') {
-      return jsonResponse(res, FEEDS.map(({ id, label, type }) => ({ id, label, type })));
+      return jsonResponse(res, { feeds: FEEDS.map(({ id, label, short, kind, type, noGenre }) => ({ id, label, short: short || label, kind, type, noGenre: !!noGenre })), genres: await getGenres() });
     }
 
     const feedMatch = urlPath.match(/^\/api\/catalog\/feed\/([a-z_]+)$/);
     if (feedMatch && method === 'GET') {
-      const items = await getFeed(feedMatch[1]);
+      const fp = new URL(req.url, 'http://localhost').searchParams;
+      const items = await getFeed(feedMatch[1], { genre: fp.get('genre') || '', skip: fp.get('skip') || 0 });
       if (!items) return errorResponse(res, 'Unknown feed', 404);
       return jsonResponse(res, items);
     }

@@ -87,17 +87,17 @@ function playback(body) {
 }
 
 // ---------- Connectors ----------
-const LOGOS = { torbox: 'bolt', realdebrid: 'bolt', alldebrid: 'bolt', tmdb: 'film', trakt: 'eye' };
+const LOGOS = { torbox: 'bolt', realdebrid: 'bolt', alldebrid: 'bolt', tmdb: 'film', harvester: 'eye' };
 async function connectors(body) {
   let data = await api('/api/connectors'), editing = null; const results = {};
   const draw = () => {
     const group = (kind) => data.items.filter((c) => c.kind === kind).map((c) => `<div class="conn"><div class="logo">${icon(LOGOS[c.id])}</div>
       <div class="info"><b>${esc(c.label)} ${c.active ? '<span class="badge acc">Active</span>' : ''}${results[c.id] ? `<span class="badge ${results[c.id].status === 'online' ? 'ok' : 'err'}">${esc(results[c.id].detail)}</span>` : c.configured ? '<span class="badge">Key saved</span>' : '<span class="badge">Not connected</span>'}</b>
         <span>${c.configured ? esc(c.masked) + ' · ' : ''}${esc(c.help)}</span>
-        ${editing === c.id ? `<div class="edit"><input class="input" type="password" id="keyin" placeholder="Paste API key" autocomplete="off" spellcheck="false"><button class="btn primary" data-save="${c.id}">Save</button><button class="btn ghost" data-cancel>Cancel</button></div>` : ''}</div>
+        ${editing === c.id ? `<div class="edit"><input class="input" type="${c.url ? 'url' : 'password'}" id="keyin" placeholder="${c.url ? 'https://your-service.onrender.com' : 'Paste API key'}" autocomplete="off" spellcheck="false"><button class="btn primary" data-save="${c.id}">Save</button><button class="btn ghost" data-cancel>Cancel</button></div>` : ''}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         ${c.configured ? `<button class="btn" data-test="${c.id}">Test</button>` : ''}<button class="btn" data-edit="${c.id}">${c.configured ? 'Replace' : 'Connect'}</button>
-        ${c.configured ? `<button class="btn ghost danger" data-rm="${c.id}" aria-label="Remove">${icon('trash')}</button>` : ''}</div></div>`).join('');
+        ${c.configured && !c.url ? `<button class="btn ghost danger" data-rm="${c.id}" aria-label="Remove">${icon('trash')}</button>` : ''}</div></div>`).join('');
     body.innerHTML =
       card({ title: 'Debrid service', desc: 'Resolves torrents into instant streams. Only one is used at a time.', body:
         `<div class="srow" style="border:0;padding-top:0"><div class="lbl"><b>Active service</b><span>Used for every search and play.</span></div>
@@ -111,7 +111,7 @@ async function connectors(body) {
       const key = $('#keyin', body).value.trim(); if (!key) return;
       b.disabled = true;
       const t = await post(`/api/connectors/${b.dataset.save}/test`, { key });
-      if (t.status !== 'online') { b.disabled = false; return toast(`Key rejected: ${t.detail}`, 'err'); }
+      if (t.status !== 'online') { b.disabled = false; return toast(`Rejected: ${t.detail}`, 'err'); }
       data = await put(`/api/connectors/${b.dataset.save}`, { key }); editing = null; results[b.dataset.save] = t; window.refreshNodes?.(); toast('Connected', 'ok'); draw();
     }));
     $$('[data-test]', body).forEach((b) => (b.onclick = async () => { b.textContent = 'Testing…'; results[b.dataset.test] = await post(`/api/connectors/${b.dataset.test}/test`); draw(); }));
