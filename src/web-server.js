@@ -3,7 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { z } from 'zod';
-import { tools } from './tools.js';
+import { tools, getLoadedStreams } from './tools.js';
+import { FEEDS, getFeed, search as catalogSearch, getTitle } from './catalog.js';
+import { getHistory } from './history.js';
 import { WebSocketServer } from 'ws';
 
 import {
@@ -27,6 +29,12 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
 };
+
+const TAG_PATTERNS = [
+  ['REMUX', /remux/i], ['DV', /\bDV\b|dolby.?vision|dovi/i], ['HDR', /hdr/i],
+  ['IMAX', /imax/i], ['Atmos', /atmos|truehd|dts-hd/i],
+];
+const streamTags = (q) => TAG_PATTERNS.filter(([, re]) => re.test(q)).map(([t]) => t);
 
 const clients = new Set();
 
@@ -91,6 +99,63 @@ async function handleApi(req, res, urlPath) {
   }
 
   try {
+    if (method === 'GET' && urlPath === '/api/catalog/feeds') {
+      return jsonResponse(res, FEEDS.map(({ id, label, type }) => ({ id, label, type })));
+    }
+
+    const feedMatch = urlPath.match(/^\/api\/catalog\/feed\/([a-z_]+)$/);
+    if (feedMatch && method === 'GET') {
+      const items = await getFeed(feedMatch[1]);
+      if (!items) return errorResponse(res, 'Unknown feed', 404);
+      return jsonResponse(res, items);
+    }
+
+    if (method === 'GET' && urlPath === '/api/catalog/search') {
+      const q = (new URL(req.url, 'http://localhost').searchParams.get('q') || '').trim();
+      return jsonResponse(res, q ? await catalogSearch(q) : []);
+    }
+
+    const titleMatch = urlPath.match(/^\/api\/title\/(tt\d+)$/);
+    if (titleMatch && method === 'GET') {
+      const type = new URL(req.url, 'http://localhost').searchParams.get('type') === 'series' ? 'series' : 'movie';
+      const t = await getTitle(titleMatch[1], type);
+      return t ? jsonResponse(res, t) : errorResponse(res, 'Not found', 404);
+    }
+
+    if (method === 'GET' && urlPath === '/api/history') {
+      return jsonResponse(res, await getHistory(30));
+    }
+
+    // Stream picker: loads streams into the shared tool state so /api/play can use the index.
+    if (method === 'GET' && urlPath === '/api/streams') {
+      const p = new URL(req.url, 'http://localhost').searchParams;
+      const type = p.get('type') === 'series' ? 'tv' : 'movie';
+      const season = p.get('season') ? Number(p.get('season')) : undefined;
+      const episode = p.get('episode') ? Number(p.get('episode')) : undefined;
+      await tools.ironhide_streams.handler({ imdbId: p.get('imdbId'), title: p.get('title') || '', type, season, episode });
+      const { streams } = getLoadedStreams();
+      return jsonResponse(res, streams.map((s, i) => ({
+        index: i + 1,
+        isRD: s.isRD,
+        quality: s.quality,
+        size: s.size,
+        seeds: s.seeds,
+        resolution: (s.quality.match(/2160p|4k|1080p|720p|480p/i) || [''])[0].replace(/4k/i, '2160p'),
+        tags: streamTags(s.quality),
+      })));
+    }
+
+    if (method === 'POST' && urlPath === '/api/play') {
+      const body = await parseBody(req);
+      const tool = body.target === 'tv' ? tools.ironhide_cast_tv : tools.ironhide_play;
+      return jsonResponse(res, await tool.handler({ index: Number(body.index), resumeFrom: body.resumeFrom }));
+    }
+
+    if (method === 'POST' && urlPath === '/api/control') {
+      const body = await parseBody(req);
+      return jsonResponse(res, await tools.ironhide_control.handler({ action: body.action, value: body.value }));
+    }
+
     if (method === 'GET' && urlPath === '/api/health') {
       return jsonResponse(res, { ok: true, service: 'ironhide', pid: process.pid });
     }

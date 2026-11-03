@@ -1055,6 +1055,8 @@ server.registerTool(
   }
 );
 
+export function getLoadedStreams() { return { streams: globalStreams, meta: globalMeta }; }
+
 // Called once by the daemon: background monitors that used to live in the MCP process.
 export function startBackground() {
   startMpvMonitor();

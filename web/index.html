@@ -5,13 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ironhide Playlist</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="theme.css" />
 </head>
 <body>
+  <div id="gate"><div class="lock">members only</div><div class="ok">access granted</div></div>
+  <script>
+    (function () {
+      var g = document.getElementById('gate');
+      if (sessionStorage.getItem('ih-in')) { g.remove(); return; }
+      sessionStorage.setItem('ih-in', '1');
+      setTimeout(function () { g.classList.add('out'); setTimeout(function () { g.remove(); }, 700); }, 1100);
+    })();
+  </script>
+
   <header class="app-header">
     <div class="header-brand">
       <span class="brand-name">IRONHIDE</span>
-      <span class="brand-sub">Playlist</span>
+      <span class="brand-sub">The Vault</span>
     </div>
+    <nav class="header-nav"><a href="/browse.html">Browse</a><a href="/" class="active">Playlists</a></nav>
     <div class="header-status" id="headerStatus"></div>
   </header>
 

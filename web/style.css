@@ -1149,3 +1149,8 @@ body {
 .text-muted { color: var(--muted); }
 .text-accent { color: var(--accent); }
 .text-success { color: var(--success); }
+
+/* Header nav (shared with browse.html) */
+.header-nav { display: flex; gap: 18px; margin-left: 28px; margin-right: auto; }
+.header-nav a { color: var(--muted); text-decoration: none; font-weight: 600; letter-spacing: .04em; }
+.header-nav a:hover, .header-nav a.active { color: var(--text); }

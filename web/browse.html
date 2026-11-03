@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ironhide Browse</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="browse.css" />
+  <link rel="stylesheet" href="theme.css" />
+</head>
+<body class="browse">
+  <div id="gate"><div class="lock">members only</div><div class="ok">access granted</div></div>
+  <script>
+    (function () {
+      var g = document.getElementById('gate');
+      if (sessionStorage.getItem('ih-in')) { g.remove(); return; }
+      sessionStorage.setItem('ih-in', '1');
+      setTimeout(function () { g.classList.add('out'); setTimeout(function () { g.remove(); }, 700); }, 1100);
+    })();
+  </script>
+
+  <header class="app-header">
+    <div class="header-brand"><span class="brand-name">IRONHIDE</span><span class="brand-sub">The Vault</span></div>
+    <nav class="header-nav"><a href="/browse.html" class="active">Browse</a><a href="/">Playlists</a></nav>
+    <input id="q" class="search" type="search" placeholder="find something…" autocomplete="off" />
+  </header>
+
+  <main id="view" class="view"></main>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-panel" id="modalPanel"></div>
+  </div>
+
+  <div id="remote" class="remote hidden">
+    <button id="rPlay" title="Play/Pause">⏯</button>
+    <div class="r-info"><div id="rTitle" class="r-title"></div><div class="r-bar"><div id="rFill"></div></div></div>
+    <span id="rTime" class="r-time"></span>
+    <button id="rBack" title="Back 30s">⏪</button>
+    <button id="rFwd" title="Forward 30s">⏩</button>
+    <button id="rStop" title="Stop">⏹</button>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="browse.js"></script>
+</body>
+</html>
