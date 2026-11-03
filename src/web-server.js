@@ -128,7 +128,7 @@ async function handleApi(req, res, urlPath) {
     }
 
     if (method === 'GET' && urlPath === '/api/history') {
-      return jsonResponse(res, await getHistory(30));
+      return jsonResponse(res, await getHistory(100));
     }
 
     // Stream picker: loads streams into the shared tool state so /api/play can use the index.
