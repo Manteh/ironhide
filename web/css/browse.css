@@ -20,7 +20,7 @@ body.is-browse { background: var(--bg); }
 .nodes:hover { color: var(--text); background: var(--hover); }
 .me { display: block; border-radius: 50%; }
 
-.bwrap { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 4px var(--page-pad) 170px; }
+.bwrap { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 28px var(--page-pad) 170px; }
 
 /* hero */
 .hero2 { position: relative; height: 440px; border-radius: 28px; overflow: hidden; margin-bottom: 40px; background: var(--surface); animation: rise .7s var(--ease) both; }
@@ -136,6 +136,7 @@ body.is-browse { background: var(--bg); }
 
 @media (max-width: 900px) { .hero2 { height: 400px; } .hero2 h2 { font-size: 34px; } .stats { gap: 22px; flex-wrap: wrap; } }
 @media (max-width: 720px) {
+  .bwrap { padding-top: 16px; }
   .nav { height: 60px; grid-template-columns: auto 1fr auto; gap: 6px; } .brand span { display: none; } .ncenter > * { width: 42px; height: 42px; font-size: 20px; }
   .nodes { display: none; } .bgrid { grid-template-columns: repeat(2, 1fr); gap: 12px; } .bover h3 { font-size: 16px; } .bover { left: 12px; right: 12px; bottom: 12px; } .bmeta span { display: none; }
   .hero2 { height: 380px; border-radius: 22px; } .h2in { left: 18px; right: 18px; bottom: 18px; } .hero2 p { display: none; } .stats { padding: 10px 10px 10px 16px; gap: 16px; } .stats div:nth-child(3) { display: none; }

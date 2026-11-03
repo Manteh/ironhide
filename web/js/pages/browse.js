@@ -66,7 +66,7 @@ async function renderHero(items) {
       <span class="chip2">${icon('bolt')} ${kick}${cont?.tag ? ' · ' + esc(cont.tag) : ''}</span>
       <h2>${esc(pick.title)}</h2>
       <p>${esc((meta?.overview || '').slice(0, 190))}${(meta?.overview || '').length > 190 ? '…' : ''}</p>
-      <div class="stats"><div><b>${meta?.rating ? '★ ' + esc(meta.rating) : '—'}</b><span>Rating</span></div><div><b>${esc(meta?.year || '—')}</b><span>Year</span></div><div><b>${esc(meta?.runtime || (type === 'series' ? 'Series' : 'Film'))}</b><span>${meta?.runtime || type !== 'series' ? 'Runtime' : 'Format'}</span></div>
+      <div class="stats">${meta?.rating ? `<div><b>★ ${esc(meta.rating)}</b><span>Rating</span></div>` : ''}<div><b>${esc(meta?.year || '—')}</b><span>Year</span></div><div><b>${esc(meta?.runtime || (type === 'series' ? 'Series' : 'Film'))}</b><span>${meta?.runtime || type !== 'series' ? 'Runtime' : 'Format'}</span></div>
         <button class="pill" data-hero-play>Play ${icon('fwd')}</button></div>
     </div></section>`;
 }
