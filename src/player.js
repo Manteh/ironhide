@@ -134,7 +134,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom) {
 
   if (stream.isRD && stream.url) {
     const res = await fetch(stream.url, { redirect: 'manual' });
-    const location = res.headers.get('location');
+    const location = res.headers.get('location') || (res.status < 300 ? stream.url : null);
     if (!location) return { status: 'not_cached', progressFile: null };
     if (/failed_|error|denied/i.test(location)) return { status: 'not_cached', progressFile: null };
 

@@ -1,29 +1,20 @@
 // Discovery: Trakt feeds (optional client id) with a Cinemeta fallback, plus
 // Cinemeta search and title metadata. Ported from the nitrate CLI.
-import { readFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
+import { getConfig } from './config.js';
 
 const CINEMETA = 'https://v3-cinemeta.strem.io';
 const TTL_MS = 10 * 60 * 1000;
 const cache = new Map();
 
-function traktClientId() {
-  if (process.env.TRAKT_CLIENT_ID) return process.env.TRAKT_CLIENT_ID;
-  try {
-    const cfg = JSON.parse(readFileSync(join(homedir(), '.config', 'ironhide', 'config.json'), 'utf-8'));
-    return cfg.trakt_client_id || '';
-  } catch {
-    return '';
-  }
-}
+const traktClientId = () => getConfig().trakt_client_id;
 
 export const FEEDS = [
-  { id: 'trending_movies', label: 'Trending Movies', type: 'movie', trakt: '/movies/trending' },
-  { id: 'trending_shows', label: 'Trending Shows', type: 'series', trakt: '/shows/trending' },
-  { id: 'popular_movies', label: 'Popular Movies', type: 'movie', trakt: '/movies/popular' },
-  { id: 'popular_shows', label: 'Popular Shows', type: 'series', trakt: '/shows/popular' },
-  { id: 'anticipated', label: 'Anticipated', type: 'movie', trakt: '/movies/anticipated' },
+  { id: 'trending_movies', label: 'Movies', type: 'movie', trakt: '/movies/trending' },
+  { id: 'trending_shows', label: 'Series', type: 'series', trakt: '/shows/trending' },
+  { id: 'popular_movies', label: 'Popular', type: 'movie', trakt: '/movies/popular' },
+  { id: 'popular_shows', label: 'TV Hits', type: 'series', trakt: '/shows/popular' },
+  { id: 'watched_weekly', label: 'Trending', type: 'movie', trakt: '/movies/watched/weekly' },
+  { id: 'anticipated', label: 'Upcoming', type: 'movie', trakt: '/movies/anticipated' },
 ];
 
 async function getJson(url, headers = {}, timeoutMs = 8000) {

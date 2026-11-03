@@ -1,11 +1,23 @@
-import { RD_API_KEY, AD_API_KEY, NO_DEBRID } from './config.js';
-const BASE = NO_DEBRID
-  ? 'https://torrentio.strem.fun'
-  : RD_API_KEY
-  ? `https://torrentio.strem.fun/realdebrid=${RD_API_KEY}`
-  : AD_API_KEY
-  ? `https://torrentio.strem.fun/alldebrid=${AD_API_KEY}`
-  : 'https://torrentio.strem.fun';
+import { getConfig, debridKey } from './config.js';
+
+const SERVICE_SLUG = { torbox: 'torbox', realdebrid: 'realdebrid', alldebrid: 'alldebrid' };
+
+function torrentioBase() {
+  const cfg = getConfig();
+  const key = debridKey(cfg);
+  const slug = SERVICE_SLUG[cfg.debrid_provider];
+  return slug && key ? `https://torrentio.strem.fun/${slug}=${key}` : 'https://torrentio.strem.fun';
+}
+
+// Comet (debrid-aware indexer), same source nitrate merges with Torrentio.
+function cometUrl(path) {
+  const cfg = getConfig();
+  const key = debridKey(cfg);
+  const service = { torbox: 'torbox', realdebrid: 'realdebrid' }[cfg.debrid_provider];
+  if (!service || !key) return null;
+  const b64 = Buffer.from(JSON.stringify({ debridServices: [{ service, apiKey: key }] })).toString('base64');
+  return `https://comet.elfhosted.com/${b64}/${path}`;
+}
 
 const TRACKERS = [
   'udp://tracker.opentrackr.org:1337/announce',
@@ -52,8 +64,11 @@ function parseStream(s) {
     magnet = `magnet:?xt=urn:btih:${s.infoHash}${trackerParams}`;
   }
 
+  const cached = /\[(TB|RD|AD)\+\]|⚡/.test(s.name || '');
+
   return {
     isRD,
+    cached,
     url: s.url || null,
     magnet,
     name,
@@ -66,29 +81,49 @@ function parseStream(s) {
   };
 }
 
-export async function getStreams(imdbId, type = 'movie', season, episode) {
-  let path;
-  if (type === 'tv' && season != null && episode != null) {
-    path = `stream/series/${imdbId}:${season}:${episode}.json`;
-  } else {
-    path = `stream/movie/${imdbId}.json`;
+async function fetchStreams(url) {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) return [];
+    return (await res.json()).streams || [];
+  } catch {
+    return [];
   }
+}
 
-  const res = await fetch(`${BASE}/${path}`);
-  if (!res.ok) return [];
+export async function getStreams(imdbId, type = 'movie', season, episode) {
+  const path = type === 'tv' && season != null && episode != null
+    ? `stream/series/${imdbId}:${season}:${episode}.json`
+    : `stream/movie/${imdbId}.json`;
 
-  const data = await res.json();
-  if (!data.streams || data.streams.length === 0) return [];
+  const comet = cometUrl(path);
+  const [fromTorrentio, fromComet] = await Promise.all([
+    fetchStreams(`${torrentioBase()}/${path}`),
+    comet ? fetchStreams(comet) : [],
+  ]);
 
-  const streams = data.streams.map(parseStream);
+  const seen = new Set();
+  const raw = [...fromComet, ...fromTorrentio].filter((s) => {
+    // Drop provider error placeholders (expired key, not cached, etc.)
+    const label = `${s.name || ''} ${s.title || ''} ${s.url || ''}`;
+    if (/(TB|RD|AD) error|failed_access|Expired/i.test(label)) return false;
+    const id = s.infoHash ? `${s.infoHash}:${s.fileIdx ?? ''}` : s.url;
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  if (raw.length === 0) return [];
 
-  // Sort: deprioritize DUAL/dubbed, RD first, then by size, then seeds
+  const streams = raw.map(parseStream);
+
+  // Sort: deprioritize DUAL/dubbed, debrid first, then by size, then seeds
   const isDual = (q) => /\bDUAL\b|DUBBED|\bDUB\b/i.test(q);
   streams.sort((a, b) => {
     const aDual = isDual(a.quality);
     const bDual = isDual(b.quality);
     if (aDual && !bDual) return 1;
     if (!aDual && bDual) return -1;
+    if (a.cached !== b.cached) return a.cached ? -1 : 1;
     if (a.isRD && !b.isRD) return -1;
     if (!a.isRD && b.isRD) return 1;
     if (b.sizeBytes !== a.sizeBytes) return b.sizeBytes - a.sizeBytes;

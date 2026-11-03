@@ -1,75 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark" data-accent="indigo">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ironhide Playlist</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="theme.css" />
+  <title>IronHide</title>
+  <script>
+    // Apply cached appearance before first paint to avoid a theme flash.
+    try {
+      var a = JSON.parse(localStorage.getItem('ih-appearance') || 'null');
+      if (a) {
+        var r = document.documentElement, t = a.theme;
+        if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        r.dataset.theme = t; r.dataset.accent = a.accent; r.dataset.density = a.density;
+        r.dataset.radius = a.radius; r.dataset.motion = a.motion; r.dataset.poster = a.posterSize;
+      }
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="/css/tokens.css" />
+  <link rel="stylesheet" href="/css/app.css" />
 </head>
 <body>
-  <div id="gate"><svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8f8cff"/><stop offset="1" stop-color="#4b48d6"/></linearGradient></defs><path d="M16 2l11 4v9c0 7.2-4.6 12.4-11 15C9.6 27.4 5 22.2 5 15V6z" fill="url(#gg)"/><path d="M16 9l2.2 4.8L23 16l-4.8 2.2L16 23l-2.2-4.8L9 16l4.8-2.2z" fill="#fff" fill-opacity=".92"/></svg><div class="ok">Welcome back</div><div class="lock">Private access</div></div>
-  <script>
-    (function () {
-      var g = document.getElementById('gate');
-      if (sessionStorage.getItem('ih-in')) { g.remove(); return; }
-      sessionStorage.setItem('ih-in', '1');
-      setTimeout(function () { g.classList.add('out'); setTimeout(function () { g.remove(); }, 700); }, 1100);
-    })();
-  </script>
-
-  <header class="app-header">
-    <div class="header-brand">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8f8cff"/><stop offset="1" stop-color="#4b48d6"/></linearGradient></defs><path d="M16 2l11 4v9c0 7.2-4.6 12.4-11 15C9.6 27.4 5 22.2 5 15V6z" fill="url(#lg)"/><path d="M16 9l2.2 4.8L23 16l-4.8 2.2L16 23l-2.2-4.8L9 16l4.8-2.2z" fill="#fff" fill-opacity=".92"/></svg><span class="brand-name">IronHide</span>
-      <span class="brand-sub">Private</span>
-    </div>
-    <nav class="header-nav"><a href="/browse.html">Browse</a><a href="/" class="active">Playlists</a></nav>
-    <div class="header-status" id="headerStatus"></div>
-  </header>
-
-  <div class="app-body">
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-playlists" id="sidebarPlaylists">
-        <!-- Populated by JS -->
-      </div>
-      <div class="sidebar-footer">
-        <div class="new-playlist-area" id="newPlaylistArea">
-          <button class="btn-new-playlist" id="btnNewPlaylist">+ New Playlist</button>
-          <div class="new-playlist-input-row hidden" id="newPlaylistInputRow">
-            <input type="text" id="newPlaylistName" placeholder="Playlist name…" maxlength="80" />
-            <button class="btn-confirm" id="btnConfirmNewPlaylist">Add</button>
-            <button class="btn-cancel" id="btnCancelNewPlaylist">✕</button>
-          </div>
-        </div>
-      </div>
-    </aside>
-
-    <main class="main-content" id="mainContent">
-      <!-- Populated by JS -->
-    </main>
+  <div id="gate"></div>
+  <div id="app"></div>
+  <div id="remote" class="remote hidden">
+    <button class="rb main" id="rPlay" aria-label="Play or pause"></button>
+    <div class="r-info"><div class="r-title" id="rTitle"></div><div class="r-bar"><div id="rFill"></div></div></div>
+    <span class="r-time" id="rTime"></span>
+    <button class="rb" id="rBack" aria-label="Back 30 seconds"></button>
+    <button class="rb" id="rFwd" aria-label="Forward 30 seconds"></button>
+    <button class="rb" id="rStop" aria-label="Stop"></button>
   </div>
-
-  <div class="now-playing-bar hidden" id="nowPlayingBar">
-    <button class="np-btn np-play-pause" id="npPlayPause" title="Play/Pause">▶</button>
-    <div class="np-info">
-      <div class="np-title" id="npTitle">—</div>
-      <div class="np-episode" id="npEpisode"></div>
-    </div>
-    <div class="np-progress-container">
-      <div class="np-progress-bar">
-        <div class="np-progress-fill" id="npProgressFill"></div>
-      </div>
-      <div class="np-time" id="npTime">0:00 / 0:00</div>
-    </div>
-    <div class="np-position" id="npPosition"></div>
-    <div class="np-controls">
-      <button class="np-btn" id="npSkip" title="Skip to next">⏭</button>
-      <button class="np-btn np-stop" id="npStop" title="Stop">⏹</button>
-    </div>
-  </div>
-
-  <div class="toast-container" id="toastContainer"></div>
-
-  <script src="app.js"></script>
+  <div class="toasts" id="toasts"></div>
+  <script type="module" src="/js/main.js"></script>
 </body>
 </html>

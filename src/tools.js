@@ -134,6 +134,7 @@ server.registerTool(
       const bDual = isDual(b.quality);
       if (aDual && !bDual) return 1;
       if (!aDual && bDual) return -1;
+      if (a.cached !== b.cached) return a.cached ? -1 : 1;
       if (a.isRD && !b.isRD) return -1;
       if (!a.isRD && b.isRD) return 1;
       if (b.sizeBytes !== a.sizeBytes) return b.sizeBytes - a.sizeBytes;
@@ -149,7 +150,7 @@ server.registerTool(
     const lines = streams.map((s, i) => {
       const langs = parseLangs(s.quality);
       const langStr = langs.length > 0 ? langs.join(" ") : "";
-      const rd = s.isRD ? "⚡RD" : "   ";
+      const rd = s.cached ? "⚡DB" : s.isRD ? "↓DB" : "   ";
       return `${String(i + 1).padStart(2)}. ${rd} ↑${String(s.seeds).padStart(4)} ${s.size.padStart(10)} ${langStr.padEnd(12)} ${s.quality.slice(0, 60)}`;
     });
 
@@ -781,7 +782,7 @@ server.registerTool(
 
       // Resolve RD redirect to get direct URL
       const res = await fetch(stream.url, { redirect: 'manual' });
-      const directUrl = res.headers.get('location');
+      const directUrl = res.headers.get('location') || (res.status < 300 ? stream.url : null);
       if (!directUrl) throw new Error('Could not resolve RD URL — stream may not be cached');
 
       // Save to history

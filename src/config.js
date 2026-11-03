@@ -1,29 +1,44 @@
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 
-const CONFIG_PATH = join(homedir(), '.config', 'ironhide', 'config.json');
+export const CONFIG_DIR = join(homedir(), '.config', 'ironhide');
+const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 
-function loadConfig() {
-  try {
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
-  } catch {
-    return {};
+// Read fresh each call so edits from the web UI apply without a restart.
+export function getConfig() {
+  let file = {};
+  try { file = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
+  const env = process.env;
+  const cfg = {
+    tmdb_api_key: env.TMDB_API_KEY || file.tmdb_api_key || '',
+    torbox_api_key: env.TORBOX_API_KEY || file.torbox_api_key || '',
+    rd_api_key: env.RD_API_KEY || file.rd_api_key || '',
+    ad_api_key: env.AD_API_KEY || file.ad_api_key || '',
+    trakt_client_id: env.TRAKT_CLIENT_ID || file.trakt_client_id || '',
+  };
+  // Which debrid service to use. Explicit choice wins; otherwise first key found.
+  let provider = file.debrid_provider;
+  if (env.NO_DEBRID === '1' || file.no_debrid === true) provider = provider || 'none';
+  if (!provider) provider = cfg.torbox_api_key ? 'torbox' : cfg.rd_api_key ? 'realdebrid' : cfg.ad_api_key ? 'alldebrid' : 'none';
+  cfg.debrid_provider = provider;
+  return cfg;
+}
+
+export function debridKey(cfg = getConfig()) {
+  return { torbox: cfg.torbox_api_key, realdebrid: cfg.rd_api_key, alldebrid: cfg.ad_api_key }[cfg.debrid_provider] || '';
+}
+
+// Merge a patch into config.json (atomic write). Pass null/'' to remove a key.
+export function saveConfig(patch) {
+  let file = {};
+  try { file = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null || v === '') delete file[k]; else file[k] = v;
   }
-}
-
-const config = loadConfig();
-
-export const TMDB_API_KEY = process.env.TMDB_API_KEY || config.tmdb_api_key || '';
-export const RD_API_KEY = process.env.RD_API_KEY || config.rd_api_key || '';
-export const AD_API_KEY = process.env.AD_API_KEY || config.ad_api_key || '';
-export const NO_DEBRID = process.env.NO_DEBRID === '1' || config.no_debrid === true;
-
-if (!TMDB_API_KEY) {
-  console.error('Missing TMDB_API_KEY — set it in ~/.config/ironhide/config.json or as an env var');
-  process.exit(1);
-}
-if (!RD_API_KEY && !AD_API_KEY) {
-  console.error('Missing debrid key — set rd_api_key or ad_api_key in ~/.config/ironhide/config.json');
-  process.exit(1);
+  if (patch.debrid_provider) delete file.no_debrid;
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  const tmp = CONFIG_PATH + '.tmp';
+  writeFileSync(tmp, JSON.stringify(file, null, 2), { mode: 0o600 });
+  renameSync(tmp, CONFIG_PATH);
 }

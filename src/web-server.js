@@ -6,6 +6,10 @@ import { z } from 'zod';
 import { tools, getLoadedStreams } from './tools.js';
 import { FEEDS, getFeed, search as catalogSearch, getTitle } from './catalog.js';
 import { getHistory } from './history.js';
+import {
+  getSettings, updateSettings, connectorsView, setConnectorKey, setDebridProvider, testConnector,
+  getNodes, pickBest, getWatchlist, toggleWatchlist,
+} from './settings.js';
 import { WebSocketServer } from 'ws';
 
 import {
@@ -70,7 +74,8 @@ function errorResponse(res, message, status = 500) {
 async function serveStatic(req, res) {
   let urlPath = req.url.split('?')[0];
   if (urlPath === '/') urlPath = '/index.html';
-  const filePath = path.join(WEB_DIR, urlPath);
+  const filePath = path.join(WEB_DIR, path.normalize(urlPath));
+  if (!filePath.startsWith(WEB_DIR + path.sep)) { res.writeHead(403); res.end('Forbidden'); return; }
   const ext = path.extname(filePath);
   const mime = MIME_TYPES[ext] || 'application/octet-stream';
 
@@ -134,11 +139,15 @@ async function handleApi(req, res, urlPath) {
       const episode = p.get('episode') ? Number(p.get('episode')) : undefined;
       await tools.ironhide_streams.handler({ imdbId: p.get('imdbId'), title: p.get('title') || '', type, season, episode });
       const { streams } = getLoadedStreams();
+      const best = pickBest(streams, (await getSettings()).playback);
       return jsonResponse(res, streams.map((s, i) => ({
+        best: best === i + 1,
         index: i + 1,
         isRD: s.isRD,
+        cached: s.cached,
         quality: s.quality,
         size: s.size,
+        sizeGb: s.sizeBytes / 1e9,
         seeds: s.seeds,
         resolution: (s.quality.match(/2160p|4k|1080p|720p|480p/i) || [''])[0].replace(/4k/i, '2160p'),
         tags: streamTags(s.quality),
@@ -155,6 +164,34 @@ async function handleApi(req, res, urlPath) {
       const body = await parseBody(req);
       return jsonResponse(res, await tools.ironhide_control.handler({ action: body.action, value: body.value }));
     }
+
+    if (method === 'GET' && urlPath === '/api/settings') return jsonResponse(res, await getSettings());
+    if (method === 'PUT' && urlPath === '/api/settings') return jsonResponse(res, await updateSettings(await parseBody(req)));
+
+    if (method === 'GET' && urlPath === '/api/connectors') return jsonResponse(res, connectorsView());
+    if (method === 'PUT' && urlPath === '/api/connectors/provider') {
+      setDebridProvider((await parseBody(req)).provider);
+      return jsonResponse(res, connectorsView());
+    }
+    const connMatch = urlPath.match(/^\/api\/connectors\/([a-z]+)(\/test)?$/);
+    if (connMatch && method === 'PUT' && !connMatch[2]) {
+      setConnectorKey(connMatch[1], (await parseBody(req)).key);
+      return jsonResponse(res, connectorsView());
+    }
+    if (connMatch && method === 'DELETE') {
+      setConnectorKey(connMatch[1], '');
+      return jsonResponse(res, connectorsView());
+    }
+    if (connMatch && method === 'POST' && connMatch[2]) {
+      return jsonResponse(res, await testConnector(connMatch[1], (await parseBody(req)).key));
+    }
+
+    if (method === 'GET' && urlPath === '/api/nodes') {
+      return jsonResponse(res, await getNodes(new URL(req.url, 'http://localhost').searchParams.has('refresh')));
+    }
+
+    if (method === 'GET' && urlPath === '/api/watchlist') return jsonResponse(res, await getWatchlist());
+    if (method === 'POST' && urlPath === '/api/watchlist/toggle') return jsonResponse(res, await toggleWatchlist(await parseBody(req)));
 
     if (method === 'GET' && urlPath === '/api/health') {
       return jsonResponse(res, { ok: true, service: 'ironhide', pid: process.pid });
