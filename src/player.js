@@ -1,11 +1,13 @@
 import { spawn } from 'child_process';
 import { readFile, unlink } from 'fs/promises';
+import { unlinkSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LUA_SCRIPT = join(__dirname, 'mpv-progress.lua');
+const MPV_BIN = '/Applications/mpv.app/Contents/MacOS/mpv';
 
 async function resolveUrl(url) {
   const res = await fetch(url, { redirect: 'manual' });
@@ -51,7 +53,7 @@ export async function play(stream, subs = []) {
     const resolved = await resolveUrl(stream.url);
     if (!resolved.ready) return { status: 'not_cached' };
 
-    proc = spawn('/opt/homebrew/bin/mpv', [...mpvArgs, resolved.url], {
+    proc = spawn(MPV_BIN, [...mpvArgs, resolved.url], {
       stdio: 'inherit',
       env: { ...process.env, IRONHIDE_PROGRESS_FILE: progressFile },
     });
@@ -83,49 +85,94 @@ export async function play(stream, subs = []) {
   });
 }
 
-const PROGRESS_FILE = join(tmpdir(), 'ironhide-progress.json');
+const PROGRESS_FILE = '/tmp/ironhide-progress.json';
+
+export function isMpvRunning() {
+  return new Promise(resolve => {
+    const p = spawn('pgrep', ['-x', 'mpv'], { stdio: 'ignore' });
+    p.on('exit', code => resolve(code === 0));
+    p.on('error', () => resolve(false));
+  });
+}
+
+function watchMpvProcess(progressFile, onFinish) {
+  let wasRunning = false;
+  const interval = setInterval(async () => {
+    const running = await isMpvRunning();
+    if (running && !wasRunning) wasRunning = true;
+    if (!running && wasRunning) {
+      clearInterval(interval);
+      await new Promise(r => setTimeout(r, 400));
+      const progress = await readProgress(progressFile);
+      if (onFinish) onFinish(progress);
+    }
+  }, 2000);
+  return interval;
+}
+
+// Write a shell script and run via osascript so mpv/webtorrent get macOS GUI session access.
+// Sets PATH so webtorrent can find mpv internally.
+// Uses 'sh scriptPath' to avoid needing chmod +x.
+function launchScript(lines) {
+  const scriptPath = '/tmp/ironhide-launch.sh';
+  writeFileSync(scriptPath, [
+    '#!/bin/sh',
+    'export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH',
+    ...lines,
+  ].join('\n') + '\n');
+  spawn('osascript', ['-e', `do shell script "sh '${scriptPath}'"`], { stdio: 'ignore' });
+}
+
+function sh(s) {
+  return `'${s.replace(/'/g, "'\\''")}'`;
+}
 
 export async function playDetached(stream, subs = [], onFinish, resumeFrom) {
   const progressFile = PROGRESS_FILE;
-  const subArgs = subs.flatMap(s => [`--sub-file=${s.path}`]);
-  const resumeArgs = resumeFrom > 0 ? [`--start=${Math.floor(resumeFrom)}`] : [];
   const ipcSocket = '/tmp/ironhide-mpv.sock';
-  const mpvArgs = ['--really-quiet', `--script=${LUA_SCRIPT}`, '--alang=eng,en,lit,lt,swe,sv', '--fullscreen=yes', `--input-ipc-server=${ipcSocket}`, ...resumeArgs, ...subArgs];
-
-  let proc;
+  try { unlinkSync(ipcSocket); } catch {}
 
   if (stream.isRD && stream.url) {
     const res = await fetch(stream.url, { redirect: 'manual' });
     const location = res.headers.get('location');
     if (!location) return { status: 'not_cached', progressFile: null };
+    if (/failed_|error|denied/i.test(location)) return { status: 'not_cached', progressFile: null };
 
-    proc = spawn('/opt/homebrew/bin/mpv', [...mpvArgs, location], {
-      stdio: 'ignore',
-      env: { ...process.env, IRONHIDE_PROGRESS_FILE: progressFile },
-    });
+    const startArg = resumeFrom > 0 ? `--start=${Math.floor(resumeFrom)}` : '';
+    launchScript([
+      `nohup /opt/homebrew/bin/mpv --really-quiet ${startArg} ${sh(location)} > /dev/null 2>&1 &`,
+    ]);
+
+    const interval = watchMpvProcess(progressFile, onFinish);
+    return { status: 'playing', progressFile, cancel: () => clearInterval(interval) };
+
   } else if (stream.magnet) {
-    proc = spawn('/opt/homebrew/bin/webtorrent', [stream.magnet, '--mpv'], {
-      stdio: 'ignore',
-    });
-    return { status: 'playing', progressFile: null };
+    const wtArgs = [stream.magnet, '--mpv'];
+    if (stream.fileIdx != null) wtArgs.push('--select', String(stream.fileIdx));
+    if (resumeFrom > 0) wtArgs.push('--player-args', `--start=${Math.floor(resumeFrom)}`);
+
+    launchScript([
+      `nohup /opt/homebrew/bin/webtorrent ${wtArgs.map(sh).join(' ')} > /dev/null 2>&1 &`,
+    ]);
+
+    const interval = watchMpvProcess(progressFile, onFinish);
+    return { status: 'playing', progressFile, cancel: () => clearInterval(interval) };
+
   } else if (stream.torrentLink) {
-    proc = spawn('/opt/homebrew/bin/webtorrent', [stream.torrentLink, '--mpv'], {
-      stdio: 'ignore',
-    });
-    return { status: 'playing', progressFile: null };
+    const tlArgs = [stream.torrentLink, '--mpv'];
+    if (stream.fileIdx != null) tlArgs.push('--select', String(stream.fileIdx));
+    if (resumeFrom > 0) tlArgs.push('--player-args', `--start=${Math.floor(resumeFrom)}`);
+
+    launchScript([
+      `nohup /opt/homebrew/bin/webtorrent ${tlArgs.map(sh).join(' ')} > /dev/null 2>&1 &`,
+    ]);
+
+    const interval = watchMpvProcess(progressFile, onFinish);
+    return { status: 'playing', progressFile, cancel: () => clearInterval(interval) };
+
   } else {
     return { status: 'error', progressFile: null };
   }
-
-  // Monitor exit — fires when user closes mpv
-  proc.on('exit', async () => {
-    // Small delay to let Lua script finish writing
-    await new Promise(r => setTimeout(r, 200));
-    const progress = await readProgress(progressFile);
-    if (onFinish) onFinish(progress);
-  });
-
-  return { status: 'playing', progressFile };
 }
 
 export { readProgress, formatTime };

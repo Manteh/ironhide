@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const BRIDGE_PORT = 8787;
+const BRIDGE_PORT = Number(process.env.IRONHIDE_BRIDGE_PORT) || 8787;
 const STATUS_PORT = 8788; // HTTP status endpoint for tv-watcher
 const PROXY_PORT = 9091;  // ffmpeg remux proxy for TV
 

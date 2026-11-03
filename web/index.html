@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ironhide Playlist</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-brand">
+      <span class="brand-name">IRONHIDE</span>
+      <span class="brand-sub">Playlist</span>
+    </div>
+    <div class="header-status" id="headerStatus"></div>
+  </header>
+
+  <div class="app-body">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-playlists" id="sidebarPlaylists">
+        <!-- Populated by JS -->
+      </div>
+      <div class="sidebar-footer">
+        <div class="new-playlist-area" id="newPlaylistArea">
+          <button class="btn-new-playlist" id="btnNewPlaylist">+ New Playlist</button>
+          <div class="new-playlist-input-row hidden" id="newPlaylistInputRow">
+            <input type="text" id="newPlaylistName" placeholder="Playlist name…" maxlength="80" />
+            <button class="btn-confirm" id="btnConfirmNewPlaylist">Add</button>
+            <button class="btn-cancel" id="btnCancelNewPlaylist">✕</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content" id="mainContent">
+      <!-- Populated by JS -->
+    </main>
+  </div>
+
+  <div class="now-playing-bar hidden" id="nowPlayingBar">
+    <button class="np-btn np-play-pause" id="npPlayPause" title="Play/Pause">▶</button>
+    <div class="np-info">
+      <div class="np-title" id="npTitle">—</div>
+      <div class="np-episode" id="npEpisode"></div>
+    </div>
+    <div class="np-progress-container">
+      <div class="np-progress-bar">
+        <div class="np-progress-fill" id="npProgressFill"></div>
+      </div>
+      <div class="np-time" id="npTime">0:00 / 0:00</div>
+    </div>
+    <div class="np-position" id="npPosition"></div>
+    <div class="np-controls">
+      <button class="np-btn" id="npSkip" title="Skip to next">⏭</button>
+      <button class="np-btn np-stop" id="npStop" title="Stop">⏹</button>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

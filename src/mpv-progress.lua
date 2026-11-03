@@ -5,8 +5,7 @@ local last_pos = 0
 local last_dur = 0
 
 local function save_progress()
-    local path = os.getenv("IRONHIDE_PROGRESS_FILE")
-    if not path then return end
+    local path = os.getenv("IRONHIDE_PROGRESS_FILE") or "/tmp/ironhide-progress.json"
 
     local pos = last_pos
     local duration = last_dur

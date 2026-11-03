@@ -1,5 +1,11 @@
-import { RD_API_KEY as RD_KEY } from './config.js';
-const BASE = `https://torrentio.strem.fun/realdebrid=${RD_KEY}`;
+import { RD_API_KEY, AD_API_KEY, NO_DEBRID } from './config.js';
+const BASE = NO_DEBRID
+  ? 'https://torrentio.strem.fun'
+  : RD_API_KEY
+  ? `https://torrentio.strem.fun/realdebrid=${RD_API_KEY}`
+  : AD_API_KEY
+  ? `https://torrentio.strem.fun/alldebrid=${AD_API_KEY}`
+  : 'https://torrentio.strem.fun';
 
 const TRACKERS = [
   'udp://tracker.opentrackr.org:1337/announce',
@@ -56,6 +62,7 @@ function parseStream(s) {
     size,
     sizeBytes,
     infoHash: s.infoHash || null,
+    fileIdx: s.fileIdx != null ? s.fileIdx : null,
   };
 }
 
