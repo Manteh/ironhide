@@ -1,6 +1,6 @@
 // Browse: immersive hero, tab row and big portrait cards. One persistent view; tabs change by hash.
 import { api } from '../api.js';
-import { store, quickPlay } from '../main.js';
+import { store, quickPlay, toggleSave } from '../main.js';
 import { esc, pad, posterOf, wl, icon, $, $$ } from '../ui.js';
 import { openDossier, closeDossier } from '../dossier.js';
 
@@ -61,15 +61,20 @@ async function renderHero(items) {
   const bg = meta?.background || meta?.poster || posterOf(pick.imdbId);
   const kick = cont ? (cont.pct ? 'Continue watching' : 'Next up') : 'Trending';
   const facts = [meta?.year, meta?.runtime || (type === 'series' ? 'Series' : ''), meta?.rating && '★ ' + meta.rating, ...(meta?.genres || []).slice(0, 2)].filter(Boolean);
-  return `<section class="hero2" data-id="${esc(pick.imdbId)}" data-type="${type}" data-title="${esc(pick.title)}" ${pick.season ? `data-season="${pick.season}" data-episode="${pick.episode}"` : ''} data-bg="${esc(bg)}">
+  const resuming = !!(cont && cont.pct);
+  const saved = wl.has(pick.imdbId);
+  return `<section class="hero2" data-id="${esc(pick.imdbId)}" data-type="${type}" data-title="${esc(pick.title)}" data-year="${esc(meta?.year || '')}" data-poster="${esc(meta?.poster || '')}" data-rating="${esc(meta?.rating || '')}" ${pick.season ? `data-season="${pick.season}" data-episode="${pick.episode}"` : ''} data-bg="${esc(bg)}">
     <div class="h2bg" style="background-image:url('${esc(bg)}')"></div>
     <div class="h2in">
-      <span class="kick">${kick}${cont?.tag ? ' · ' + esc(cont.tag) : ''}</span>
+      <span class="chip2">${icon('bolt')} ${kick}${cont?.tag && cont.tag !== 'Resume' ? ' · ' + esc(cont.tag) : ''}</span>
       <h2>${esc(pick.title)}</h2>
       <div class="facts">${facts.map((f) => `<span>${esc(f)}</span>`).join('')}</div>
-      <p>${esc((meta?.overview || '').slice(0, 170))}${(meta?.overview || '').length > 170 ? '…' : ''}</p>
-      <div class="hbtns"><button class="pill" data-hero-play>${icon('play')} Play</button><a class="pill ghost2" href="#/title/${type}/${esc(pick.imdbId)}">Details</a></div>
-    </div></section>`;
+      ${meta?.overview ? `<p>${esc(meta.overview)}</p>` : ''}
+      ${resuming ? `<div class="hprog"><div><i style="width:${Math.min(100, Math.round(cont.pct))}%"></i></div><span>${esc(cont.left || Math.round(cont.pct) + '% watched')}</span></div>` : ''}
+      <div class="hbtns"><button class="pill" data-hero-play>${icon('play')} ${resuming ? 'Resume' : 'Play'}</button><a class="pill ghost2" href="#/title/${type}/${esc(pick.imdbId)}">Details</a>
+        <button class="pill ghost2 sq ${saved ? 'on' : ''}" data-hero-save aria-label="${saved ? 'Remove from shelf' : 'Save to shelf'}">${icon('bookmark')}</button></div>
+    </div>
+    ${meta?.poster ? `<div class="hposter" style="background-image:url('${esc(meta.poster)}')"></div>` : ''}</section>`;
 }
 
 async function loadTab(reset = true) {
@@ -133,6 +138,11 @@ export async function mount(el) {
 
   // interactions: delegation on the whole view
   el.addEventListener('click', (e) => {
+    if (e.target.closest('[data-hero-save]')) {
+      const h = e.target.closest('.hero2'), btn = e.target.closest('[data-hero-save]');
+      toggleSave({ imdbId: h.dataset.id, type: h.dataset.type, title: h.dataset.title, year: h.dataset.year, poster: h.dataset.poster, rating: h.dataset.rating }).then((on) => btn.classList.toggle('on', on));
+      return;
+    }
     if (e.target.closest('[data-hero-play]')) { const h = e.target.closest('.hero2'); quickPlay({ imdbId: h.dataset.id, type: h.dataset.type, title: h.dataset.title, ...(h.dataset.season ? { season: +h.dataset.season, episode: +h.dataset.episode } : {}) }); return; }
     const c = e.target.closest('.bc[data-id]'); if (!c) return;
     location.hash = `#/title/${c.dataset.type}/${c.dataset.id}`;

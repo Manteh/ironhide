@@ -49,8 +49,8 @@ export async function openDossier({ type, id }) {
         <p class="dover">${esc(meta.overview)}</p>
         <div class="dacts"><button class="btn primary" id="dPlay">${icon('play')} ${playLabel}</button>
           <button class="btn" id="dSave">${icon('bookmark')} ${saved ? 'On your shelf' : 'Save'}</button>
-          <a class="btn ghost" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${q}+trailer">Trailer</a>
-          <a class="btn ghost" target="_blank" rel="noopener" href="https://www.imdb.com/title/${esc(id)}/">IMDb</a></div>
+          <a class="btn ghost" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${q}+trailer">Trailer ${icon('ext')}</a>
+          <a class="btn ghost" target="_blank" rel="noopener" href="https://www.imdb.com/title/${esc(id)}/">IMDb ${icon('ext')}</a></div>
         ${type === 'series' ? `<div class="dsec"><h3>Episodes</h3><div class="seg" style="margin-bottom:10px">${seasons.map((s) => `<button data-s="${s}" class="${s === st.season ? 'on' : ''}">S${s}</button>`).join('')}</div>
           <div class="eps">${eps.map((e) => { const w = watched(st.season, e.episode), done = w && (w.percent || 0) >= 90;
             return `<button class="ep ${e.episode === st.episode ? 'on' : ''}" data-e="${e.episode}"><span class="n">${e.episode}</span><span>${esc(e.name)}</span><span class="d">${done ? '<span class="badge ok">Watched</span>' : w ? `<span class="badge acc">${Math.round(w.percent || 0)}%</span>` : ''}</span></button>`; }).join('')}</div></div>` : ''}
@@ -91,8 +91,8 @@ export async function openDossier({ type, id }) {
     const list = view(st.streams).slice(0, 25);
     out.innerHTML = `<div class="chips" style="margin:0 0 var(--s4)">${CATS.map(([k, l]) => `<button data-c="${k}" class="${st.cat === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       ${list.length ? list.map((s) => `<div class="stream ${s.best ? 'best' : ''}"><div class="res">${esc(s.resolution || '—')}</div>
-        <div><div class="line">${s.best ? '<span class="badge acc">Best</span>' : ''}${s.cached ? '<span class="badge ok">Cached</span>' : '<span class="badge warn">Download</span>'}${s.tags.map((t) => `<span class="badge ${t.toLowerCase()}">${t}</span>`).join('')}<span class="muted">${esc(s.size)} · ↑${s.seeds}</span></div><div class="q" title="${esc(s.quality)}">${esc(s.quality)}</div></div>
-        <div class="acts"><button class="btn primary" data-p="${s.index}">${icon('play')} Play</button></div></div>`).join('') : '<div class="note">No streams for this filter.</div>'}`;
+        <div><div class="line">${s.best ? '<span class="badge acc">Best</span>' : ''}${s.cached ? '<span class="badge ok">Cached</span>' : '<span class="badge warn">Download</span>'}${s.tags.map((t) => `<span class="badge ${t.toLowerCase()}">${t}</span>`).join('')}</div><div class="sz">${esc(s.size)} · ↑${s.seeds}</div><div class="q" title="${esc(s.quality)}">${esc(s.quality)}</div></div>
+        <div class="acts"><button class="btn ${s.best ? 'primary' : ''}" data-p="${s.index}">${icon('play')} Play</button></div></div>`).join('') : '<div class="note">No streams for this filter.</div>'}`;
     $$('[data-c]', out).forEach((b) => (b.onclick = () => { st.cat = b.dataset.c; renderList(); }));
     $$('[data-p]', out).forEach((b) => (b.onclick = async () => {
       try { const r = await post('/api/play', { index: +b.dataset.p }); toast((r.content?.[0]?.text || 'Started').split('\n')[0].slice(0, 90), 'ok'); setTimeout(() => window.pollRemote?.(), 2500); }
