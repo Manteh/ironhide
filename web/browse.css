@@ -59,3 +59,9 @@ body.browse .app-header { position: sticky; top: 0; }
 .r-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .btn.primary, .tab.on { color: #050507; font-weight: 700; }
 .tab, .btn { border-radius: 2px; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+
+.row h2 { font-size: 22px; font-weight: 400; font-style: italic; text-transform: none; letter-spacing: 0; color: var(--text); }
+.card .t { font-size: 15px; font-weight: 500; }
+.hero h1 { font-size: 40px; font-weight: 500; letter-spacing: -.01em; }
+.streams h3 { font-family: var(--serif); font-style: italic; font-size: 18px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text); }
+.r-time { font-variant-numeric: tabular-nums; }
