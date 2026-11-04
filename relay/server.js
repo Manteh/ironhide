@@ -60,14 +60,14 @@ function presenceFor(u) {
 const newCode = () => { let c; do { c = b32(randomBytes(4)).slice(0, 6); } while (rooms.has(c)); return c; };
 const snapshot = (r) => ({
   code: r.code, name: r.name, host: r.host, control: r.control, open: r.open !== false, media: r.media, pb: r.pb, startAt: r.startAt,
-  members: [...r.members].map((id) => { const u = users.get(id); return u ? { ...profile(u), ready: r.ready.has(id) } : null; }).filter(Boolean),
+  members: [...r.members].map((id) => { const u = users.get(id); return u ? { ...profile(u), ready: r.ready.has(id), st: r.ms?.get(id) || null } : null; }).filter(Boolean),
 });
 const toRoom = (r, msg) => { for (const id of r.members) send(users.get(id)?.ws, msg); };
 const pushRoom = (r) => { toRoom(r, { t: 'room', room: snapshot(r) }); for (const id of r.members) { const m = users.get(id); if (m && !m.hide) announce(m); } };
 function say(r, text) { const m = { from: null, text, ts: Date.now() }; r.chat.push(m); if (r.chat.length > HISTORY) r.chat.shift(); toRoom(r, { t: 'chat', msg: m }); }
 function leaveRoom(u) {
   const r = u.room && rooms.get(u.room); u.room = null; if (!u.hide) announce(u); if (!r) return;
-  r.members.delete(u.id); r.ready.delete(u.id);
+  r.members.delete(u.id); r.ready.delete(u.id); r.ms?.delete(u.id);
   if (!r.members.size) { r.emptyTimer = setTimeout(() => rooms.delete(r.code), 5 * 60e3); return; }
   if (r.host === u.id) r.host = [...r.members][0];
   say(r, `${u.name} left`); pushRoom(r);
@@ -156,6 +156,11 @@ wss.on('connection', (ws) => {
         r.pb = { playing: false, pos: 0, at: now, rate: 1 }; r.ready.clear(); r.startAt = 0;
         if (r.media) say(r, `${u.name} picked ${r.media.title}${r.media.season ? ` S${String(r.media.season).padStart(2, '0')}E${String(r.media.episode).padStart(2, '0')}` : ''}`);
         pushRoom(r); break;
+      }
+      case 'room.state': { // a light, frequent update: what this person's player is doing and where it is
+        const r = rooms.get(u.room); if (!r || !['playing', 'paused', 'buffering', 'away', 'loading'].includes(m.state)) break;
+        const st = { state: m.state, pos: Math.max(0, Math.min(1e6, Number(m.pos) || 0)), at: now };
+        (r.ms ||= new Map()).set(u.id, st); toRoom(r, { t: 'room.ms', id: u.id, st }); break;
       }
       case 'room.ready': { const r = rooms.get(u.room); if (!r) break; m.ready ? r.ready.add(u.id) : r.ready.delete(u.id); pushRoom(r); break; }
       case 'room.control': {

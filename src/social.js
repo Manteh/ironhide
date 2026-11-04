@@ -101,6 +101,7 @@ async function handle(m) {
     case 'chat': S.chat.push(m.msg); if (S.chat.length > 80) S.chat.shift(); emit('chat', m.msg); break;
     case 'react': emit('react', m); break;
     case 'room.invite': S.invites = [m, ...S.invites.filter((i) => i.code !== m.code)].slice(0, 5); emit('toast', { kind: 'info', text: `${m.from.name} invited you to ${m.name}` }); push(); break;
+    case 'room.ms': { const mem = S.room?.members.find((x) => x.id === m.id); if (mem) { mem.st = m.st; push(); } break; }
     case 'room.kicked': emit('toast', { kind: 'err', text: `${m.by} removed you from ${m.room}` }); break;
     case 'room.error': emit('toast', { kind: 'err', text: m.msg }); break;
     case 'replaced': stopped = true; link = 'replaced'; push(); break;
@@ -132,6 +133,7 @@ export const leaveRoom = () => { tx({ t: 'room.leave' }); S.room = null; S.chat 
 export const invite = (id) => tx({ t: 'room.invite', to: id });
 export const kick = (id) => tx({ t: 'room.kick', to: id });
 export const roomMedia = (media) => tx({ t: 'room.media', media });
+export const roomState = (state, pos) => tx({ t: 'room.state', state, pos });
 export const roomReady = (ready) => tx({ t: 'room.ready', ready: !!ready });
 export const roomControl = (action, pos, extra = {}) => tx({ t: 'room.control', action, pos, ...extra });
 export const roomSettings = (s) => tx({ t: 'room.settings', ...s });
