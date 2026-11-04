@@ -13,10 +13,20 @@ export const FEEDS = [
   { id: 'anticipated', label: 'Most anticipated', short: 'Upcoming', kind: 'movies', type: 'movie' },
   { id: 'boxoffice', label: 'Box office top 10', short: 'Box office', kind: 'movies', type: 'movie', noGenre: true },
   { id: 'trending_shows', label: 'Trending', kind: 'series', type: 'series' },
+  // Cinemeta-backed: work for movies and series, reach much deeper than the Trakt lists
+  { id: 'new', label: 'New', kind: 'both', cine: true, year: true },
+  { id: 'toprated', label: 'Top rated', kind: 'both', cine: true },
+  { id: 'gems', label: 'Hidden gems', kind: 'both', cine: true },
+  { id: 'surprise', label: 'Surprise me', kind: 'both', cine: true, shuffle: true },
   { id: 'popular_shows', label: 'Popular', kind: 'series', type: 'series' },
 ];
 
 const harvester = () => getConfig().harvester_url;
+export const CINE_GENRES = ['Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western'];
+
+// Seeded randomness, so a shuffle is repeatable while it is cached but different next time
+export const rnd = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+export const shuffle = (arr, seed) => { const r = rnd(seed), a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 async function getJson(url, headers = {}, timeoutMs = 8000) {
   const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
@@ -51,9 +61,47 @@ async function cached(key, fn) {
 // Feeds come from the user's Trakt harvester (a Stremio catalog addon). Render's free tier
 // can take ~40s to wake, so use a long timeout, cache results and serve stale on failure.
 const stale = new Map();
-export async function getFeed(feedId, { genre = '', skip = 0 } = {}) {
+// One page of a Cinemeta catalog (50 titles). 'top' is by popularity, 'year' takes the year as its genre.
+export async function cinemetaPage(type, cat, { genre = '', skip = 0 } = {}) {
+  const extra = [genre && `genre=${encodeURIComponent(genre)}`, skip && `skip=${Number(skip)}`].filter(Boolean).join('&');
+  return cached(`cine:${type}:${cat}:${extra}`, async () => {
+    const d = await getJson(`${CINEMETA}/catalog/${type}/${cat}${extra ? '/' + extra : ''}.json`, {}, 15000);
+    return (d.metas || []).map((m) => fromCinemeta(m, type));
+  }).catch(() => []);
+}
+const uniq = (list) => { const seen = new Set(); return list.filter((x) => x.poster && !seen.has(x.imdbId) && seen.add(x.imdbId)); };
+const rated = (list, min) => list.filter((x) => Number(x.rating) >= min);
+const dayN = () => Math.floor(Date.now() / 864e5);
+const PAGES = (from, n) => Array.from({ length: n }, (_, i) => from + i * 50);
+
+async function cineFeed(id, { genre = '', skip = 0, type = 'movie', year = '', seed = 0 } = {}) {
+  const t = type === 'series' ? 'series' : 'movie', g = CINE_GENRES.includes(genre) ? genre : '';
+  if (id === 'new') return cinemetaPage(t, 'year', { genre: String(Number(year) || new Date().getFullYear()), skip });
+  if (id === 'toprated') {
+    if (skip) return []; // one long ranked list
+    const pages = await Promise.all(PAGES(0, 5).map((s) => cinemetaPage(t, 'top', { genre: g, skip: s })));
+    return uniq(rated(pages.flat(), 7.4)).sort((a, b) => Number(b.rating) - Number(a.rating));
+  }
+  if (id === 'gems') { // well rated but further down the popularity list, so not what everybody is shown
+    if (skip) return [];
+    const [known, pages] = await Promise.all([Promise.all(PAGES(0, 3).map((s) => cinemetaPage(t, 'top', { genre: g, skip: s }))), Promise.all(PAGES(150, 8).map((s) => cinemetaPage(t, 'top', { genre: g, skip: s })))]);
+    const famous = new Set(known.flat().map((x) => x.imdbId)); // what every list already shows
+    return shuffle(uniq(rated(pages.flat(), 7.3)).filter((x) => !famous.has(x.imdbId)), dayN() + Number(seed || 0)).slice(0, 60);
+  }
+  if (id === 'surprise') {
+    if (skip) return [];
+    const r = rnd(Number(seed) || Date.now()), pickG = g || CINE_GENRES[Math.floor(r() * CINE_GENRES.length)];
+    const offs = shuffle(PAGES(0, 10), Math.floor(r() * 1e9)).slice(0, 3);
+    const pages = await Promise.all(offs.map((s) => cinemetaPage(t, 'top', { genre: pickG, skip: s })));
+    return shuffle(uniq(rated(pages.flat(), 6.6)), Math.floor(r() * 1e9)).slice(0, 48).map((x) => ({ ...x, tag: pickG }));
+  }
+  return [];
+}
+
+export async function getFeed(feedId, { genre = '', skip = 0, type = '', year = '', seed = 0 } = {}) {
   const feed = FEEDS.find(f => f.id === feedId);
   if (!feed) return null;
+  if (feed.cine) return cineFeed(feedId, { genre, skip, type, year, seed });
   const g = feed.noGenre ? '' : genre;
   const extra = [g && `genre=${encodeURIComponent(g)}`, skip && `skip=${Number(skip)}`].filter(Boolean).join('&');
   const key = `feed:${feedId}:${extra}`;

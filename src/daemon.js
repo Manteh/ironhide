@@ -6,6 +6,11 @@ import { startBridge } from './tizen-bridge.js';
 import { startBackground } from './tools.js';
 import { startSocial } from './social.js';
 
+// One failed background task must not take the whole app down
+const clean = (e) => String(e?.stack || e).replace(/([?&](token|apikey|api_key)=)[^&\s]+/gi, '$1***');
+process.on('unhandledRejection', (e) => console.error('[daemon] background task failed:', clean(e)));
+process.on('uncaughtException', (e) => console.error('[daemon] error:', clean(e)));
+
 export async function isDaemonRunning() {
   try {
     const r = await fetch(`http://127.0.0.1:${WEB_PORT}/api/health`, { signal: AbortSignal.timeout(800) });

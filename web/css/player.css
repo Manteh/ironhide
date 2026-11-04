@@ -75,3 +75,8 @@
 
 .wp-thumb img { transition: filter .25s var(--ease); }
 .wp-tip.approx .wp-thumb img { filter: blur(3px) saturate(.8) brightness(.9); }
+.wp-stats { position: absolute; left: 20px; top: 76px; z-index: 11; padding: 7px 11px; border-radius: 9px; background: rgba(0,0,0,.72); color: #e7e7ec; font: 500 12px/1.3 ui-monospace, Menlo, monospace; white-space: pre; pointer-events: none; }
+.wp.parked .wp-stats { display: none; }
+/* Blur over a playing film makes the GPU redo that area for every frame. Menus still get it: they are brief. */
+.wp *:not(.wp-menu):not(.wp-menu *) { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+.wp-full #app { visibility: hidden; }

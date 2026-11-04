@@ -3,8 +3,8 @@ import { store, saveSettings, onLeave } from '../main.js';
 import { $, $$, esc, icon, avatar, toast, AVATAR_ICONS, AVATAR_COLORS } from '../ui.js';
 
 const SECTIONS = [
-  ['profile', 'Profile', 'user'], ['appearance', 'Appearance', 'palette'], ['playback', 'Playback', 'sliders'],
-  ['connectors', 'Connectors', 'plug'], ['together', 'Together', 'users'], ['nodes', 'Nodes', 'nodes'], ['updates', 'Updates', 'bolt'], ['about', 'About', 'info'],
+  ['profile', 'Profile', 'user'], ['appearance', 'Appearance', 'palette'], ['playback', 'Playback', 'sliders'], ['streams', 'Streams', 'film'],
+  ['connectors', 'Connectors', 'plug'], ['together', 'Friends', 'users'], ['nodes', 'Nodes', 'nodes'], ['updates', 'Updates', 'bolt'], ['about', 'About', 'info'],
 ];
 const seg = (name, opts, cur) => `<div class="seg" data-seg="${name}">${opts.map(([v, l, ic]) => `<button data-v="${v}" class="${String(cur) === String(v) ? 'on' : ''}">${ic ? icon(ic) : ''}${l}</button>`).join('')}</div>`;
 const card = ({ title, desc, body, foot, danger }) => `<section class="scard ${danger ? 'danger' : ''}"><div class="body"><h3>${title}</h3>${desc ? `<p class="desc">${desc}</p>` : ''}${body}</div>${foot ? `<div class="foot">${foot}</div>` : ''}</section>`;
@@ -24,7 +24,7 @@ export default async function settings(el, { section = 'profile' }) {
     <div class="settings"><nav class="snav" aria-label="Settings">${SECTIONS.map(([k, l, ic]) => `<a href="#/settings/${k}" class="${k === section ? 'on' : ''}">${icon(ic)} ${l}</a>`).join('')}</nav>
     <div class="scol" id="sbody"></div></div></div>`;
   const body = $('#sbody');
-  await ({ profile, appearance, playback, connectors, together: togetherSettings, nodes, updates, about }[section])(body);
+  await ({ profile, appearance, playback, streams, connectors, together: togetherSettings, nodes, updates, about }[section])(body);
 }
 
 // ---------- Profile ----------
@@ -35,7 +35,7 @@ function profile(body) {
       card({ title: 'Display name', desc: 'Shown in the menu and the welcome screen.',
         body: `<div class="field"><label for="pname">Name</label><input id="pname" class="input" maxlength="40" value="${esc(p.name)}" style="max-width:340px"></div>`,
         foot: `<span>Up to 40 characters. Saves automatically.</span>${savestat('s1')}` }) +
-      card({ title: 'Avatar', desc: 'Upload a photo or build one: shape, gradient, frame. Friends see it in Together.',
+      card({ title: 'Avatar', desc: 'Upload a photo or build one: shape, gradient, frame. Friends see it next to your name.',
         body: '<div id="avStudio"></div>',
         foot: `<span>Saves automatically.</span>${savestat('s2')}` });
     const saveName = debounce(() => saveSettings({ profile: { name: p.name } }).then(() => flash(body, 's1')).catch((e) => toast(e.message, 'err')));
@@ -64,7 +64,7 @@ function profile(body) {
 // ---------- Another person on this Mac ----------
 function mountInstances(body) {
   body.insertAdjacentHTML('beforeend', card({ title: 'Another person on this Mac',
-    desc: 'Start a second IronHide with its own profile, friend code and history, then open it in a new tab. Good for trying Together with yourself, or sharing this computer.',
+    desc: 'Start a second IronHide with its own profile, friend code and history, then open it in a new tab. Good for trying rooms with yourself, or sharing this computer.',
     body: `<div id="instList" class="inst-list"></div>
       <div class="inst-new"><input id="instName" class="input" maxlength="40" placeholder="Name (optional)" aria-label="Name"><button class="btn primary" id="instGo">Start a new instance</button></div>
       <label class="inst-keys"><input type="checkbox" id="instKeys" checked> Use my debrid keys so they can play right away</label>`,
@@ -128,7 +128,7 @@ async function playback(body) {
     body.innerHTML =
       card({ title: 'Player', desc: 'Where playback happens when you press Play.', body:
         row('Player', 'mpv opens a native fullscreen window. The web player plays inside this page.', seg('player', [['mpv', 'mpv (native)', 'monitor'], ['web', 'Web player', 'laptop']], p.player)) +
-        (p.player === 'web' ? row('Quality when transcoding', 'Only used if the browser cannot decode the video directly.', seg('webMaxHeight', [['source', 'Source'], ['1080', '1080p'], ['720', '720p']], p.webMaxHeight)) +
+        (p.player === 'web' ? row('Web player quality', 'The browser and rooms pick this version first. 4K stays smooth in mpv, which is not affected.', seg('webMaxHeight', [['source', 'Source'], ['1080', '1080p'], ['720', '720p']], p.webMaxHeight)) +
           row('Always use GPU transcode', 'Skips direct play. Use if a file stutters or has no picture.', `<button class="switch ${p.forceTranscode ? 'on' : ''}" id="ftx" role="switch" aria-checked="${p.forceTranscode}" aria-label="Force transcode"></button>`) : '') +
         `<div class="banner" style="margin-top:var(--s4)">${icon('info')}<span>${cap.ffmpeg ? `ffmpeg found · GPU encoding via ${esc(cap.gpu)}. ` : 'ffmpeg not found, the web player is unavailable. '}This browser decodes HEVC: <b>${bc.hevc ? 'yes' : 'no'}</b>. Web playback streams the video untouched when possible (no CPU use) and converts audio to AAC.</span></div>` }) +
       card({ title: 'Preferred quality', desc: 'IronHide uses this to pick the “Best match” stream and for one-click play.', body:
@@ -215,6 +215,37 @@ async function nodes(body) {
   onLeave(() => clearInterval(t));
 }
 
+// ---------- Streams: what Torrentio and Comet give this person ----------
+const LANG_NAMES = [['en', 'English'], ['lt', 'Lithuanian'], ['sv', 'Swedish'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['it', 'Italian'], ['pt', 'Portuguese'], ['ru', 'Russian'], ['pl', 'Polish']];
+const KIND_NAMES = [['4k', '4K'], ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['brremux', 'Remux'], ['hdrall', 'HDR'], ['dolbyvision', 'Dolby Vision'], ['threed', '3D'], ['cam', 'Cam'], ['scr', 'Screener']];
+async function streams(body) {
+  const p = { ...store.settings.playback };
+  const draw = () => {
+    const al = p.audioLangs || [], hide = p.hideKinds || [];
+    body.innerHTML =
+      card({ title: 'Languages', desc: 'Picks the version with your language first, then the right audio track when it plays.', body:
+        `<div class="st-row"><b>Audio</b><span>Tap in order of preference. The number shows the order.</span><div class="st-chips">${LANG_NAMES.map(([c, n]) => { const i = al.indexOf(c); return `<button class="st-chip ${i >= 0 ? 'on' : ''}" data-al="${c}">${i >= 0 ? `<em>${i + 1}</em>` : ''}${n}</button>`; }).join('')}</div></div>` +
+        row('Subtitles', 'Turned on automatically when found.', `<select class="input st-sel" id="stSub"><option value="">Off in the web player, mpv decides</option><option value="off">Always off</option>${LANG_NAMES.map(([c, n]) => `<option value="${c}">${n}</option>`).join('')}</select>`) }) +
+      card({ title: 'Which versions you see', desc: 'Applies to every title, in the web player and mpv.', body:
+        `<div class="st-row"><b>Hide these</b><span>Hidden versions never show up or get picked.</span><div class="st-chips">${KIND_NAMES.map(([k, n]) => `<button class="st-chip hide ${hide.includes(k) ? 'on' : ''}" data-hide="${k}">${n}</button>`).join('')}</div></div>` +
+        row('Sort by', 'Order asked from Torrentio.', seg('sortBy', [['qualitysize', 'Quality, then size'], ['quality', 'Quality'], ['seeders', 'Seeders'], ['size', 'Size']], p.sortBy || 'qualitysize')) +
+        row('How many to load', 'More gives more choice, especially smaller files.', seg('resultCount', [[20, '20'], [60, '60'], [100, '100']], p.resultCount || 60)),
+        foot: `<span>Only for you: each friend's IronHide has its own. Saves automatically.</span>${savestat('sst')}` });
+    $('#stSub', body).value = p.subLang || '';
+    $('#stSub', body).onchange = (e) => persist({ subLang: e.target.value });
+    $$('[data-al]', body).forEach((b) => (b.onclick = () => { const c = b.dataset.al; persist({ audioLangs: al.includes(c) ? al.filter((x) => x !== c) : [...al, c] }); }));
+    $$('[data-hide]', body).forEach((b) => (b.onclick = () => { const k = b.dataset.hide; persist({ hideKinds: hide.includes(k) ? hide.filter((x) => x !== k) : [...hide, k] }); }));
+    bindSeg(body, 'sortBy', (v) => persist({ sortBy: v }));
+    bindSeg(body, 'resultCount', (v) => persist({ resultCount: +v }));
+  };
+  const persist = async (patch) => {
+    Object.assign(p, patch);
+    try { await saveSettings({ playback: p }); } catch (e) { return toast(e.message, 'err'); }
+    draw(); flash(body, 'sst');
+  };
+  draw();
+}
+
 // ---------- Together (relay, privacy) ----------
 async function togetherSettings(body) {
   const { onState, fmtCode } = await import('../social.js');
@@ -229,30 +260,40 @@ async function togetherSettings(body) {
       card({ title: 'Your friend code', desc: 'Friends add this code to connect with you. Your name and avatar come from Profile.', body:
         `<div class="tg-code" style="font-size:30px">${s.you ? esc(fmtCode(s.you.id)) : '—'}</div>`, foot: `<span>Your private key stays on this Mac.</span><button class="btn" id="cpc" ${s.you ? '' : 'disabled'}>Copy code</button>` }) +
       card({ title: 'Privacy', body:
+        row('Share my profile with friends', 'Friends can open your stats, favourites, list, medals and what you watched.', `<button class="switch ${s.shareProfile ? 'on' : ''}" id="shP" role="switch" aria-checked="${s.shareProfile}" aria-label="Share profile"></button>`) +
         row('Show what I am watching', 'Friends see the title you have open in the player.', `<button class="switch ${s.shareStatus ? 'on' : ''}" id="sh" role="switch" aria-checked="${s.shareStatus}" aria-label="Share status"></button>`) +
         row('Appear offline', 'Stay connected for rooms, but friends see you as offline.', `<button class="switch ${s.appearOffline ? 'on' : ''}" id="off" role="switch" aria-checked="${s.appearOffline}" aria-label="Appear offline"></button>`), foot: `<span>Saves automatically.</span>${savestat('s6')}` });
     const save = (patch, id) => put('/api/social/settings', patch).then(() => flash(body, id)).catch((e) => toast(e.message, 'err'));
     $('#relay', body).oninput = debounce((e) => save({ relayUrl: e.target.value.trim() }, 's5'), 700);
     $('#cpc', body)?.addEventListener('click', () => navigator.clipboard.writeText(s.you.id).then(() => toast('Friend code copied', 'ok')));
-    $('#sh', body).onclick = () => save({ shareStatus: !s.shareStatus }, 's6'); $('#off', body).onclick = () => save({ appearOffline: !s.appearOffline }, 's6');
+    $('#shP', body).onclick = () => save({ shareProfile: !s.shareProfile }, 's6'); $('#sh', body).onclick = () => save({ shareStatus: !s.shareStatus }, 's6'); $('#off', body).onclick = () => save({ appearOffline: !s.appearOffline }, 's6');
     if (focus === 'relay') { const i = $('#relay', body); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
   };
   let sig = '';
-  const off = onState((s) => { const k = JSON.stringify([s.relay, s.you?.id, s.shareStatus, s.appearOffline]); if (k === sig) return; sig = k; draw(s); });
+  const off = onState((s) => { const k = JSON.stringify([s.relay, s.you?.id, s.shareStatus, s.shareProfile, s.appearOffline]); if (k === sig) return; sig = k; draw(s); });
   onLeave(off);
 }
 
 // ---------- Updates ----------
 async function updates(body) {
   const { CHANGELOG } = await import('../changelog.js');
-  const when = (d) => new Date(d + 'T12:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  const when = (iso) => { const d = new Date(iso); return `${d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} at ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`; };
+  const n = (x) => Number(x || 0).toLocaleString();
   const KIND = { New: 'new', Improved: 'imp', Fixed: 'fix', 'Known limits': 'lim' };
-  body.innerHTML = `<div class="upd"><header class="upd-top"><h2>What's new</h2><p>Every update to IronHide, newest first.</p></header>
-    <ol class="upd-list">${CHANGELOG.map((u, i) => `<li class="upd-i">
-      <details ${i < 2 ? 'open' : ''}><summary><span class="upd-v">v${esc(u.version)}</span><span class="upd-h"><b>${esc(u.title)}</b>${u.status === 'dev' ? '<em>In testing</em>' : i === 0 ? '<em class="latest">Latest</em>' : ''}<small>${esc(when(u.date))}</small></span><span class="upd-c">${icon('chev')}</span></summary>
-        <p class="upd-s">${esc(u.summary)}</p>
+  // a small GitHub-style strip: ten blocks split by the share of added and removed lines
+  const strip = (a, d) => { const t = a + d; if (!t) return ''; const g = Math.round((a / t) * 10); return `<span class="upd-strip" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i class="${i < g ? 'a' : 'd'}"></i>`).join('')}</span>`; };
+  const statsHtml = (st) => {
+    if (!st || !st.commits) return '';
+    return `<div class="upd-stat"><b class="plus">+${n(st.add)}</b><b class="minus">−${n(st.del)}</b>${strip(st.add, st.del)}<span>${n(st.commits)} commit${st.commits === 1 ? '' : 's'} · ${n(st.files)} file${st.files === 1 ? '' : 's'}</span>${st.workAdd || st.workDel ? `<span class="upd-work">plus uncommitted <b class="plus">+${n(st.workAdd)}</b> <b class="minus">−${n(st.workDel)}</b></span>` : ''}</div>`;
+  };
+  let stats = {}; try { stats = await post('/api/updates/stats', { items: CHANGELOG.map((u) => ({ version: u.version, range: u.range, commits: u.commits, work: u.work })) }); } catch {}
+  const total = Object.values(stats).reduce((a, s) => ({ add: a.add + s.add, del: a.del + s.del, commits: a.commits + s.commits }), { add: 0, del: 0, commits: 0 });
+  body.innerHTML = `<div class="upd"><header class="upd-top"><h2>What's new</h2><p>Every update to IronHide, newest first. Numbers come from git and leave out screenshots and lockfiles.</p>${total.commits ? `<div class="upd-stat big"><b class="plus">+${n(total.add)}</b><b class="minus">−${n(total.del)}</b>${strip(total.add, total.del)}<span>${n(total.commits)} commits in total</span></div>` : ''}</header>
+    <ol class="upd-list">${CHANGELOG.map((u, i) => { const st = stats[u.version]; return `<li class="upd-i">
+      <details ${i < 2 ? 'open' : ''}><summary><span class="upd-v">v${esc(u.version)}</span><span class="upd-h"><b>${esc(u.title)}</b>${u.status === 'dev' ? '<em>In testing</em>' : i === 0 ? '<em class="latest">Latest</em>' : ''}<small>${esc(when(st?.lastAt || `${u.date}T12:00:00`))}</small></span><span class="upd-c">${icon('chev')}</span></summary>
+        ${statsHtml(st)}<p class="upd-s">${esc(u.summary)}</p>
         <div class="upd-g">${Object.entries(u.groups).map(([k, items]) => `<section class="${KIND[k] || ''}"><h4>${esc(k)}</h4><ul>${items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></section>`).join('')}</div>
-      </details></li>`).join('')}</ol></div>`;
+      </details></li>`; }).join('')}</ol></div>`;
 }
 
 // ---------- About ----------

@@ -5,6 +5,7 @@ import { join, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { getProp, setProp, isMpvRunning as ipcRunning } from './mpv-ipc.js';
+import { getSettings, STREAM_LANGS } from './settings.js';
 import { setPlayState, getPlayState } from './playstate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -43,11 +44,20 @@ function formatTime(seconds) {
   return `${m}m ${s}s`;
 }
 
+// The person's audio and subtitle languages, for mpv
+async function langArgs() {
+  const pb = (await getSettings()).playback, codes = (pb.audioLangs || []).flatMap((c) => STREAM_LANGS[c]?.iso || []);
+  const out = [`--alang=${[...new Set([...codes, 'eng', 'en', 'lit', 'lt', 'swe', 'sv'])].join(',')}`];
+  if (pb.subLang === 'off') out.push('--sid=no');
+  else if (STREAM_LANGS[pb.subLang]) out.push(`--slang=${STREAM_LANGS[pb.subLang].iso.join(',')}`);
+  return out;
+}
+
 export async function play(stream, subs = []) {
   const progressFile = PROGRESS_FILE;
   const subArgs = subs.flatMap(s => [`--sub-file=${s.path}`]);
   const ipcSocket = '/tmp/ironhide-mpv.sock';
-  const mpvArgs = ['--really-quiet', `--script=${LUA_SCRIPT}`, '--alang=eng,en,lit,lt,swe,sv', '--fullscreen=yes', `--input-ipc-server=${ipcSocket}`, ...subArgs];
+  const mpvArgs = ['--really-quiet', `--script=${LUA_SCRIPT}`, ...(await langArgs()), '--fullscreen=yes', `--input-ipc-server=${ipcSocket}`, ...subArgs];
 
   let proc;
 
@@ -142,7 +152,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
     setPlayState({ phase: 'launching', detail: 'Starting the player' });
 
     const mpvArgs = [
-      '--really-quiet', `--script=${LUA_SCRIPT}`, '--alang=eng,en,lit,lt,swe,sv',
+      '--really-quiet', `--script=${LUA_SCRIPT}`, ...(await langArgs()),
       // open behind everything, paused, until the stream is buffered; then we reveal it
       '--focus-on=never', '--pause', '--fullscreen=no', '--demuxer-readahead-secs=10',
       `--input-ipc-server=${ipcSocket}`,
@@ -157,7 +167,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
     ]);
 
     const interval = watchMpvProcess(progressFile, onFinish);
-    presentWhenReady(getPlayState().token);
+    presentWhenReady(getPlayState().token).catch((e) => { console.error('[player] showing mpv failed:', e.message); setPlayState({ phase: 'error', detail: 'The player did not start' }); });
     return { status: 'playing', progressFile, cancel: () => clearInterval(interval) };
 
   } else if (stream.magnet) {
@@ -203,7 +213,7 @@ export async function presentWhenReady(token) {
   while (Date.now() - t0 < 60000) {
     await sleep(500);
     if (stale()) return;
-    if (!(await ipcRunning().catch(() => false))) { if (Date.now() - t0 > 12000) break; continue; }
+    if (!ipcRunning()) { if (Date.now() - t0 > 12000) break; continue; }
     seenWindow = true;
     const dur = await getProp('duration').catch(() => null);
     if (!(dur > 0)) continue;
@@ -212,7 +222,7 @@ export async function presentWhenReady(token) {
     if ((cache || 0) - (pos || 0) >= 3 || Date.now() - t0 > 35000) break;
   }
   if (stale()) return;
-  if (!seenWindow || !(await ipcRunning().catch(() => false))) { setPlayState({ phase: 'error', detail: 'The player did not start' }); return; }
+  if (!seenWindow || !ipcRunning()) { setPlayState({ phase: 'error', detail: 'The player did not start' }); return; }
   setPlayState({ phase: 'playing', detail: 'Opening fullscreen' });
   await setProp('fullscreen', true).catch(() => {});
   await setProp('pause', false).catch(() => {});

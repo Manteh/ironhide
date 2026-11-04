@@ -1,13 +1,19 @@
 import { getConfig, debridKey } from './config.js';
+import { getSettings, STREAM_LANGS, HIDE_KINDS } from './settings.js';
 
 const SERVICE_SLUG = { torbox: 'torbox', realdebrid: 'realdebrid', alldebrid: 'alldebrid' };
 
-function torrentioBase() {
+// What this person asked for in Settings, Streams, in Torrentio's own format
+function torrentioOpts(pb) {
+  const hide = (pb.hideKinds || []).filter((k) => HIDE_KINDS[k]), langs = (pb.audioLangs || []).filter((c) => c !== 'en' && STREAM_LANGS[c]).map((c) => STREAM_LANGS[c].name);
+  return [hide.length ? `qualityfilter=${hide.join(',')}` : '', `sort=${pb.sortBy || 'qualitysize'}`, langs.length ? `language=${langs.join(',')}` : ''].filter(Boolean).join('|') + '|';
+}
+function torrentioBase(custom = '') {
   const cfg = getConfig();
   const key = debridKey(cfg);
   const slug = SERVICE_SLUG[cfg.debrid_provider];
   // Hosted mode plays in the browser, so skip releases no browser can decode (4K/HDR/DV/remux)
-  const opts = process.env.IRONHIDE_HOSTED === '1' ? 'qualityfilter=brremux,hdrall,dolbyvision,4k,scr,cam|sort=qualitysize|' : '';
+  const opts = process.env.IRONHIDE_HOSTED === '1' ? 'qualityfilter=brremux,hdrall,dolbyvision,4k,scr,cam|sort=qualitysize|' : custom;
   return slug && key ? `https://torrentio.strem.fun/${opts}${slug}=${key}` : 'https://torrentio.strem.fun';
 }
 
@@ -100,7 +106,7 @@ export async function getStreams(imdbId, type = 'movie', season, episode) {
 
   const comet = cometUrl(path);
   const [fromTorrentio, fromComet] = await Promise.all([
-    fetchStreams(`${torrentioBase()}/${path}`),
+    fetchStreams(`${torrentioBase(torrentioOpts((await getSettings()).playback))}/${path}`),
     comet ? fetchStreams(comet) : [],
   ]);
 

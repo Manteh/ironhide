@@ -65,10 +65,12 @@ async function poll() {
   try { np = await api('/api/nowplaying'); } catch { return; }
   if (!box) return;
   if (!np) {
-    if (++ended >= 3) { $('#nTitle', box).textContent = 'Playback ended'; $('#nSub', box).textContent = ''; setTimeout(closeNow, 1400); clearInterval(timer); }
+    // keep what we were showing: one slow answer from mpv is not the end of the film
+    box.classList.add('lost');
+    if (++ended >= 8) { $('#nTitle', box).textContent = 'Playback ended'; $('#nSub', box).textContent = ''; setTimeout(closeNow, 1400); clearInterval(timer); }
     return;
   }
-  ended = 0;
+  ended = 0; box.classList.remove('lost');
   const m = np.meta || {};
   const ep = m.season ? `S${pad(m.season)}E${pad(m.episode)}` : '';
   $('#nTitle', box).textContent = m.title || np.title;

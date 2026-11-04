@@ -1,17 +1,20 @@
+import { execFile } from 'child_process';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { z } from 'zod';
 import { tools, getLoadedStreams } from './tools.js';
-import { FEEDS, getFeed, getGenres, search as catalogSearch, getTitle } from './catalog.js';
+import { FEEDS, CINE_GENRES, getFeed, getGenres, search as catalogSearch, getTitle } from './catalog.js';
+import { forYou } from './discover.js';
 import { getHistory } from './history.js';
+import { profileData, profileMeta } from './profile.js';
 import { parseLangs } from './ui.js';
 import * as social from './social.js';
 import { listInstances, createInstance, startInstance, stopInstance, removeInstance } from './instances.js';
 import { addToHistory, updateEntryProgress } from './history.js';
 import { learnQuality } from './preferences.js';
-import { keyframesAround, ensureSyncClip, syncClipPath, capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
+import { refreshLink, touchSession, keyframesAround, ensureSyncClip, syncClipPath, capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
 import { readFile as readFileAsync } from 'fs/promises';
 import {
   getSettings, updateSettings, resetProfile, connectorsView, setConnectorKey, setDebridProvider, testConnector,
@@ -32,6 +35,13 @@ import { getPlayState, setPlayState, beginLaunch } from './playstate.js';
 
 const WEB_DIR = fileURLToPath(new URL('../web', import.meta.url));
 // A key that names one release without any debrid key in it: the torrent hash and file when we can see them, else the release name.
+let lastNp = null; // the last good now-playing answer
+// A release the debrid server refused stays marked for a while, so nobody is sent back to it
+const brokenStreams = new Map(), BROKEN_MS = 30 * 60 * 1000;
+const isBroken = (st) => { const k = streamPin(st), t = brokenStreams.get(k); if (t && Date.now() - t > BROKEN_MS) brokenStreams.delete(k); return brokenStreams.has(k); };
+const brokenSet = (streams) => new Set(streams.flatMap((s, i) => (isBroken(s) ? [i + 1] : [])));
+// The browser plays 1080p by default: lighter to download and decode, and it starts faster. mpv keeps your normal quality settings.
+const webPrefs = (p) => (p.webMaxHeight === 'source' ? p : { ...p, quality: `${p.webMaxHeight}p`, remux: 'avoid', maxSizeGb: p.maxSizeGb || 20 }); // your 4K remux preference is for mpv
 export const streamPin = (st) => { const h = (st.url || '').match(/\b[a-f0-9]{40}\b/i)?.[0] || st.infoHash; return h ? `h:${h.toLowerCase()}:${st.fileIdx ?? ''}` : `q:${String(st.quality || '').slice(0, 120)}`; };
 const findPinned = (streams, pin) => {
   let i = streams.findIndex((x) => streamPin(x) === pin);
@@ -134,13 +144,15 @@ async function handleApi(req, res, urlPath) {
 
   try {
     if (method === 'GET' && urlPath === '/api/catalog/feeds') {
-      return jsonResponse(res, { feeds: FEEDS.map(({ id, label, short, kind, type, noGenre }) => ({ id, label, short: short || label, kind, type, noGenre: !!noGenre })), genres: await getGenres() });
+      return jsonResponse(res, { feeds: FEEDS.map(({ id, label, short, kind, type, noGenre, cine, year, shuffle }) => ({ id, label, short: short || label, kind, type, noGenre: !!noGenre, cine: !!cine, year: !!year, shuffle: !!shuffle })), cineGenres: CINE_GENRES, genres: await getGenres() });
     }
+
+    if (method === 'GET' && urlPath === '/api/catalog/foryou') return jsonResponse(res, await forYou({ seed: new URL(req.url, 'http://localhost').searchParams.get('seed') || 0 }));
 
     const feedMatch = urlPath.match(/^\/api\/catalog\/feed\/([a-z_]+)$/);
     if (feedMatch && method === 'GET') {
       const fp = new URL(req.url, 'http://localhost').searchParams;
-      const items = await getFeed(feedMatch[1], { genre: fp.get('genre') || '', skip: fp.get('skip') || 0 });
+      const items = await getFeed(feedMatch[1], { genre: fp.get('genre') || '', skip: fp.get('skip') || 0, type: fp.get('type') || '', year: fp.get('year') || '', seed: fp.get('seed') || 0 });
       if (!items) return errorResponse(res, 'Unknown feed', 404);
       return jsonResponse(res, items);
     }
@@ -169,9 +181,11 @@ async function handleApi(req, res, urlPath) {
       const episode = p.get('episode') ? Number(p.get('episode')) : undefined;
       await tools.ironhide_streams.handler({ imdbId: p.get('imdbId'), title: p.get('title') || '', type, season, episode });
       const { streams } = getLoadedStreams();
-      const best = pickBest(streams, (await getSettings()).playback);
+      const pb = (await getSettings()).playback;
+      const best = pickBest(streams, pb.player === 'web' ? webPrefs(pb) : pb, { exclude: brokenSet(streams) });
       return jsonResponse(res, streams.map((s, i) => ({
         best: best === i + 1,
+        broken: isBroken(s),
         index: i + 1,
         isRD: s.isRD,
         cached: s.cached,
@@ -203,7 +217,7 @@ async function handleApi(req, res, urlPath) {
       beginLaunch({ title: body.title || '', imdbId: body.imdbId });
       await tools.ironhide_streams.handler({ imdbId: body.imdbId, title: body.title || '', type, season, episode });
       const { streams } = getLoadedStreams();
-      const best = pickBest(streams, playback);
+      const best = pickBest(streams, playback, { exclude: brokenSet(streams) });
       if (!best) { setPlayState({ phase: 'error', detail: 'No streams found for this title' }); return errorResponse(res, 'No streams found for this title', 404); }
       setPlayState({ phase: 'resolving', detail: `Resolving ${streams[best - 1].size || 'stream'}` });
       const out = await tools.ironhide_play.handler({ index: best, resumeFrom });
@@ -264,6 +278,8 @@ async function handleApi(req, res, urlPath) {
       return jsonResponse(res, await getNodes(new URL(req.url, 'http://localhost').searchParams.has('refresh')));
     }
 
+    if (method === 'GET' && urlPath === '/api/profile') return jsonResponse(res, await profileData());
+    if (method === 'GET' && urlPath === '/api/profile/meta') return jsonResponse(res, await profileMeta());
     if (method === 'GET' && urlPath === '/api/watchlist') return jsonResponse(res, await getWatchlist());
     if (method === 'POST' && urlPath === '/api/watchlist/toggle') return jsonResponse(res, await toggleWatchlist(await parseBody(req)));
 
@@ -285,6 +301,22 @@ async function handleApi(req, res, urlPath) {
       let a = 0, b = size - 1; if (rg) { if (rg[1] !== '') a = +rg[1]; if (rg[2] !== '') b = Math.min(+rg[2], size - 1); if (rg[1] === '' && rg[2] !== '') { a = Math.max(0, size - +rg[2]); b = size - 1; } }
       res.writeHead(rg ? 206 : 200, { 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': b - a + 1, ...(rg ? { 'Content-Range': `bytes ${a}-${b}/${size}` } : {}) });
       return fs.createReadStream(f, { start: a, end: b }).pipe(res);
+    }
+    // Real numbers for the Updates tab, straight from git
+    if (method === 'POST' && urlPath === '/api/updates/stats') {
+      const items = (await parseBody(req)).items || [], out = {}, HASH = /^[0-9a-f]{7,40}$/, RANGE = /^[0-9a-f]{7,40}\.\.([0-9a-f]{7,40}|HEAD)$/;
+      const git = (args) => new Promise((res2) => execFile('git', args, { cwd: fileURLToPath(new URL('..', import.meta.url)), maxBuffer: 4e7 }, (e, so) => res2(e ? '' : so)));
+      const skip = (f) => /^docs\/screens\/|package-lock\.json$/.test(f);
+      const count = (txt, r) => { for (const l of txt.split('\n')) { if (l.startsWith('@')) { r.commits++; const at = l.slice(1); r.lastAt ||= at; r.firstAt = at; continue; } const m = l.match(/^(\d+)\t(\d+)\t(.+)$/); if (m && !skip(m[3])) { r.add += +m[1]; r.del += +m[2]; r.files.add(m[3]); } } };
+      for (const it of items.slice(0, 40)) {
+        const args = it.range && RANGE.test(it.range) ? [it.range] : Array.isArray(it.commits) && it.commits.every((h) => HASH.test(h)) ? ['--no-walk', ...it.commits] : null; if (!args) continue;
+        const r = { commits: 0, add: 0, del: 0, files: new Set(), lastAt: '', firstAt: '' };
+        count(await git(['log', '--date-order', '--numstat', '--format=@%cI', ...args]), r);
+        const row = { commits: r.commits, add: r.add, del: r.del, files: r.files.size, lastAt: r.lastAt, firstAt: r.firstAt };
+        if (it.work) { const w = { commits: 0, add: 0, del: 0, files: new Set() }; count(await git(['diff', '--numstat', 'HEAD']), w); row.workAdd = w.add; row.workDel = w.del; }
+        out[it.version] = row;
+      }
+      return jsonResponse(res, out);
     }
     if (method === 'GET' && urlPath === '/api/webplay/capabilities') return jsonResponse(res, capabilities());
 
@@ -321,17 +353,16 @@ async function handleApi(req, res, urlPath) {
         const loaded = getLoadedStreams();
         // In a room everyone plays the exact release the owner's copy chose. Without it, positions would not line up.
         const pinned = body.pin ? findPinned(loaded.streams, body.pin) : 0;
-        const best = pinned || pickBest(loaded.streams, settings, { browserSafe: CDN_DELIVERY || !!body.room });
+        const best = pinned || pickBest(loaded.streams, webPrefs(settings), { exclude: brokenSet(loaded.streams), browserSafe: CDN_DELIVERY || !!body.room });
         if (!best) { setPlayState({ phase: 'error', detail: 'No streams found for this title' }); return errorResponse(res, 'No streams found for this title', 404); }
         stream = loaded.streams[best - 1];
       }
       try {
         // CDN delivery (hosted mode): the browser plays straight from the debrid CDN, so only files it can
         // decode as-is qualify. Auto-pick moves on to the next best candidate when one doesn't.
-        const tried = new Set(); let info, direct;
-        // Auto-pick also moves on when a stream's download node can't be reached or the link is dead.
-        let lastErr;
-        for (let attempt = 0; attempt < (body.index ? 1 : 6); attempt++) {
+        const tried = brokenSet(getLoadedStreams().streams), marked = [], first = stream; let info, direct;
+        // A stream that fails gets marked and we move on to the next best one, even if it was picked by hand. Nobody needs to see "connection refused".
+        for (let attempt = 0; attempt < 6; attempt++) {
           const loaded = getLoadedStreams(), meta = { ...loaded.meta, season, episode };
           try {
             if (!stream.isRD || !stream.url) throw new Error('The web player needs a debrid stream (this one is a torrent)');
@@ -340,26 +371,30 @@ async function handleApi(req, res, urlPath) {
             direct = r.headers.get('location') || (r.status < 300 ? stream.url : null);
             if (!direct || /failed_|error|denied/i.test(direct)) throw new Error('That stream is not available right now');
             setPlayState({ phase: 'probing', detail: 'Checking codecs and tracks' });
-            info = await createSession({ url: direct, title: meta.title || body.title || 'Playing', meta, subs: loaded.subs || [], caps: body.caps || {}, settings, delivery: CDN_DELIVERY ? 'cdn' : 'proxy' });
+            info = await createSession({ url: direct, origin: stream.url, title: meta.title || body.title || 'Playing', meta, subs: loaded.subs || [], caps: body.caps || {}, settings, delivery: CDN_DELIVERY ? 'cdn' : 'proxy' });
             break;
           } catch (e) {
-            lastErr = e;
-            if (body.index) throw e;
+            if (/ffmpeg is not installed/.test(e.message)) throw e;
+            console.warn(`[webplay] stream failed: ${String(e.message).replace(/([?&](token|apikey|api_key)=)[^&\s]+/gi, '$1***').slice(0, 200)}`); // never log the debrid key
+            if (stream.isRD && stream.url) { brokenStreams.set(streamPin(stream), Date.now()); marked.push(streamPin(stream)); }
             tried.add(loaded.streams.indexOf(stream) + 1);
-            const next = pickBest(loaded.streams, settings, { exclude: tried, browserSafe: CDN_DELIVERY });
+            const next = pickBest(loaded.streams, webPrefs(settings), { exclude: tried, browserSafe: CDN_DELIVERY || !!body.room });
             if (!next) break;
-            setPlayState({ phase: 'resolving', detail: 'Trying another source' });
+            setPlayState({ phase: 'resolving', detail: "That version isn't working. Trying the next one" });
             stream = loaded.streams[next - 1];
           }
         }
-        if (!info) throw lastErr || new Error('No stream for this title could be opened.');
+        if (!info) {
+          marked.forEach((k) => brokenStreams.delete(k)); // every one failed: more likely the debrid server than the releases, so let the next try start clean
+          throw new Error("None of the versions we tried are working right now. Try again in a few minutes.");
+        }
         const loaded = getLoadedStreams(), meta = { ...loaded.meta, season, episode };
         await addToHistory({ title: meta.title || stream.quality.slice(0, 40), imdbId: meta.imdbId || '', type: meta.type || type, season, episode, quality: stream.quality.slice(0, 80), streamUrl: stream.url, streamIsRD: true }).catch(() => {});
         if (meta.imdbId) await learnQuality(meta.imdbId, stream).catch(() => {});
         setPlayState({ phase: 'playing', detail: 'Opening the player' });
         if (body.fromStart) resumeFrom = 0;
         if (typeof body.roomStart === 'number' && body.roomStart >= 0) resumeFrom = body.roomStart; // a room that was paused here
-        return jsonResponse(res, { ...info, start: resumeFrom || 0, pin: streamPin(stream), pinned: !body.pin || streamPin(stream) === body.pin, quality: stream.quality, size: stream.size });
+        return jsonResponse(res, { ...info, swapped: stream !== first, start: resumeFrom || 0, pin: streamPin(stream), pinned: !body.pin || streamPin(stream) === body.pin, quality: stream.quality, size: stream.size });
       } catch (err) {
         setPlayState({ phase: 'error', detail: err.message });
         return errorResponse(res, err.message, 502);
@@ -369,9 +404,11 @@ async function handleApi(req, res, urlPath) {
     const wpMatch = urlPath.match(/^\/api\/wp\/([a-z0-9-]+)\/(stream|progress|thumbs|thumb|keyframes|sub\/(\d+)\.vtt)$/);
     if (wpMatch) {
       const [, id, what, subIdx] = wpMatch;
+      touchSession(id);
       if (what === 'stream' && method === 'GET') {
         const q = new URL(req.url, 'http://localhost').searchParams;
-        return streamTo(res, id, Number(q.get('start')) || 0, Number(q.get('audio')) || 0, q.get('transcode') === '1', Number(q.get('sync')) || 0);
+        await refreshLink(id);
+        return streamTo(res, id, Number(q.get('start')) || 0, Number(q.get('audio')) || 0, q.get('transcode') === '1', Number(q.get('sync')) || 0, q.get('abs') === '1');
       }
       if (what === 'keyframes' && method === 'GET') return jsonResponse(res, await keyframesAround(id, new URL(req.url, 'http://localhost').searchParams.get('t')));
       if (what === 'thumbs' && method === 'POST') { const sess = getSession(id); if (sess) startThumbs(sess); return jsonResponse(res, { ok: true }); }
@@ -410,6 +447,7 @@ async function handleApi(req, res, urlPath) {
         if (method === 'PUT' && sub === '/settings') { social.setSocialSettings(body); return ok(); }
         if (method === 'POST' && sub === '/people') { social.refreshPeople(); return ok(); }
         if (method === 'POST' && sub === '/friends') { social.addFriend(body.code); return ok(); }
+        const fp = sub.match(/^\/friends\/([A-Za-z0-9]+)\/profile$/); if (method === 'GET' && fp) return jsonResponse(res, await social.friendProfile(fp[1]));
         if (method === 'POST' && sub === '/friends/accept') { social.acceptFriend(body.id); return ok(); }
         if (method === 'POST' && sub === '/friends/decline') { social.declineFriend(body.id); return ok(); }
         const del = sub.match(/^\/friends\/([A-Z0-9]+)$/);
@@ -465,10 +503,12 @@ async function handleApi(req, res, urlPath) {
     }
 
     if (method === 'GET' && urlPath === '/api/nowplaying') {
+      // mpv sometimes takes a moment to answer. Say "nothing playing" only after a few seconds of silence, so the page doesn't flicker.
       const running = await isMpvRunning();
-      if (!running) return jsonResponse(res, null);
-      const np = await getNowPlaying();
-      return jsonResponse(res, np && { ...np, meta: getLoadedStreams().meta });
+      const np = running ? await getNowPlaying() : null;
+      if (np) { lastNp = { at: Date.now(), v: { ...np, meta: getLoadedStreams().meta } }; return jsonResponse(res, lastNp.v); }
+      if (lastNp && Date.now() - lastNp.at < 6000) return jsonResponse(res, { ...lastNp.v, stale: true });
+      return jsonResponse(res, null);
     }
 
     if (method === 'GET' && urlPath.startsWith('/api/search')) {

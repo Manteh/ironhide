@@ -25,15 +25,16 @@ export async function saveSettings(patch) {
 const usingWeb = () => store.settings?.playback?.player === 'web';
 
 // In-browser player: the daemon picks/resolves/probes, then the player streams it.
-export async function playWeb(body) {
-  watchLaunch({ title: body.title || '', imdbId: body.imdbId, poster: body.poster }, 'web');
+export async function playWeb(body, opts = {}) {
+  if (!opts.quiet) watchLaunch({ title: body.title || '', imdbId: body.imdbId, poster: body.poster }, 'web');
   try {
     const { browserCaps, openPlayer } = await import('./player.js');
     const info = await post('/api/webplay', { ...body, caps: browserCaps() });
-    hideLaunch(); openPlayer(info, { room: !!body.room });
+    if (!opts.quiet) hideLaunch(); openPlayer(info, { room: !!body.room, parked: !!opts.parked, prefs: store.settings.playback });
+    if (info.swapped) toast(`That version isn't working, so we picked another: ${info.size || 'next best'}`, 'info');
     setTimeout(() => refreshHistory(), 3000);
     return true;
-  } catch (e) { hideLaunch(); toast(e.message, 'err'); return false; }
+  } catch (e) { if (!opts.quiet) hideLaunch(); toast(e.message, 'err'); return false; }
 }
 
 // play a specific stream row from the version picker
@@ -132,20 +133,9 @@ export function renderNav() {
     <button id="nSearch" class="ri" aria-label="Search" data-tip="Search  /">${icon('search')}<span>Search</span></button>
     <a href="#/continue" class="ri ${on(/^#\/continue/)}" aria-label="Continue watching" data-tip="Continue watching">${icon('play')}<span>Resume</span></a>
     <a href="#/shelf" class="ri ${on(/^#\/shelf/)}" aria-label="Shelf" data-tip="Shelf">${icon('bookmark')}<span>Shelf</span></a>
-    <a href="#/together" class="ri ${on(/^#\/together/)}" aria-label="Together" data-tip="Together">${icon('users')}<span>Together</span>${store.socialCount ? `<i class="rbadge">${store.socialCount}</i>` : ''}</a>
+    <a href="#/friends" class="ri ${on(/^#\/(friends|together)/)}" aria-label="Friends, ${online} online" data-tip="Friends">${icon('users')}<span>Friends</span>${store.socialCount ? `<i class="rbadge">${store.socialCount}</i>` : online ? `<i class="rbadge on">${online}</i>` : ''}</a>
     <i class="rsep"></i>
-    <a class="rnode" href="#/together" data-tip="${online} friend${online === 1 ? '' : 's'} online"><span class="dot ${online ? 'online' : 'offline'}"></span><b>${online}</b></a>
-    <a class="rme" href="#/settings/profile" aria-label="Settings" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 32)}</a>`;
-  const railEl = $('#nav');
-  if (!railEl.dataset.mag) {
-    railEl.dataset.mag = '1';
-    // dock-style magnify: items swell toward the cursor
-    railEl.addEventListener('pointermove', (e) => {
-      if (innerWidth <= 720 || e.pointerType === 'touch') return;
-      railEl.querySelectorAll('.ri, .rnode, .rme, .rlogo').forEach((it) => { const r = it.getBoundingClientRect(), d = e.clientY - (r.top + r.height / 2); it.style.setProperty('--mag', (1 + 0.14 * Math.exp(-(d * d) / (2 * 44 * 44))).toFixed(3)); });
-    });
-    railEl.addEventListener('pointerleave', () => railEl.querySelectorAll('.ri, .rnode, .rme, .rlogo').forEach((it) => it.style.removeProperty('--mag')));
-  }
+    <a class="rme ${on(/^#\/profile/)}" href="#/profile" aria-label="Your profile" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 32)}</a>`;
   $('#nSearch').onclick = () => import('./palette.js').then((m) => m.openPalette());
 }
 
@@ -165,12 +155,13 @@ function setupNowPlaying() {
     ({ open: () => import('./now.js').then((m) => m.openNow()), toggle: () => ctl('toggle'), back: () => ctl('seek_back', 30), fwd: () => ctl('seek_forward', 30), stop: () => ctl('stop') })[b.dataset.r]();
   };
 }
+let npMiss = 0;
 async function pollRemote() {
   try {
     const d = await api('/api/nowplaying');
     const el = $('#np');
-    if (!d) return el.classList.add('hidden');
-    el.classList.remove('hidden');
+    if (!d) { if (++npMiss >= 4) el.classList.add('hidden'); return; } // a slow answer is not the end
+    npMiss = 0; el.classList.remove('hidden');
     el.querySelector('.npt').textContent = d.title || 'Playing';
     el.querySelector('[data-r="toggle"]').innerHTML = icon(d.playing ? 'pause' : 'play');
     el.querySelector('.npbar i').style.width = (d.percent || 0) + '%';
@@ -225,7 +216,10 @@ route('/continue', 'browse', 'continue');
 route('/shelf', 'browse', 'shelf');
 route('/title/:type/:id', 'browse', 'title');
 route('/search/:q', 'browse', 'search');
+route('/friends', 'page', 'together');
 route('/together', 'page', 'together');
+route('/profile', 'page', 'profile');
+route('/profile/:id', 'page', 'profile');
 route('/settings', 'page', 'settings');
 route('/settings/:section', 'page', 'settings');
 
@@ -253,6 +247,7 @@ document.addEventListener('keydown', (e) => {
   seen(); setInterval(() => { if (document.visibilityState === 'visible') seen(); }, 20000);
   onEvent((ev, d) => { if (ev === 'reset') { location.href = '/'; return; } if (ev === 'toast') toast(d.text, d.kind === 'err' ? 'err' : d.kind === 'ok' ? 'ok' : ''); });
   onState((st) => { const n = st.incoming.length + st.invites.length, on = st.friends.filter((f) => f.online).length; if (n !== store.socialCount || on !== store.friendsOnline) { store.socialCount = n; store.friendsOnline = on; renderNav(); } });
+  import('./updates-bell.js').then((m) => m.mountBell());
   window.addEventListener('hashchange', navigate);
   navigate(); refreshNodes(); setInterval(refreshNodes, 30000);
 })();

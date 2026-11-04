@@ -2,6 +2,7 @@
 import { api, post } from './api.js';
 import { $, $$, esc, icon, fmtTime, toast, pad, posterOf } from './ui.js';
 
+const ISO = { en: ['eng', 'en'], lt: ['lit', 'lt'], sv: ['swe', 'sv'], es: ['spa', 'es'], fr: ['fre', 'fra', 'fr'], de: ['ger', 'deu', 'de'], it: ['ita', 'it'], pt: ['por', 'pt'], ru: ['rus', 'ru'], pl: ['pol', 'pl'] };
 const LANG = { eng: 'English', en: 'English', lit: 'Lithuanian', lt: 'Lithuanian', swe: 'Swedish', sv: 'Swedish', chi: 'Chinese', zho: 'Chinese', jpn: 'Japanese', spa: 'Spanish', fre: 'French', ger: 'German', ita: 'Italian', rus: 'Russian', und: 'Unknown' };
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const SYNCS = [-400, -300, -200, -150, -100, -50, 0, 50, 100, 200, 300]; // ms: <0 sound earlier, >0 sound later
@@ -20,7 +21,7 @@ export function browserCaps() {
 
 const watchingNow = (info) => ({ state: S?.video?.paused ? 'paused' : 'playing', title: info.title, type: info.meta?.type === 'movie' ? 'movie' : 'series', imdbId: info.meta?.imdbId || '', poster: info.meta?.imdbId ? posterOf(info.meta.imdbId) : '' });
 // closing the tab also ends the status
-addEventListener('pagehide', () => { try { fetch('/api/social/watching', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ watching: null }) }); } catch {} });
+addEventListener('pagehide', () => { try { if (S?.info?.id) fetch(`/api/wp/${S.info.id}`, { method: 'DELETE', keepalive: true }); fetch('/api/social/watching', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ watching: null }) }); } catch {} });
 
 export function openPlayer(info, opts = {}) {
   if (wp) closePlayer();
@@ -50,7 +51,6 @@ export function openPlayer(info, opts = {}) {
         <div class="wp-r">
           <button class="wp-btn" id="wpSubs"><span>Subtitles</span></button>
           <button class="wp-btn" id="wpAudio"><span>Audio</span></button>
-          <button class="wp-btn" id="wpSync" title="Line the sound up with the picture (Bluetooth headphones delay sound)"><span>Sync</span></button>
           <button class="wp-btn" id="wpSpeed"><span>1x</span></button>
           <button class="wp-btn ic" id="wpPip" aria-label="Picture in picture">${icon('pip')}</button>
           <button class="wp-btn ic" id="wpFs" aria-label="Fullscreen">${icon('expand')}</button>
@@ -58,13 +58,19 @@ export function openPlayer(info, opts = {}) {
       </div>
       <div class="wp-menu hidden" id="wpMenu"></div>
     </div>`;
-  document.body.appendChild(wp);
+  if (opts.parked) wp.classList.add('parked');
+  document.body.appendChild(wp); fullFlag();
   requestAnimationFrame(() => wp.classList.add('in'));
 
   const video = $('.wp-video', wp);
   S = { info, video, offset: 0, audio: info.audio.findIndex((a) => a.default) >= 0 ? info.audio.findIndex((a) => a.default) : 0, wasPlaying: true, transcode: false, dragging: false,
     sync: +(localStorage.getItem('wp-sync') || 0) || 0, cues: [], cueOn: -1, subIdx: -1, rate: 1, idle: 0, saver: 0, retried: false, lastUI: 0, room: !!opts.room };
   video.volume = +(localStorage.getItem('wp-vol') ?? 1); $('#wpVol', wp).value = video.volume;
+  // the audio and subtitles this person asked for in Settings, Streams
+  const P = opts.prefs || {};
+  for (const l of P.audioLangs || []) { const i = info.audio.findIndex((a) => ISO[l]?.includes(a.lang)); if (i >= 0) { S.audio = i; break; } }
+  const wantSub = ISO[P.subLang] && info.subs.find((x) => ISO[P.subLang].includes(x.lang));
+  if (wantSub) setTimeout(() => { if (S?.info === info) setSub(wantSub.index); }, 0);
 
   badges();
   bind();
@@ -80,16 +86,19 @@ export function openPlayer(info, opts = {}) {
 
 // ---------- rooms ----------
 const roomApi = () => ({ root: () => wp, video: () => S?.video, info: () => S?.info, cur: () => (S ? cur() : 0), dur: () => (S ? dur() : 0), hasStream: () => !!S?.video.getAttribute('src'),
-  load: (t, autoplay = false) => { if (S) load(t, autoplay); }, jump: (t) => jumpTo(t), keyframes: (t) => api(`/api/wp/${S.info.id}/keyframes?t=${Number(t).toFixed(3)}`), close: () => closePlayer(), hooks, park: () => parkPlayer(), unpark: () => unparkPlayer(), parked: () => !!wp?.classList.contains('parked'), wake: () => wake() });
+  load: (t, autoplay = false) => { if (S) load(t, autoplay); }, jump: (t) => jumpTo(t), holds: (t) => !!S && !!mse && bufferedRange(S.video, t - S.offset), usesMse: () => !!mse, mseCapable: () => mseCapable(), keyframes: (t) => api(`/api/wp/${S.info.id}/keyframes?t=${Number(t).toFixed(3)}`), close: () => closePlayer(), hooks, park: () => parkPlayer(), unpark: () => unparkPlayer(), parked: () => !!wp?.classList.contains('parked'), wake: () => wake() });
 function attachToRoom() { return import('./roomplay.js').then((m) => { if (S && wp && !roomOff) roomOff = m.attachRoom(roomApi()); }); }
 export const isRoomAttached = () => !!roomOff;
+export const isRoomPlayer = () => !!S?.room;
 export const detachRoom = () => { roomOff?.(); roomOff = null; };
 export const reattachRoom = () => attachToRoom();
 export const playerKey = () => { const m = S?.info?.meta; return m ? `${m.imdbId}:${m.season || 0}:${m.episode || 0}` : ''; };
 export const isParked = () => !!wp?.classList.contains('parked');
 // Back in a room shrinks the player to a corner and keeps it running, so coming back is instant and still in sync.
-export function parkPlayer() { if (!wp) return; if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); wp.classList.add('parked'); }
-export function unparkPlayer() { if (!wp) return; wp.classList.remove('parked'); wake(); }
+// While the player fills the window, nothing behind it should spend time painting
+const fullFlag = () => document.body.classList.toggle('wp-full', !!wp && !wp.classList.contains('parked'));
+export function parkPlayer() { if (!wp) return; if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); wp.classList.add('parked'); fullFlag(); }
+export function unparkPlayer() { if (!wp) return; wp.classList.remove('parked'); fullFlag(); wake(); }
 
 // ---------- Media Source feed ----------
 // With a plain <video src>, browsers read only ~2.5 s ahead on a piped stream and cannot seek in it. Fetching it ourselves and appending to a
@@ -111,15 +120,24 @@ function codecsOf(u8) {
   return video ? `video/mp4; codecs="${video}, mp4a.40.2"` : null;
 }
 function mseStop() { if (!mse) return; mse.dead = true; try { mse.ctl.abort(); } catch {} mse = null; }
-const bufferedRange = (video, rel) => { for (let i = 0; i < video.buffered.length; i++) if (rel >= video.buffered.start(i) - 0.05 && rel <= video.buffered.end(i) - 0.5) return true; return false; };
-function mseStart(url, video) {
+const bufferedRange = (video, rel) => { for (let i = 0; i < video.buffered.length; i++) if (rel >= video.buffered.start(i) - 0.25 && rel <= video.buffered.end(i) - 0.5) return true; return false; };
+const mseCapable = () => !!window.MediaSource && !S?.noMse;
+function mseStart(url, video, from = 0) {
   mseStop();
-  if (!window.MediaSource || S.noMse) return false;
-  const m = { dead: false, ctl: new AbortController() }, ms = new MediaSource(); mse = m;
+  const m = { dead: false, ctl: new AbortController(), want: from }, ms = new MediaSource(); mse = m;
   video.src = URL.createObjectURL(ms);
-  const fallback = () => { if (m.dead) return; m.dead = true; if (S) { S.noMse = true; video.src = url; video.playbackRate = S.rate; if (S.wasPlaying) video.play().catch(() => {}); } };
+  const fallback = () => { if (m.dead) return; m.dead = true; if (S) { S.noMse = true; load(from, S.wasPlaying); } };
   ms.addEventListener('sourceopen', async () => {
     let sb = null, head = new Uint8Array(0);
+    // The connection dropped before the end: keep playing what we hold, then reconnect at the same spot.
+    const lost = async () => {
+      if (m.dead || !S) return;
+      const n = S.retries = (S.retries || 0) + 1;
+      if (n > 6) { spin(false); toast('The stream keeps failing. The debrid server may be down, so try another version.', 'err'); return; }
+      while (!m.dead && video.buffered.length && video.buffered.end(video.buffered.length - 1) - video.currentTime > 4) await sleep(500);
+      await sleep(Math.min(16000, 1000 * 2 ** (n - 1)));
+      if (!m.dead && S) { const go = !video.paused || S.wasPlaying; load(cur(), go); }
+    };
     const idle = () => new Promise((r) => { if (!sb.updating) return r(); sb.addEventListener('updateend', r, { once: true }); });
     const append = async (chunk) => {
       for (;;) {
@@ -133,7 +151,7 @@ function mseStart(url, video) {
       }
     };
     try {
-      const res = await fetch(url, { signal: m.ctl.signal }); if (!res.ok || !res.body) return fallback();
+      const res = await fetch(url, { signal: m.ctl.signal }); if (!res.ok || !res.body) return lost();
       const reader = res.body.getReader();
       for (;;) {
         const { done, value } = await reader.read(); if (m.dead) return;
@@ -143,17 +161,22 @@ function mseStart(url, video) {
           if (findBox(head, 'moof') < 0) continue;
           const type = codecsOf(head); if (!type || !MediaSource.isTypeSupported(type)) { reader.cancel().catch(() => {}); return fallback(); }
           sb = ms.addSourceBuffer(type); sb.mode = 'segments';
-          try { ms.duration = Math.max(1, (S?.info.duration || 0) - (S?.offset || 0)) || Infinity; } catch {}
+          try { ms.duration = S?.info.duration || Infinity; } catch {}
           await append(head);
         } else await append(value);
         if (m.dead) return;
+        if (S) S.retries = 0;
         // the very first frame can sit a hair after 0: start on it rather than waiting at a gap
-        if (video.buffered.length && video.currentTime < video.buffered.start(0)) video.currentTime = video.buffered.start(0);
+        // the stream begins on the keyframe before the spot we asked for: go to the exact spot as soon as it has arrived
+        if (m.want != null && bufferedRange(video, m.want)) { video.currentTime = Math.max(m.want, video.buffered.start(0)); m.want = null; }
         while (!m.dead && video.buffered.length && video.buffered.end(video.buffered.length - 1) - video.currentTime > MAX_AHEAD) await sleep(1000);
       }
+      if (m.dead) return;
       if (sb) await idle();
-      if (!m.dead && ms.readyState === 'open') ms.endOfStream();
-    } catch (e) { if (m.dead || e.name === 'AbortError') return; if (!sb) fallback(); else toast('The stream stopped. Try again.', 'err'); }
+      const heldTo = (S?.offset || 0) + (video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0);
+      if (sb && S && heldTo >= (S.info.duration || 0) - 5) { if (ms.readyState === 'open') ms.endOfStream(); return; }
+      lost(); // the stream ended early: that is a dropped connection, not the end of the film
+    } catch (e) { if (m.dead || e.name === 'AbortError') return; lost(); }
   }, { once: true });
   return true;
 }
@@ -169,13 +192,16 @@ function load(start, autoplay) {
     video.playbackRate = S.rate; if (autoplay) video.play().catch(() => {});
     return;
   }
-  S.offset = Math.max(0, start); S.wasPlaying = autoplay; spin(true);
-  const url = `/api/wp/${info.id}/stream?start=${S.offset.toFixed(2)}&audio=${S.audio}${S.transcode ? '&transcode=1' : ''}${S.sync ? `&sync=${S.sync}` : ''}&t=${Date.now()}`;
-  if (!mseStart(url, video)) { mseStop(); video.src = url; }
+  S.wasPlaying = autoplay; spin(true);
+  const from = Math.max(0, start); S.resumeAt = from; // the clock keeps saying where we are going, not 0:00, while the new spot loads
+  const url = `/api/wp/${info.id}/stream?start=${from.toFixed(2)}&audio=${S.audio}${S.transcode ? '&transcode=1' : ''}${S.sync ? `&sync=${S.sync}` : ''}&t=${Date.now()}`;
+  if (mseCapable()) { S.offset = 0; mseStart(`${url}&abs=1`, video, from); } // real timestamps: currentTime is the film's own time
+  else { mseStop(); S.offset = from; video.src = url; }
   video.playbackRate = S.rate;
   if (autoplay) video.play().catch(() => {});
 }
-const cur = () => S.offset + (S.video.currentTime || 0);
+const cur = () => mse?.want != null ? mse.want : S.video.readyState === 0 && S.resumeAt != null ? S.resumeAt : curRaw();
+const curRaw = () => S.offset + (S.video.currentTime || 0);
 const dur = () => S.info.duration || (S.offset + (S.video.duration || 0));
 
 function seekTo(t) {
@@ -223,21 +249,21 @@ function bind() {
   video.addEventListener('timeupdate', () => { const now = performance.now(); if (!S.dragging && now - S.lastUI > 200) { S.lastUI = now; paintTime(); } paintBuffer(); });
   video.addEventListener('progress', paintBuffer);
   video.addEventListener('waiting', () => spin(true)); video.addEventListener('stalled', () => spin(true));
-  video.addEventListener('playing', () => { spin(false); wp.classList.add('started'); playIcon(); if (!S.thumbsOn && S.info.mode !== 'cdn') { S.thumbsOn = true; setTimeout(() => S && post(`/api/wp/${S.info.id}/thumbs`).catch(() => {}), 3000); } });
+  video.addEventListener('playing', () => { spin(false); wp.classList.add('started'); playIcon(); if (!S.thumbsOn && S.info.mode !== 'cdn' && !S.room) { S.thumbsOn = true; setTimeout(() => S && post(`/api/wp/${S.info.id}/thumbs`).catch(() => {}), 3000); } });
   video.addEventListener('canplay', () => spin(false));
   video.addEventListener('loadeddata', () => wp.classList.add('started'));
   // friends see Watching / Paused the moment it changes
   const tellWatch = () => post('/api/social/watching', { watching: watchingNow(S.info) }).catch(() => {});
   video.addEventListener('pause', () => { playIcon(); wake(); tellWatch(); }); video.addEventListener('play', () => { playIcon(); wake(); tellWatch(); });
   video.addEventListener('volumechange', () => { localStorage.setItem('wp-vol', video.volume); playIcon(); });
-  video.addEventListener('ended', () => { save(); closePlayer(); toast('Finished', 'ok'); });
+  video.addEventListener('ended', () => { save(); hooks.onDismiss?.(); closePlayer(); toast('Finished', 'ok'); });
   video.addEventListener('error', () => {
     if (!S.retried && S.info.mode === 'direct') { S.retried = true; S.transcode = true; badges(); toast('This browser can’t play that directly. Switching to GPU transcode…'); load(cur(), true); }
     else { spin(false); toast('Playback failed. Try the mpv player in Settings.', 'err'); }
   });
   video.addEventListener('click', toggle); video.addEventListener('dblclick', fs);
 
-  $('#wpBack', wp).onclick = () => { if (S.room) { parkPlayer(); if (!location.hash.startsWith('#/together')) location.hash = '#/together'; } else closePlayer(); };
+  $('#wpBack', wp).onclick = () => { if (S.room) { parkPlayer(); if (!location.hash.startsWith('#/friends')) location.hash = '#/friends'; } else closePlayer(); };
   wp.addEventListener('click', (e) => { if (wp.classList.contains('parked') && !e.target.closest('#wpMiniX')) { e.stopPropagation(); unparkPlayer(); } }, true);
   $('#wpMiniX', wp).onclick = (e) => { e.stopPropagation(); hooks.onDismiss?.(); closePlayer(); };
   $('#wpPlay', wp).onclick = toggle;
@@ -246,7 +272,7 @@ function bind() {
   $('#wpVol', wp).oninput = (e) => { video.volume = +e.target.value; video.muted = false; };
   $('#wpPip', wp).onclick = () => { document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture?.().catch(() => toast('Picture in picture is not available', 'err')); };
   $('#wpFs', wp).onclick = fs;
-  $('#wpSubs', wp).onclick = (e) => menu('subs', e.currentTarget); $('#wpAudio', wp).onclick = (e) => menu('audio', e.currentTarget); $('#wpSync', wp).onclick = (e) => menu('sync', e.currentTarget); $('#wpSpeed', wp).onclick = (e) => menu('speed', e.currentTarget);
+  $('#wpSubs', wp).onclick = (e) => menu('subs', e.currentTarget); $('#wpAudio', wp).onclick = (e) => menu('audio', e.currentTarget); $('#wpSpeed', wp).onclick = (e) => menu('speed', e.currentTarget);
 
   // scrubber
   const scrub = $('#wpScrub', wp), tip = $('#wpTip', wp);
@@ -265,7 +291,7 @@ function bind() {
     } catch {}
   };
   const showThumb = (t) => {
-    if (S.info.mode === 'cdn') return; // no server-made preview frames when video goes straight to the browser
+    if (S.info.mode === 'cdn' || S.room) return; // no preview frames straight from the CDN, or in rooms: the movie gets the bandwidth
     const my = ++thumbReq; clearTimeout(nearTimer); clearTimeout(exactTimer);
     nearTimer = setTimeout(() => fetchThumb(`/api/wp/${S.info.id}/thumb?t=${t.toFixed(1)}`, my, false, t), 30);
     exactTimer = setTimeout(() => fetchThumb(`/api/wp/${S.info.id}/thumb?t=${Math.round(t)}&exact=1`, my, true, t), 260);
@@ -278,7 +304,7 @@ function bind() {
   scrub.addEventListener('pointerup', (e) => { if (!S.dragging) return; S.dragging = false; userSeek(at(e) * dur()); });
   scrub.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') userSeek(cur() - 10); if (e.key === 'ArrowRight') userSeek(cur() + 10); });
 
-  wp.addEventListener('pointermove', wake); wp.addEventListener('pointerdown', (e) => { wake(); if (!e.target.closest('#wpMenu, #wpSubs, #wpAudio, #wpSync, #wpSpeed')) $('#wpMenu', wp).classList.add('hidden'); });
+  wp.addEventListener('pointermove', wake); wp.addEventListener('pointerdown', (e) => { wake(); if (!e.target.closest('#wpMenu, #wpSubs, #wpAudio, #wpSpeed')) $('#wpMenu', wp).classList.add('hidden'); });
   playIcon();
 }
 
@@ -291,7 +317,8 @@ function menu(kind, anchor) {
   let items = [];
   if (kind === 'audio') items = S.info.audio.map((a, i) => ({ label: labelA(a), on: i === S.audio, act: () => { if (i === S.audio) return; S.audio = i; load(cur(), !S.video.paused || S.wasPlaying); } }));
   if (kind === 'subs') items = [{ label: 'Off', on: S.subIdx < 0, act: () => setSub(-1) }, ...S.info.subs.map((s) => ({ label: LANG[s.lang] || s.lang, on: S.subIdx === s.index, act: () => setSub(s.index) }))];
-  if (kind === 'sync') items = [{ label: 'Sound earlier  ·  fixes sound that is late', on: false, head: true, act() {} }, ...SYNCS.map((v) => ({ label: syncLabel(v), on: (S.sync || 0) === v, act: () => { S.sync = v; localStorage.setItem('wp-sync', String(v)); syncBtn(); load(cur(), !S.video.paused || S.wasPlaying); } }))];
+  if (kind === 'audio') items.push({ label: `Sound timing: ${syncLabel(S.sync || 0)} ›`, on: false, act: () => setTimeout(() => menu('sync', anchor), 0) });
+  if (kind === 'sync') items = [...SYNCS.map((v) => ({ label: syncLabel(v), on: (S.sync || 0) === v, act: () => { S.sync = v; localStorage.setItem('wp-sync', String(v)); syncBtn(); load(cur(), !S.video.paused || S.wasPlaying); } }))];
   if (kind === 'speed') items = SPEEDS.map((r) => ({ label: r === 1 ? 'Normal' : r + 'x', on: S.rate === r, act: () => { S.rate = r; S.video.playbackRate = r; $('#wpSpeed span', wp).textContent = r + 'x'; } }));
   if (!items.length) items = [{ label: kind === 'subs' ? 'No subtitles found for this title' : 'Single audio track', on: false, act() {} }];
   m.dataset.kind = kind;
@@ -318,6 +345,22 @@ function parseVtt(text) {
 }
 
 // ---------- keyboard ----------
+// Press I: what the player is really doing
+let statsT = 0;
+function toggleStats() {
+  const old = wp.querySelector('.wp-stats');
+  if (old) { old.remove(); clearInterval(statsT); statsT = 0; return; }
+  const el = document.createElement('div'); el.className = 'wp-stats'; wp.append(el);
+  let q0 = S.video.getVideoPlaybackQuality(), t0 = performance.now();
+  const draw = () => {
+    const v = S?.video; if (!v) return;
+    const q = v.getVideoPlaybackQuality(), secs = (performance.now() - t0) / 1000, shown = q.totalVideoFrames - q.droppedVideoFrames - (q0.totalVideoFrames - q0.droppedVideoFrames), lost = q.droppedVideoFrames - q0.droppedVideoFrames;
+    const end = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+    el.textContent = `${v.videoWidth}×${v.videoHeight}  ·  ${v.paused ? 'paused' : `${secs > 0 ? (shown / secs).toFixed(1) : '0'} fps`}  ·  ${lost} dropped  ·  ${Math.max(0, end - v.currentTime).toFixed(0)} s buffered  ·  ${S.transcode ? 'converted' : S.info.mode || 'direct'}`;
+    q0 = q; t0 = performance.now();
+  };
+  draw(); statsT = setInterval(draw, 2000);
+}
 function onKey(e) {
   if (!wp || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && e.key !== 'Escape') return;
   const k = e.key; let used = true;
@@ -327,9 +370,10 @@ function onKey(e) {
   else if (k === 'ArrowUp') S.video.volume = Math.min(1, S.video.volume + 0.08);
   else if (k === 'ArrowDown') S.video.volume = Math.max(0, S.video.volume - 0.08);
   else if (k === 'm') S.video.muted = !S.video.muted;
+  else if (k === 'i') toggleStats();
   else if (k === 'f') fs();
   else if (k === 'c') setSub(S.subIdx < 0 && S.info.subs.length ? S.info.subs[0].index : -1);
-  else if (k === 'Escape') { if (!document.fullscreenElement) closePlayer(); else used = false; }
+  else if (k === 'Escape') { if (document.fullscreenElement) used = false; else if (S.room) { parkPlayer(); if (!location.hash.startsWith('#/friends')) location.hash = '#/friends'; } else closePlayer(); }
   else used = false;
   if (used) { e.preventDefault(); e.stopPropagation(); wake(); }
 }
@@ -342,6 +386,7 @@ export const debugState = () => (S ? { pos: cur(), paused: S.video.paused, offse
 
 export function closePlayer() {
   if (!wp) return;
+  document.body.classList.remove('wp-full'); clearInterval(statsT); statsT = 0;
   save(); clearInterval(S.saver); clearInterval(S.beat); clearTimeout(S.idle); mseStop();
   roomOff?.(); roomOff = null;
   post('/api/social/watching', { watching: null }).catch(() => {});

@@ -2,7 +2,9 @@
 // the web UI talks to it over the local API/WebSocket. No video ever goes through the relay.
 import WebSocket from 'ws';
 import { generateKeyPairSync, createPrivateKey, sign } from 'crypto';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { gzipSync, gunzipSync } from 'zlib';
+import { profileShare } from './profile.js';
 import { join } from 'path';
 import { CONFIG_DIR } from './config.js';
 import { getSettings } from './settings.js';
@@ -43,7 +45,7 @@ export function snapshot() {
   friends.sort((a, b) => (b.online - a.online) || (!!b.status - !!a.status) || a.name.localeCompare(b.name)); // online first, then watchers
   return {
     you: S.you, savedRooms: savedRooms().map((x) => ({ code: x.code, name: x.name, media: x.media, pos: x.pos, savedAt: x.savedAt, members: x.members, current: S.room?.code === x.code })).sort((a, b) => b.savedAt - a.savedAt), relayHost: relayHost(), directory: S.directory, people: S.people.filter((p) => !data.friends.some((f) => f.id === p.id)), relay: { url: data.relayUrl, status: link, version: S.relayV || 0 }, friends, incoming: S.incoming, outgoing: S.outgoing, room: S.room, chat: S.chat, invites: S.invites,
-    offset: median(S.offsets), shareStatus: data.shareStatus, appearOffline: data.appearOffline, reactions: REACTIONS,
+    offset: median(S.offsets), shareStatus: data.shareStatus, shareProfile: data.shareProfile !== false, appearOffline: data.appearOffline, reactions: REACTIONS,
   };
 }
 const ROOM_KEEP_MS = 14 * 864e5;
@@ -108,6 +110,17 @@ async function handle(m) {
       if (!S.incoming.some((r) => r.id === m.from.id)) S.incoming.push(m.from);
       emit('toast', { kind: 'info', text: `${m.from.name} sent you a friend request` }); push(); break;
     case 'friend.accepted': addFriendLocal(m.from); S.outgoing = S.outgoing.filter((o) => o.id !== m.from.id); emit('toast', { kind: 'ok', text: `${m.from.name} accepted your request` }); break;
+    case 'profile.get': { // a friend opened our profile
+      if (!data.friends.some((f) => f.id === m.from)) break;
+      if (data.shareProfile === false) { tx({ t: 'profile.res', to: m.from, rid: m.rid, denied: true }); break; }
+      profileShare(data.friends.length).then((p) => {
+        let z = gzipSync(JSON.stringify(p)).toString('base64');
+        if (z.length > 72000) { p.plays = p.plays.slice(0, 400); z = gzipSync(JSON.stringify(p)).toString('base64'); } // the relay carries 80 KB at most
+        tx({ t: 'profile.res', to: m.from, rid: m.rid, z });
+      }).catch(() => tx({ t: 'profile.res', to: m.from, rid: m.rid, denied: true }));
+      break;
+    }
+    case 'profile.res': { const w = profileWaits.get(m.rid); if (w) { profileWaits.delete(m.rid); w(m); } break; }
     case 'friend.sent': emit('toast', { kind: 'ok', text: `Request sent to ${m.name}` }); break;
     case 'friend.unknown': S.outgoing = S.outgoing.filter((o) => o.id !== m.to); emit('toast', { kind: 'err', text: `No one with that code is online on ${relayHost()}. They need to be connected to the same relay.` }); push(); break;
     case 'room': if (!m.room && S.room) { saveRoom(true); S.prevRoom = S.room; } S.room = m.room; if (!m.room) { S.chat = []; } push(); break;
@@ -143,7 +156,26 @@ export function acceptFriend(id, prof) { const p = prof || S.incoming.find((r) =
 export function declineFriend(id) { S.incoming = S.incoming.filter((r) => r.id !== id); push(); }
 export function removeFriend(id) { tx({ t: 'friend.remove', to: id }); dropFriend(id); }
 // forget someone locally (and refresh what the relay knows)
-function dropFriend(id) { data.friends = data.friends.filter((f) => f.id !== id); S.presence.delete(id); S.incoming = S.incoming.filter((r) => r.id !== id); S.outgoing = S.outgoing.filter((r) => r.id !== id); save(); tx({ t: 'friends', ids: data.friends.map((f) => f.id) }); push(); }
+// ---------- friend profiles ----------
+// Ask the friend's own IronHide. The last copy stays on this Mac, so the page still opens when they are offline.
+const profileWaits = new Map();
+const copyPath = (id) => join(CONFIG_DIR, 'friend-profiles', `${String(id).replace(/[^A-Z0-9]/gi, '')}.json`);
+export async function friendProfile(id) {
+  if (!data.friends.some((f) => f.id === id)) throw new Error('Not a friend');
+  const old = () => { try { return JSON.parse(readFileSync(copyPath(id), 'utf8')); } catch { return null; } };
+  if (link !== 'online') { const c = old(); return c ? { ...c, live: false } : { none: 'offline' }; }
+  const rid = Math.random().toString(36).slice(2, 12);
+  const m = await new Promise((res) => { const t = setTimeout(() => { profileWaits.delete(rid); res({ off: true }); }, 9000); profileWaits.set(rid, (x) => { clearTimeout(t); res(x); }); tx({ t: 'profile.get', to: id, rid }); });
+  if (m.denied) { rmSync(copyPath(id), { force: true }); return { none: 'private' }; } // they turned sharing off: drop what we kept
+  if (m.z) {
+    const profile = JSON.parse(gunzipSync(Buffer.from(m.z, 'base64')).toString()), out = { profile, at: Date.now() };
+    mkdirSync(join(CONFIG_DIR, 'friend-profiles'), { recursive: true }); writeFileSync(copyPath(id), JSON.stringify(out));
+    return { ...out, live: true };
+  }
+  const c = old(); return c ? { ...c, live: false } : { none: 'offline' };
+}
+function dropFriend(id) { rmSync(copyPath(id), { force: true }); dropFriendRow(id); }
+function dropFriendRow(id) { data.friends = data.friends.filter((f) => f.id !== id); S.presence.delete(id); S.incoming = S.incoming.filter((r) => r.id !== id); S.outgoing = S.outgoing.filter((r) => r.id !== id); save(); tx({ t: 'friends', ids: data.friends.map((f) => f.id) }); push(); }
 
 // ---------- rooms ----------
 export const createRoom = (name) => tx({ t: 'room.create', name });
@@ -173,6 +205,7 @@ export function setSocialSettings(p) {
   let reconnect = false;
   if (typeof p.relayUrl === 'string' && p.relayUrl.trim() !== data.relayUrl) { data.relayUrl = p.relayUrl.trim(); reconnect = true; }
   if (typeof p.shareStatus === 'boolean') data.shareStatus = p.shareStatus;
+  if (typeof p.shareProfile === 'boolean') data.shareProfile = p.shareProfile;
   if (typeof p.appearOffline === 'boolean') { data.appearOffline = p.appearOffline; sendProfile(); }
   save();
   if (reconnect) connect(); else push();

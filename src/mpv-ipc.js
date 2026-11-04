@@ -211,7 +211,7 @@ export function isMpvRunning() {
   try {
     const client = connect(SOCKET_PATH);
     return new Promise((resolve) => {
-      client.setTimeout(500);
+      client.setTimeout(2000); // mpv is slow to answer while it decodes 4K
       client.on('connect', () => { client.end(); resolve(true); });
       client.on('error', () => { resolve(false); });
       client.on('timeout', () => { client.end(); resolve(false); });

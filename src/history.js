@@ -59,7 +59,7 @@ export async function addToHistory(entry) {
       streamIsRD: entry.streamIsRD || false,
       watchedAt: new Date().toISOString(),
     });
-    await saveHistoryRaw(history.slice(0, 100));
+    await saveHistoryRaw(history.slice(0, 5000));
   });
 }
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { searchMedia, getImdbId, getLatestEpisode } from "./tmdb.js";
 import { getStreams } from "./torrentio.js";
+import { getSettings as getPrefs, hiddenKind } from "./settings.js";
 import { fetchSubtitles } from "./subtitles.js";
 import { parseLangs } from "./ui.js";
 import { addToHistory, getHistory, getLastWatched, updateLatestProgress } from "./history.js";
@@ -116,7 +117,9 @@ server.registerTool(
       fetchSubtitles(imdbId, season, episode).catch(() => []),
     ]);
 
-    let streams = [...torrentioStreams];
+    const prefs = (await getPrefs()).playback;
+    let streams = torrentioStreams.filter((s) => !hiddenKind(s.quality, prefs.hideKinds)); // Comet has no filter of its own
+    if (!preferLang && prefs.audioLangs?.[0] && prefs.audioLangs[0] !== 'en') preferLang = prefs.audioLangs[0].toUpperCase();
 
     // Deprioritize DUAL/dubbed releases (often default to non-English audio)
     const isDual = (q) => /\bDUAL\b|DUBBED|\bDUB\b/i.test(q);
@@ -138,11 +141,12 @@ server.registerTool(
       if (a.cached !== b.cached) return a.cached ? -1 : 1;
       if (a.isRD && !b.isRD) return -1;
       if (!a.isRD && b.isRD) return 1;
+      if (prefs.sortBy === 'seeders' && b.seeds !== a.seeds) return b.seeds - a.seeds;
       if (b.sizeBytes !== a.sizeBytes) return b.sizeBytes - a.sizeBytes;
       return b.seeds - a.seeds;
     });
 
-    streams = streams.slice(0, 20);
+    streams = streams.slice(0, prefs.resultCount || 60);
 
     if (streams.length === 0) {
       return { content: [{ type: "text", text: "No streams found." }] };

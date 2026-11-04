@@ -75,7 +75,7 @@ function cdnCompatible(info, video, audioStreams) {
   return '';
 }
 
-export async function createSession({ url, title, meta, subs = [], caps = {}, settings = {}, delivery = 'proxy' }) {
+export async function createSession({ url, origin = '', title, meta, subs = [], caps = {}, settings = {}, delivery = 'proxy' }) {
   if (!FFMPEG || !FFPROBE) throw new Error('ffmpeg is not installed (brew install ffmpeg)');
   url = await resolveFinal(url);
   const info = await probe(url);
@@ -95,10 +95,10 @@ export async function createSession({ url, title, meta, subs = [], caps = {}, se
   const maxH = settings.webMaxHeight === 'source' ? 0 : parseInt(settings.webMaxHeight || '1080', 10);
   const tooTall = maxH && video.height > maxH && settings.webMaxHeight !== 'source';
   const canCopy = (video.codec_name === 'h264' && !tenBitH264) || (video.codec_name === 'hevc' && !!caps.hevc);
-  const copyVideo = canCopy && !settings.forceTranscode;
+  const copyVideo = canCopy && !tooTall && !settings.forceTranscode; // only a 4K release exists and the cap is on: bring it down rather than make the browser decode 4K
   const id = randomUUID().slice(0, 12);
   const sess = {
-    id, url, title, meta, duration, subs, audio, procs: new Set(), createdAt: Date.now(),
+    id, url, origin, title, meta, duration, subs, audio, procs: new Set(), createdAt: Date.now(), seen: Date.now(),
     video: { codec: video.codec_name, width: video.width, height: video.height, hdr, dv, fps: video.avg_frame_rate },
     plan: { copyVideo, maxH: copyVideo ? 0 : (maxH || 0), hevc: video.codec_name === 'hevc', cdn: delivery === 'cdn' },
     log: [],
@@ -121,19 +121,35 @@ export const getSession = (id) => sessions.get(id);
 // (and rooms can start every viewer on the same frame).
 export async function keyframesAround(id, t) {
   const s = sessions.get(id); t = Math.max(0, Number(t) || 0);
-  if (!s || !s.plan.copyVideo || t < 0.01) return { prev: t < 0.01 ? 0 : t, next: t < 0.01 ? 0 : t };
+  if (t < 0.01) return { prev: 0 };
+  if (!s || !s.plan.copyVideo) return { prev: t };
+  // Seek there and read a single packet: the demuxer lands on the keyframe at or before t. Cheap even on a huge remux.
+  const first = async (at) => {
+    const out = await run(FFPROBE, ['-v', 'error', '-probesize', '1500000', '-analyzeduration', '800000', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time,flags', '-of', 'csv=p=0', '-read_intervals', `${at}%+#1`, s.url], 9000);
+    const [pts, flags] = out.trim().split('\n')[0].split(','); const k = parseFloat(pts);
+    return Number.isFinite(k) && flags?.includes('K') ? k : null;
+  };
   try {
-    const out = await run(FFPROBE, ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time,flags', '-of', 'csv=p=0', '-read_intervals', `${Math.max(0, t - 40)}%${t + 40}`, s.url], 25000);
-    const ks = out.trim().split('\n').map((l) => l.split(',')).filter((a) => a[1]?.includes('K')).map((a) => parseFloat(a[0])).filter(Number.isFinite).sort((a, b) => a - b);
-    const prev = [...ks].reverse().find((k) => k <= t + 0.001) ?? 0, next = ks.find((k) => k > t + 0.001) ?? prev;
-    return { prev, next };
-  } catch { return { prev: t, next: t }; }
+    let k = await first(t); if (k != null && k > t + 0.01) k = await first(Math.max(0, t - 15));
+    return { prev: k != null && k <= t + 0.01 ? k : t };
+  } catch { return { prev: t }; }
 }
 
-function ffArgs(s, start, audioIdx, force = false, sync = 0) {
+// A debrid link can die mid-session (a download node going away). Before starting a stream, check it, and ask for a new one if needed.
+export async function refreshLink(id) {
+  const s = sessions.get(id); if (!s?.origin || Date.now() - (s.checkedAt || 0) < 15000) return;
+  s.checkedAt = Date.now();
+  try { const r = await fetch(s.url, { headers: { Range: 'bytes=0-0' }, signal: AbortSignal.timeout(4000) }); await r.arrayBuffer().catch(() => {}); if (r.ok) return; } catch {}
+  try { const r = await fetch(s.origin, { redirect: 'manual', signal: AbortSignal.timeout(8000) }); const next = r.headers.get('location'); if (next) { s.url = await resolveFinal(next); s.log.push('link renewed'); } } catch {}
+}
+export const touchSession = (id) => { const s = sessions.get(id); if (s) s.seen = Date.now(); };
+
+
+function ffArgs(s, start, audioIdx, force = false, sync = 0, abs = false) {
   const copyVideo = s.plan.copyVideo && !force;
   const maxH = copyVideo ? 0 : (s.plan.maxH || (force ? 1080 : 0));
   const a = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
+  if (abs) a.push('-copyts'); // keep the film's real timestamps: the player then knows exactly what it received, wherever the keyframe was
   // Audio sync (like mpv's audio delay): <0 plays the sound earlier, >0 later. Browsers cannot see Bluetooth latency,
   // so this lets the user line the sound up with the picture. Done by opening the file twice and shifting one stream's timestamps.
   const lag = Math.max(-1500, Math.min(1500, Math.round(Number(sync) || 0)));
@@ -165,14 +181,16 @@ function ffArgs(s, start, audioIdx, force = false, sync = 0) {
     const ch = track.channels > 2 ? 6 : 2;
     a.push('-c:a', 'aac', '-b:a', ch > 2 ? '448k' : '192k', '-ac', String(ch));
   }
-  a.push('-sn', '-dn', '-avoid_negative_ts', 'make_zero', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1');
+  a.push('-sn', '-dn', ...(abs ? ['-avoid_negative_ts', 'disabled'] : ['-avoid_negative_ts', 'make_zero']), '-movflags', `frag_keyframe+empty_moov+default_base_moof${abs ? '+frag_discont' : ''}`, // without frag_discont the muxer rewinds every stream to 0:00
+      '-f', 'mp4', 'pipe:1');
   return a;
 }
 
-export function streamTo(res, id, start = 0, audio = 0, force = false, sync = 0) {
+export function streamTo(res, id, start = 0, audio = 0, force = false, sync = 0, abs = false) {
   const s = sessions.get(id);
   if (!s) { res.writeHead(404); return res.end('Unknown session'); }
-  const proc = spawn(FFMPEG, ffArgs(s, Math.max(0, start), audio, force, sync), { stdio: ['ignore', 'pipe', 'pipe'] });
+  s.seen = Date.now();
+  const proc = spawn(FFMPEG, ffArgs(s, Math.max(0, start), audio, force, sync, abs), { stdio: ['ignore', 'pipe', 'pipe'] });
   s.procs.add(proc);
   res.writeHead(200, { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-store', 'Accept-Ranges': 'none', 'X-Content-Type-Options': 'nosniff' });
   proc.stdout.pipe(res);
@@ -189,10 +207,20 @@ export async function subtitleVtt(id, index) {
   return 'WEBVTT\n\n' + srt.replace(/\r+/g, '').replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
 }
 
+// A closed tab can't always say goodbye. Nobody streaming and nothing heard from the player: stop its background work, then forget it.
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, s] of sessions) {
+    if (s.procs.size) { s.seen = now; continue; }
+    if (s.thumbs && now - s.seen > 120000) s.thumbs.stopped = true;
+    if (now - s.seen > 1800000) closeSession(id);
+  }
+}, 30000).unref?.();
+
 export function closeSession(id) {
   const s = sessions.get(id); if (!s) return;
   for (const p of s.procs) { try { p.kill('SIGKILL'); } catch {} }
-  if (s.thumbs) { s.thumbs.stopped = true; for (const p of s.thumbs.procs) { try { p.kill('SIGKILL'); } catch {} } try { rmSync(s.thumbs.dir, { recursive: true, force: true }); } catch {} }
+  if (s.thumbs) { s.thumbs.stopped = true; clearTimeout(s.thumbs.gap); for (const p of s.thumbs.procs) { try { p.kill('SIGKILL'); } catch {} } try { rmSync(s.thumbs.dir, { recursive: true, force: true }); } catch {} }
   sessions.delete(id);
 }
 
@@ -217,15 +245,17 @@ export function startThumbs(s) {
 }
 function pumpThumbs(s) {
   const T = s.thumbs;
-  while (!T.stopped && T.hold === 0 && T.running < 4 && T.queue.length) { T.running++; genThumb(s, T.queue.shift()).finally(() => { T.running--; pumpThumbs(s); }); }
+  // One at a time and spaced out: every frame is a new connection to the debrid server, and the movie itself needs the bandwidth.
+  if (T.stopped || T.hold !== 0 || T.running || !T.queue.length) return;
+  T.running = 1; genThumb(s, T.queue.shift()).finally(() => { T.running = 0; if (T.fails >= 3) { T.stopped = true; return; } T.gap = setTimeout(() => pumpThumbs(s), 1500); });
 }
 function genThumb(s, i) {
   const T = s.thumbs, out = join(T.dir, `${i}.jpg`), t = Math.min(s.duration - 2, i * T.step + 1);
   return new Promise((resolve) => {
-    const p = spawn('nice', ['-n', '12', FFMPEG, '-hide_banner', '-loglevel', 'error', '-nostdin', '-probesize', '500000', '-analyzeduration', '200000', '-noaccurate_seek', '-ss', String(t), '-i', s.url, '-frames:v', '1', '-an', '-sn', '-vf', 'scale=360:-2', '-q:v', '6', '-y', out], { stdio: 'ignore' });
+    const p = spawn('nice', ['-n', '12', FFMPEG, '-hide_banner', '-loglevel', 'error', '-nostdin', '-probesize', '500000', '-analyzeduration', '200000', '-threads', '1', '-skip_frame', 'nokey', '-noaccurate_seek', '-ss', String(t), '-i', s.url, '-frames:v', '1', '-an', '-sn', '-vf', 'scale=360:-2', '-q:v', '6', '-y', out], { stdio: 'ignore' });
     T.procs.add(p);
     const kill = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} }, 25000);
-    p.on('close', (code) => { clearTimeout(kill); T.procs.delete(p); if (code === 0 && existsSync(out)) T.ready.add(i); resolve(); });
+    p.on('close', (code) => { clearTimeout(kill); T.procs.delete(p); if (code === 0 && existsSync(out)) { T.ready.add(i); T.fails = 0; } else T.fails = (T.fails || 0) + 1; resolve(); });
     p.on('error', () => { clearTimeout(kill); T.procs.delete(p); resolve(); });
   });
 }
@@ -247,7 +277,7 @@ export function exactThumb(id, t) {
   if (exactJobs.has(key)) return exactJobs.get(key);
   T.hold++;
   const job = new Promise((resolve) => {
-    const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-probesize', '500000', '-analyzeduration', '200000', '-noaccurate_seek', '-ss', String(sec), '-i', s.url, '-frames:v', '1', '-an', '-sn', '-vf', 'scale=360:-2', '-q:v', '5', '-y', out], { stdio: 'ignore' });
+    const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-probesize', '500000', '-analyzeduration', '200000', '-threads', '1', '-skip_frame', 'nokey', '-noaccurate_seek', '-ss', String(sec), '-i', s.url, '-frames:v', '1', '-an', '-sn', '-vf', 'scale=360:-2', '-q:v', '5', '-y', out], { stdio: 'ignore' });
     T.procs.add(p);
     const kill = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} }, 9000);
     p.on('close', (code) => { clearTimeout(kill); T.procs.delete(p); exactJobs.delete(key); T.hold--; pumpThumbs(s); resolve(code === 0 && existsSync(out) ? { path: out, t: sec } : null); });

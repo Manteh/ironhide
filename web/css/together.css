@@ -1,5 +1,5 @@
 /* Together: friends, rooms, chat, reactions, in-player drawer */
-.rbadge { position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #ff5d5d; color: #fff; font: 700 10px/16px var(--font, inherit); text-align: center; font-style: normal; }
+.rbadge { position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #ff5d5d; color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; font-style: normal; }
 
 .together { max-width: 1180px; }
 .tg-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: var(--s5); align-items: start; }
@@ -85,7 +85,7 @@
 .dw-mem { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 18px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }
 .dmb { position: relative; display: inline-flex; } .dmb i { position: absolute; right: -2px; bottom: -2px; border: 2px solid #121216; width: 12px; height: 12px; box-sizing: border-box; }
 .dw-chat { flex: 1; min-height: 0; } .dw-chat.chat { height: auto; } .dw-chat .chat-list { flex: 1; }
-.wp-count { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 140px/1 var(--font, inherit); color: #fff; text-shadow: 0 8px 50px rgba(0,0,0,.6); pointer-events: none; z-index: 8; }
+.wp-count { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; pointer-events: none; z-index: 8; overflow: hidden; }
 .wp-count.hidden { display: none; }
 .wp-roomed.locked #wpPlay, .wp-roomed.locked .wp-scrub { cursor: not-allowed; }
 .wp-roomed.locked .wp-btn.big { opacity: .6; }
@@ -186,7 +186,7 @@
 .wp.parked:hover { transform: translateY(-3px); }
 .wp.parked > :not(.wp-video):not(.wp-poster):not(.wp-mini):not(.wp-count):not(.wp-spin) { display: none !important; }
 .wp.parked .wp-video { width: 100% !important; }
-.wp.parked .wp-count { font-size: 48px; }
+.wp.parked .wp-count { background: none; } .wp.parked .cd-bg, .wp.parked .cd-kick, .wp.parked .cd-title, .wp.parked .cd-who { display: none; } .wp.parked .cd-dial { width: 72px !important; height: 72px !important; } .wp.parked .cd-n { font-size: 30px !important; }
 .wp.parked .wp-mini { position: absolute; inset: 0 0 auto 0; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 18px 12px; background: linear-gradient(180deg, rgba(0,0,0,.75), transparent); font-size: 12.5px; font-weight: 600; }
 .wp-mini-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wp.parked .wp-mini .wp-btn { width: 28px; height: 28px; border-radius: 9px; font-size: 13px; flex: none; }
@@ -298,3 +298,62 @@
 .rm-note.in { border-color: #3ddc8466; } .rm-note.out { border-color: rgba(255,255,255,.2); }
 .rm-note.bye { opacity: 0; transform: translateX(-10px); }
 @keyframes rmnote { from { opacity: 0; transform: translateX(-14px); } }
+
+/* updates: git numbers */
+.upd-stat { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 0 18px 12px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.upd-stat.big { padding: 12px 0 0; font-size: 14px; }
+.upd-stat .plus, .upd-work .plus { color: #3ddc84; font-weight: 650; font-family: ui-monospace, Menlo, monospace; } .upd-stat .minus, .upd-work .minus { color: #ff7b7b; font-weight: 650; font-family: ui-monospace, Menlo, monospace; }
+.upd-strip { display: inline-flex; gap: 2px; } .upd-strip i { width: 8px; height: 8px; border-radius: 2px; } .upd-strip i.a { background: #3ddc84; } .upd-strip i.d { background: #ff7b7b; }
+.upd-work { flex-basis: 100%; }
+
+/* ---------- the countdown ---------- */
+.wp-count.cd-full { background: radial-gradient(ellipse at center, rgba(0,0,0,.62), rgba(0,0,0,.92) 75%); }
+.cd-bg { position: absolute; inset: -60px; background-size: cover; background-position: center; filter: blur(44px) saturate(1.25); opacity: .38; }
+.cd-in { position: relative; display: grid; justify-items: center; animation: cdIn .45s cubic-bezier(.2,.8,.2,1); }
+.cd-kick { font-size: 12px; font-weight: 600; letter-spacing: .24em; text-transform: uppercase; color: rgba(255,255,255,.62); }
+.cd-title { margin: 10px 0 34px; max-width: min(760px, 80%); font-size: clamp(26px, 3.6vw, 46px); font-weight: 700; line-height: 1.08; letter-spacing: -.03em; text-align: center; text-wrap: balance; }
+.cd-dial { position: relative; display: grid; place-items: center; width: clamp(190px, 26vmin, 280px); aspect-ratio: 1; }
+.cd-dial svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.cd-track { fill: rgba(0,0,0,.28); stroke: rgba(255,255,255,.13); stroke-width: 1.5; }
+.cd-hair { stroke: rgba(255,255,255,.08); stroke-width: 1; }
+.cd-sweep { fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; filter: drop-shadow(0 0 7px rgba(255,255,255,.5)); }
+.cd-n { position: relative; font-size: clamp(92px, 13vmin, 138px); font-weight: 700; line-height: 1; letter-spacing: -.05em; font-variant-numeric: tabular-nums; animation: cdNum .9s cubic-bezier(.16,.9,.3,1) both; }
+.cd-who { display: flex; align-items: center; margin-top: 30px; } .cd-who > span { display: grid; margin-left: -7px; border-radius: 50%; box-shadow: 0 0 0 2px #000; } .cd-who > span:first-child { margin-left: 0; }
+.cd-who small { margin-left: 12px; font-size: 13px; color: rgba(255,255,255,.72); }
+.cd-mini .cd-dial { width: 92px; } .cd-mini .cd-track { fill: rgba(0,0,0,.5); } .cd-mini .cd-n { font-size: 38px; letter-spacing: -.02em; } .cd-mini .cd-hair { display: none; } .cd-mini .cd-sweep { stroke-width: 5; }
+.wp-count.cd-go { transition: opacity .6s ease; opacity: 0; } .cd-go .cd-in { transition: transform .6s cubic-bezier(.3,0,.2,1); transform: scale(1.14); }
+@keyframes cdIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes cdNum { 0% { opacity: 0; transform: scale(1.32); } 22% { opacity: 1; } 100% { opacity: 1; transform: scale(1); } }
+.rm-cd .wp-top, .rm-cd .wp-bottom, .rm-cd .rm-pill, .rm-cd .rm-rx, .rm-cd .wp-spin, .rm-gating .wp-spin { opacity: 0 !important; pointer-events: none; }
+.wp-roomed.rm-open:not(.parked) .wp-spin { left: calc((100% - 372px) / 2); }
+html[data-motion="off"] .cd-in, html[data-motion="off"] .cd-n { animation: none; } html[data-motion="off"] .cd-go .cd-in { transform: none; }
+@media (prefers-reduced-motion: reduce) { .cd-in, .cd-n { animation: none; } .cd-go .cd-in { transform: none; } }
+a.fr-link { color: inherit; text-decoration: none; } a.fr-link:hover { text-decoration: underline; } .fr a.av { display: block; text-decoration: none; }
+.rm-panel { background: #0d0d11; } .rm-panel * { animation: none !important; }
+.rm-gate { background: rgba(14,14,18,.94); } .rm-pill { background: rgba(14,14,18,.8); }
+
+/* ---------- Friends page ---------- */
+.rbadge.on { background: #3ddc84; color: #06270f; }
+.tg-rh { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; } .tg-rh .tg-note { margin: 4px 0 0; } .tg-rh .btn { flex: none; display: inline-flex; align-items: center; gap: 7px; }
+.tg-rooms .sr:first-of-type { margin-top: 14px; }
+.tg-mine { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); } .tg-mine b { margin-left: 6px; color: var(--text); font-family: ui-monospace, Menlo, monospace; letter-spacing: .04em; }
+.tg-code-join { margin-top: 2px; padding: 4px 2px; font-size: 12.5px; color: var(--muted); } .tg-code-join summary { cursor: pointer; } .tg-code-join form { margin-top: 10px; }
+#tgLink[hidden] { display: none; }
+.rail .rbadge { top: 5px; right: 6px; }
+.tg-rh + .sr { margin-top: 14px; }
+.sr-inv { color: #3ddc84 !important; font-weight: 600; }
+.sr-more summary { padding: 10px 0 2px; font-size: 13px; color: var(--muted); cursor: pointer; } .sr-more summary:hover { color: var(--text); }
+.tg-relay .fw-dot { margin-right: 7px; }
+
+/* ---------- Friends page: tidy buttons and spacing ---------- */
+.together .btn.ghost { box-shadow: none; }
+.together .btn.sm { height: 36px; padding: 0 14px; font-size: 13px; border-radius: 10px; }
+.together .btn.sm.icon { width: 36px; padding: 0; }
+.together .btn.primary.sm { padding: 0 16px; }
+.room-head .tg-k { margin-bottom: 4px; } .room-head h2 { line-height: 1.15; }
+.tg-card > .tg-note + .btn { margin-top: 14px; } .tg-card.now > .tg-k { margin-bottom: 6px; } .tg-card.now > .tg-note { margin-top: 0; }
+.mb { padding: 8px 16px 8px 10px; gap: 12px; }
+.tg-note.tg-relay { display: flex; align-items: baseline; gap: 7px; } .tg-note.tg-relay .fw-dot { flex: none; margin: 0; }
+.tg-grid { grid-template-columns: 372px minmax(0, 1fr); }
+@media (max-width: 900px) { .tg-grid { grid-template-columns: 1fr; } }
+.fr .fi .pl { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .fr .fi .pl .pdot { flex: none; } .fr .fr-act { flex: none; }

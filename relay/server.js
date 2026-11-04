@@ -6,7 +6,7 @@ import { createPublicKey, verify, createHash, randomBytes } from 'crypto';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT) || 8790;
-const VERSION = 7; // 2 = rooms visible to friends, 3 = owner + kick + saved rooms, 4 = live player states, 5 = scheduled seeks, 6 = unfriend + temporary profiles, 7 = ready gate, pinned release, stall hold, cursors
+const VERSION = 8; // 2 = rooms visible to friends, 3 = owner + kick + saved rooms, 4 = live player states, 5 = scheduled seeks, 6 = unfriend + temporary profiles, 7 = ready gate, pinned release, stall hold, cursors, 8 = rooms pause when every player has closed
 const DIRECTORY = process.env.RELAY_DIRECTORY === '1'; // hosted mode: let members see who else is online
 const MAX_CHAT = 500, HISTORY = 60, REACTIONS = new Set(['👍', '😂', '😮', '❤️', '🔥', '👏', '😢', '🤯']);
 
@@ -80,7 +80,7 @@ function freezeIfIdle(r, lastPos) {
 }
 
 // --- ready gate: nobody's clock starts until everyone has buffered. The room waits, then all start the same frame together ---
-const GATE_MS = 25000, LEAD_MS = 1800, STALL_MS = 4000, HOLD_GAP_MS = 30000;
+const GATE_MS = 25000, LEAD_MS = 1800, START_LEAD_MS = 3000, STALL_MS = 4000, HOLD_GAP_MS = 30000;
 let gateTok = 0;
 function startGate(r, pos, reason, who) {
   const rate = r.pb.rate || 1;
@@ -91,7 +91,7 @@ function startGate(r, pos, reason, who) {
 }
 function releaseGate(r) {
   if (!r.gate) return;
-  const at = Date.now() + LEAD_MS, pos = r.gate.pos;
+  const pos = r.gate.pos, at = Date.now() + (r.gate.reason === 'play' && pos < 5 ? START_LEAD_MS : LEAD_MS); // the start of a film gets the full 3-2-1
   r.pb = { playing: true, pos, at, rate: r.pb.rate || 1 }; r.startAt = at; r.gate = null;
   toRoom(r, { t: 'room.pb', pb: r.pb, by: null, action: 'play', now: Date.now() }); pushRoom(r);
 }
@@ -140,8 +140,7 @@ setInterval(() => {
   for (const r of rooms.values()) {
     if (!r.pb.playing || !r.members.size || hasPlayer(r)) continue;
     const latest = [...(r.ms?.values() || [])].sort((a, b) => b.at - a.at)[0];
-    if (latest && ACTIVE.has(latest.state)) freezeIfIdle(r, latest.pos); // their last reported position
-    else if (!latest) freezeIfIdle(r);
+    freezeIfIdle(r, latest?.pos); // their last reported position
   }
 }, 5000).unref?.();
 setInterval(() => { const cut = Date.now() - 7 * 864e5; for (const [c, r] of rooms) if (!r.members.size && (r.lastActive || 0) < cut) rooms.delete(c); }, 3600e3).unref?.();
@@ -233,6 +232,9 @@ wss.on('connection', (ws) => {
         }
         break;
       }
+      // A friend's profile: passed straight through between mutual friends, never kept here
+      case 'profile.get': { const f = users.get(clean(m.to, 12)), rid = clean(m.rid, 16); if (f?.ws && mutual(u, f) && !f.hide) send(f.ws, { t: 'profile.get', from: u.id, rid }); else send(ws, { t: 'profile.res', id: clean(m.to, 12), rid, off: true }); break; }
+      case 'profile.res': { const f = users.get(clean(m.to, 12)); if (f?.ws && mutual(u, f)) send(f.ws, { t: 'profile.res', id: u.id, rid: clean(m.rid, 16), z: typeof m.z === 'string' ? m.z : null, denied: !!m.denied }); break; }
       case 'friend.remove': {
         const to = clean(m.to, 12); if (!to || to === u.id) break;
         u.friends.delete(to); const t = users.get(to);

@@ -131,7 +131,7 @@ export async function openDossier({ type, id }) {
       const media = { imdbId: id, type, title: meta.title, year: meta.year, poster: meta.poster, ...(type === 'series' ? { season: st.season || 1, episode: st.episode || 1 } : {}) };
       try {
         if (!social.state.room) { await sapi('/room', { name: `${meta.title} night` }); for (let i = 0; i < 25 && !social.state.room; i++) await new Promise((r) => setTimeout(r, 150)); }
-        await sapi('/room/media', { media }); toast('Sent to your room', 'ok'); location.hash = '#/together';
+        await sapi('/room/media', { media }); toast('Sent to your room', 'ok'); location.hash = '#/friends';
       } catch (e) { toast(e.message, 'err'); }
     });
     $('#dSave', box).onclick = async () => { await toggleSave({ ...item }); $('#dSave', box).innerHTML = saveLabel(); };
@@ -193,7 +193,7 @@ export async function openDossier({ type, id }) {
     }
     const all = st.streams;
     if (!all.length) { out.innerHTML = '<div class="note" style="padding:var(--s6) 0">No versions found for this one.</div>'; return; }
-    const rec = all.find((s) => s.best) || all.find((s) => s.cached) || all[0];
+    const rec = all.find((s) => s.best) || all.find((s) => s.cached && !s.broken) || all.find((s) => !s.broken) || all[0];
     const rest = all.filter((s) => s !== rec);
     const counts = {}; rest.forEach((s) => { const k = s.resolution || ''; counts[k] = (counts[k] || 0) + 1; });
     const tiers = TIERS.filter(([k]) => counts[k]);
@@ -216,7 +216,7 @@ export async function openDossier({ type, id }) {
       <div class="opts">${shown.map((s) => `<div class="opt" title="${esc(s.quality)}"><div class="o-res">${esc(tierLabel(s.resolution))}</div>
         <div class="o-info"><b>${esc(headline(s))}</b><div class="o-chips">${chipsOf(s, 4) || `<span class="o-none">${esc(s.group || 'Standard release')}</span>`}</div></div>
         <div class="o-size"><b>${esc(s.size || '—')}</b><span>${s.seeds ? '↑' + s.seeds : '&nbsp;'}</span></div>
-        <button class="btn" data-p="${s.index}" aria-label="Play this version">${icon('play')}</button></div>`).join('')}</div>
+        ${s.broken ? '<span class="badge warn" title="The debrid server refused this one. It gets another chance in 30 minutes.">Not working</span>' : `<button class="btn" data-p="${s.index}" aria-label="Play this version">${icon('play')}</button>`}</div>`).join('')}</div>
       ${list.length > shown.length ? `<button class="btn ghost wide" id="dMore">Show ${Math.min(list.length, 40) - shown.length} more</button>` : ''}` : ''}`;
 
     $$('[data-t]', out).forEach((b) => (b.onclick = () => { st.tier = b.dataset.t; st.more = false; renderStreams(); }));

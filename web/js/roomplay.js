@@ -7,7 +7,7 @@
 import { esc, icon, avatar, toast, $ } from './ui.js';
 import { social, onState, onEvent, sapi, serverNow, canControl, sendCursor } from './social.js';
 import { mountChat, floatEmoji } from './chat.js';
-import { isPlayerOpen, playerKey, closePlayer, isRoomAttached, reattachRoom, unparkPlayer, parkPlayer, isParked, detachRoom } from './player.js';
+import { isPlayerOpen, isRoomPlayer, playerKey, closePlayer, isRoomAttached, reattachRoom, unparkPlayer, parkPlayer, detachRoom } from './player.js';
 
 const PREBUFFER = 20;      // seconds buffered before a viewer counts as ready
 const NEAR = 0.3;          // close enough to start without restarting the stream
@@ -21,6 +21,18 @@ const runsRoom = (r, s) => r.host === s.you?.id || r.owner === s.you?.id;
 // Two soft notes made in the browser: rising when someone arrives, falling when someone goes.
 let audio = null;
 const soundsOn = () => localStorage.getItem('rm-sounds') !== '0';
+// One soft tick per second of the countdown, a brighter note on the last
+function tickSound(last) {
+  if (!soundsOn()) return;
+  try {
+    audio ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') return;
+    const t = audio.currentTime + 0.005, o = audio.createOscillator(), g = audio.createGain();
+    o.type = 'sine'; o.frequency.value = last ? 880 : 587.33;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.06, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + (last ? 0.3 : 0.12));
+    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + 0.32);
+  } catch {}
+}
 function chime(up) {
   if (!soundsOn()) return;
   try {
@@ -37,20 +49,23 @@ function chime(up) {
 }
 
 // ---------- opening by itself ----------
-let opening = false, dismissed = '', leftTimer = 0, leftKey = '';
-async function openFor(r) {
+let opening = false, dismissed = '', leftTimer = 0, leftKey = '', failedAt = 0;
+// Opening by itself must never cover what you are doing: anywhere but a free Together page, the room player starts in the corner.
+const busy = () => !location.hash.startsWith('#/friends') || !!document.querySelector('.dossier.open, .pal, .wp-trailer, .nowv');
+async function openFor(r, chosen = false) {
   if (opening) return; opening = true;
   try {
     const { playWeb } = await import('./main.js'), m = r.media, at = target(r.gate ? { playing: false, pos: r.gate.pos } : r.pb);
-    await playWeb({ imdbId: m.imdbId, type: m.type, title: m.title, poster: m.poster, season: m.season, episode: m.episode, roomStart: Math.max(0, at), room: true, ...(m.pin ? { pin: m.pin } : {}) });
+    const ok = await playWeb({ imdbId: m.imdbId, type: m.type, title: m.title, poster: m.poster, season: m.season, episode: m.episode, roomStart: Math.max(0, at), room: true, ...(m.pin ? { pin: m.pin } : {}) }, chosen ? {} : { quiet: true, parked: busy() });
+    failedAt = ok ? 0 : Date.now();
   } finally { opening = false; }
 }
 export async function joinRoomPlayback() {
   const r = social.state?.room; if (!r?.media) return toast('Nothing has been picked yet', 'err');
-  dismissed = '';
+  dismissed = ''; failedAt = 0;
   if (!leader) { holdPlayer(true); return; } // take the room over from the other tab; opening follows
-  if (isPlayerOpen() && playerKey() === mediaKey(r)) return unparkPlayer();
-  openFor(r);
+  if (isPlayerOpen() && isRoomPlayer() && playerKey() === mediaKey(r)) return unparkPlayer();
+  openFor(r, true);
 }
 // One person = one player. With several tabs open on the same IronHide, only one runs the room player;
 // otherwise each would report its own state and they would fight (paused / tabbed out / paused...).
@@ -77,12 +92,14 @@ export function watchRoom() {
     clearTimeout(leftTimer); // back in a room: nothing to expire
     const key = mediaKey(r);
     if (!r.media) { if (isPlayerOpen() && isRoomAttached()) closePlayer(); return; }
+    if (isPlayerOpen() && !isRoomPlayer()) { dismissed = key; return; } // you chose to watch something on your own: leave it alone
     if (isPlayerOpen()) {
       if (playerKey() !== key) { closePlayer(); return; }           // the owner picked something else; the next update reopens
       if (!isRoomAttached()) { const again = leftKey === key; leftKey = ''; reattachRoom(); if (again) unparkPlayer(); } // came back: no reload at all
       return;
     }
-    if (dismissed === key || opening) return;
+    if (dismissed === key || opening || Date.now() - failedAt < 30000) return; // a failed open waits before trying again
+    if (document.querySelector('.launch')) return;                      // something else is starting
     if (r.media.pin || runsRoom(r, s)) openFor(r); // members wait for the owner's copy to choose the exact release
   });
 }
@@ -116,11 +133,9 @@ export function attachRoom(P) {
   root.append(panel, gateEl, notes, count, layer, cursors, soundBtn);
   $('.wp-bottom', root).prepend(rxBar);
   const pill = document.createElement('button'); pill.className = 'rm-pill'; pill.title = 'Show who is watching'; $('.wp-top', root).insertBefore(pill, $('#wpBadges', root));
-  const btn = document.createElement('button'); btn.className = 'wp-btn'; btn.id = 'wpRoom'; btn.innerHTML = `${icon('users')}<span>Room</span><em id="wpRoomN"></em>`;
-  $('.wp-r', root).prepend(btn);
   const setPanel = (open) => { root.classList.toggle('rm-open', open); localStorage.setItem('rm-panel', open ? '1' : '0'); };
   setPanel(localStorage.getItem('rm-panel') !== '0');
-  btn.onclick = pill.onclick = () => setPanel(!root.classList.contains('rm-open'));
+  pill.onclick = () => setPanel(!root.classList.contains('rm-open'));
   $('#rmClose', panel).onclick = () => setPanel(false);
   $('#rmCode', panel).onclick = () => navigator.clipboard?.writeText(social.state?.room?.code || '').then(() => toast('Room code copied', 'ok'));
   rxBar.addEventListener('click', (e) => { const b = e.target.closest('[data-rx]'); if (b) sapi('/react', { emoji: b.dataset.rx }); });
@@ -134,7 +149,6 @@ export function attachRoom(P) {
     if (d.do === 'own') { if (confirm(`Make ${d.name} the owner of this room? You will lose owner control.`)) sapi('/room/transfer', { id: d.id }); }
     if (d.do === 'sync') sapi('/room/control', { action: 'seek', pos: P.cur() });
     if (d.do === 'resync') { reconcile(true); toast('Lining you up with the room'); }
-    if (d.do === 'toggle') P.hooks.onToggle?.(!P.video().paused);
     if (d.do === 'wait') sapi('/room/settings', { wait: r.wait === false });
     if (d.do === 'ctl') sapi('/room/settings', { control: r.control === 'all' ? 'host' : 'all' });
     if (d.do === 'open') sapi('/room/settings', { open: r.open === false });
@@ -151,9 +165,7 @@ export function attachRoom(P) {
   };
   P.hooks.onSeek = async (t) => {
     if (!canControl()) return toast('The room owner controls playback');
-    // land on a real keyframe: with the same file, every viewer restarts on exactly this frame
-    let pos = t; try { pos = (await P.keyframes(t)).prev; } catch {}
-    sapi('/room/control', { action: 'seek', pos });
+    sapi('/room/control', { action: 'seek', pos: Math.max(0, t) }); // everyone loads and jumps to this exact spot
   };
 
   // ---------- starting without being blocked ----------
@@ -167,27 +179,63 @@ export function attachRoom(P) {
   // ---------- following the room ----------
   let tok = 0, startT = 0, tick = 0, lastRestart = 0, catching = false, loadedAt = 0, sig = '';
   const ahead = (v) => { for (let i = v.buffered.length - 1; i >= 0; i--) if (v.currentTime >= v.buffered.start(i) - 0.5) return Math.max(0, v.buffered.end(i) - v.currentTime); return 0; };
-  const hideCount = () => { clearInterval(tick); count.classList.add('hidden'); };
+  // The countdown. Numbers come from the room's clock, so everyone sees the same number at the same moment.
+  // A long wait (the start of a film) gets the full screen; a resume or a seek only gets a small dial.
+  let cdRaf = 0, cdOut = 0;
+  const hideCount = (animate = false) => {
+    cancelAnimationFrame(cdRaf); clearTimeout(cdOut); root.classList.remove('rm-cd');
+    if (animate && !count.classList.contains('hidden')) { count.classList.add('cd-go'); cdOut = setTimeout(() => count.classList.add('hidden'), 620); }
+    else count.classList.add('hidden');
+  };
+  function showCount(wall, wait) {
+    const r = social.state?.room, full = wait > 2000, ppl = r?.members || [];
+    clearTimeout(cdOut); cancelAnimationFrame(cdRaf);
+    count.className = `wp-count ${full ? 'cd-full' : 'cd-mini'}`;
+    root.classList.toggle('rm-cd', full);
+    count.innerHTML = `${full && r?.media?.poster ? `<div class="cd-bg" style="background-image:url('${esc(r.media.poster)}')"></div>` : ''}<div class="cd-in">
+      ${full ? `<div class="cd-kick">${ppl.length > 1 ? `Starting together` : 'Starting'}</div><h2 class="cd-title">${esc(r?.media?.title || info?.title || '')}</h2>` : ''}
+      <div class="cd-dial"><svg viewBox="0 0 200 200" aria-hidden="true"><circle class="cd-track" cx="100" cy="100" r="92"/><line class="cd-hair" x1="100" y1="2" x2="100" y2="198"/><line class="cd-hair" x1="2" y1="100" x2="198" y2="100"/><circle class="cd-sweep" cx="100" cy="100" r="92" pathLength="1" transform="rotate(-90 100 100)"/></svg><b class="cd-n"></b></div>
+      ${full && ppl.length > 1 ? `<div class="cd-who">${ppl.slice(0, 8).map((u) => `<span title="${esc(u.name)}">${avatar({ avatar: { ...u.avatar, deco: null, frame: 'none' } }, 30)}</span>`).join('')}<small>${ppl.length} watching</small></div>` : ''}
+    </div>`;
+    const sweep = $('.cd-sweep', count), dial = $('.cd-dial', count); let shown = 0;
+    const frame = () => {
+      const ms = wall - serverNow(); if (ms <= 0) return;
+      const n = Math.ceil(ms / 1000);
+      sweep.style.strokeDashoffset = (ms % 1000) / 1000; // fills once per second, like a film leader
+      if (n !== shown) {
+        shown = n; const old = $('.cd-n', dial), b = document.createElement('b'); b.className = 'cd-n'; b.textContent = n; old.replaceWith(b); // a new node replays the entrance
+        if (full) tickSound(n === 1);
+      }
+      cdRaf = requestAnimationFrame(frame);
+    };
+    frame();
+  }
   const waitPlayable = (my, ms = 12000) => new Promise((res) => { const end = Date.now() + ms; const t = setInterval(() => { const v = P.video(); if (my !== tok || !v) { clearInterval(t); return res(false); } if (v.readyState >= 3 || Date.now() > end) { clearInterval(t); res(v.readyState >= 3); } }, 50); });
-  // Be on `pos`: stay if already there, otherwise restart on the keyframe at or just after it
+  // Be on `pos`: stay if already there, jump if we hold it, otherwise reload from the keyframe before it and jump once it has arrived
   async function place(pos, my) {
     if (P.hasStream() && Math.abs(P.cur() - pos) <= NEAR) return true;
-    if (P.jump(pos)) return true; // already buffered: instant, no restart
-    let K = pos; try { const kf = await P.keyframes(pos); K = Math.abs(kf.prev - pos) < 0.05 ? kf.prev : kf.next; } catch {}
+    if (P.jump(pos)) return true;
+    let K = pos; if (!P.mseCapable()) { try { K = (await P.keyframes(pos)).prev; } catch {} }
     if (my !== tok) return false;
     P.load(K, false); loadedAt = Date.now(); lastRestart = Date.now();
-    return waitPlayable(my);
+    const end = Date.now() + 25000;
+    while (my === tok && Date.now() < end) {
+      if (P.holds(pos)) { P.jump(pos); break; }
+      if (!P.usesMse() && P.video()?.readyState >= 3) break;
+      await new Promise((r) => setTimeout(r, 80));
+    }
+    if (my !== tok) return false;
+    return waitPlayable(my, 6000);
   }
   // Start at the shared instant the room's clock reaches where this player is standing
   function startAligned(pb, my) {
     const v = P.video(), rate = pb.rate || 1, c = P.cur();
     const wall = pb.at + Math.max(0, c - pb.pos) / rate * 1000;
-    const go = () => { if (my !== tok) return; hideCount(); catching = false; v.playbackRate = rate; play(v); };
+    const go = () => { if (my !== tok) return; hideCount(true); catching = false; v.playbackRate = rate; play(v); };
     const wait = wall - serverNow();
     if (wait <= 15) return go();
     v.pause(); v.playbackRate = rate;
-    count.textContent = Math.max(1, Math.ceil(wait / 1000)); count.classList.remove('hidden');
-    clearInterval(tick); tick = setInterval(() => { const left = Math.ceil((wall - serverNow()) / 1000); if (left > 0) count.textContent = left; }, 150);
+    showCount(wall, wait);
     clearTimeout(startT);
     startT = setTimeout(() => { const spin = () => { if (my !== tok) return; if (serverNow() >= wall) go(); else requestAnimationFrame(spin); }; if (document.hidden) { go(); } else spin(); }, Math.max(0, wait - 40));
   }
@@ -200,15 +248,12 @@ export function attachRoom(P) {
     if (!force && !v.paused && Math.abs(P.cur() - target(pb)) < JUMP_AT) return;    // already moving with the room: drift control has it
     let spare = 3;
     for (let tries = 0; tries < 3; tries++) {
-      if (P.jump(target(pb) + 0.4)) break;                                          // we already hold that spot: be there instantly
+      if (P.jump(target(pb) + (pb.at > serverNow() ? 0 : 0.4))) break;                                          // we already hold that spot: be there instantly
       const t = target(pb), c = P.cur();
       if (P.hasStream() && c - t >= -NEAR && c - t < 12) break;                     // on the spot or a little ahead: just wait for the clock
       catching = true;
       const want = Math.max(pb.pos, t + spare * rate);                              // aim past where the room will be once this has loaded
-      let K = want; try { K = (await P.keyframes(want)).next; } catch {}
-      if (my !== tok) return;
-      P.load(K, false); loadedAt = Date.now(); lastRestart = Date.now();
-      await waitPlayable(my); if (my !== tok) return;
+      await place(want, my); if (my !== tok) return;
       spare *= 2;                                                                   // too slow? aim further next time
     }
     startAligned(pb, my);
@@ -219,7 +264,8 @@ export function attachRoom(P) {
     const pb = social.state?.room?.pb, v = P.video(); if (!pb || !v || !pb.playing || v.paused || catching || pb.at > serverNow()) return;
     const d = P.cur() - target(pb), rate = pb.rate || 1;
     if (Math.abs(d) > JUMP_AT && Date.now() - lastRestart > RESTART_GAP) { reconcile(true); return; }
-    v.playbackRate = Math.abs(d) > 0.03 ? rate * (1 - Math.max(-0.1, Math.min(0.1, d * 0.9))) : rate;   // inaudible below about 10 %
+    const want = Math.abs(d) > 0.05 ? rate * (1 - Math.max(-0.1, Math.min(0.1, d * 0.9))) : rate;       // inaudible below about 10 %; a film frame is about 42 ms, so smaller errors are left alone
+    if (Math.abs(want - v.playbackRate) > 0.004) v.playbackRate = want;                                  // every change makes the browser re-time its frames
   }, 200);
 
   // ---------- telling the room how we are doing ----------
@@ -228,7 +274,7 @@ export function attachRoom(P) {
     const v = P.video(), r = social.state?.room; if (!v || !r) return;
     const want = r.gate ? r.gate.pos : r.pb.pos, a = ahead(v), since = Date.now() - loadedAt;
     const there = P.hasStream() && P.cur() >= want - NEAR;
-    const ok = there && v.readyState >= 3 && (a >= PREBUFFER || (since > 6000 && a >= 3) || v.ended);
+    const ok = there && v.readyState >= 3 && (a >= PREBUFFER || (since > 3000 && a >= 6) || (since > 8000 && a >= 2) || v.ended);
     const mark = `${ok}:${r.gate?.token || 0}`;
     if (mark !== readySent) { readySent = mark; sapi('/room/ready', { ready: ok, token: r.gate?.token }).catch(() => {}); }
   };
@@ -258,26 +304,34 @@ export function attachRoom(P) {
   };
   const showCursors = () => localStorage.getItem('rm-cursors') !== '0';
   const sw = (id, label, val, hint = '') => `<button class="rm-sw" data-do="${id}" title="${esc(hint)}"><span>${esc(label)}</span><i class="${val ? 'on' : ''}"></i></button>`;
+  // Rebuilding the panel every second restarted animated avatars (a visible flicker) and repainted over the video.
+  const setT = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+  const setH = (el, html) => { if (el._h === html) return; el._h = html; el.innerHTML = html; el.querySelectorAll('svg').forEach((v) => v.pauseAnimations?.()); };
   function paint(s) {
     const r = s?.room; if (!r) return;
     const me = s.you?.id, runs = runsRoom(r, s), pb = r.pb;
-    $('#rmName', panel).textContent = r.name; $('#rmCode', panel).textContent = r.code; $('#wpRoomN', root).textContent = r.members.length;
+    setT($('#rmName', panel), r.name); setT($('#rmCode', panel), r.code);
     root.classList.toggle('locked', !canControl());
     const drifts = r.members.map((u) => ({ u, d: driftOf(u, pb) }));
-    $('#rmCountK', panel).textContent = `Watching · ${r.members.length}`;
-    $('#rmMem', panel).innerHTML = drifts.map(({ u, d }) => {
+    setT($('#rmCountK', panel), `Watching · ${r.members.length}`);
+    // Who is here only changes now and then, so it stays put. Only each person's status line updates every second.
+    const memEl = $('#rmMem', panel);
+    setH(memEl, drifts.map(({ u }) => `<div class="rm-m" data-u="${esc(u.id)}"><span class="rm-av">${avatar({ avatar: u.avatar }, 34)}</span><div class="rm-mi"><b>${esc(u.name)}${u.id === me ? ' <small>you</small>' : ''}${u.id === r.owner ? '<em>owner</em>' : u.id === r.host ? '<em>host</em>' : ''}</b>
+        <span class="rm-ml"></span></div>
+        ${runs && u.id !== me && u.id !== r.owner ? `<div class="rm-acts">${r.owner === me ? `<button class="wp-btn ic" data-do="own" data-id="${u.id}" data-name="${esc(u.name)}" title="Make owner">${icon('crown')}</button>` : ''}<button class="wp-btn ic" data-do="kick" data-id="${u.id}" data-name="${esc(u.name)}" title="Remove from room">${icon('x')}</button></div>` : ''}</div>`).join(''));
+    drifts.forEach(({ u, d }, i) => {
+      const row = memEl.children[i]; if (!row) return;
       const st = u.st?.state || (u.ready ? 'paused' : 'loading'), buf = u.st?.buf;
       const ds = d == null ? '' : Math.abs(d) < 50 ? 'in sync' : `${d > 0 ? '+' : '−'}${Math.abs(d) < 1000 ? Math.round(Math.abs(d)) + ' ms' : (Math.abs(d) / 1000).toFixed(1) + ' s'}`;
-      return `<div class="rm-m ${esc(st)}"><span class="rm-av">${avatar({ avatar: u.avatar }, 34)}</span><div class="rm-mi"><b>${esc(u.name)}${u.id === me ? ' <small>you</small>' : ''}${u.id === r.owner ? '<em>owner</em>' : u.id === r.host ? '<em>host</em>' : ''}</b>
-        <span><i class="rm-dot"></i>${LABEL[st] || st}${ds ? ` · <span class="rm-d ${d != null && Math.abs(d) > 500 ? 'bad' : d != null && Math.abs(d) > 120 ? 'warn' : 'ok'}">${ds}</span>` : ''}${buf != null ? ` · ${Math.round(buf)} s buffered` : ''}</span></div>
-        ${runs && u.id !== me && u.id !== r.owner ? `<div class="rm-acts">${r.owner === me ? `<button class="wp-btn ic" data-do="own" data-id="${u.id}" data-name="${esc(u.name)}" title="Make owner">${icon('crown')}</button>` : ''}<button class="wp-btn ic" data-do="kick" data-id="${u.id}" data-name="${esc(u.name)}" title="Remove from room">${icon('x')}</button></div>` : ''}</div>`;
-    }).join('');
+      const cls = `rm-m ${st}`; if (row.className !== cls) row.className = cls;
+      setH($('.rm-ml', row), `<i class="rm-dot"></i>${LABEL[st] || st}${ds ? ` · <span class="rm-d ${d != null && Math.abs(d) > 500 ? 'bad' : d != null && Math.abs(d) > 120 ? 'warn' : 'ok'}">${ds}</span>` : ''}${buf != null ? ` · ${Math.round(buf)} s buffered` : ''}`);
+    });
     const owner = r.members.find((u) => u.id === r.owner);
-    $('#rmOwner', panel).innerHTML = runs
-      ? `<div class="rm-k">Room controls</div><div class="rm-btns"><button class="wp-btn" data-do="toggle">${icon(P.video()?.paused ? 'play' : 'pause')}<span>${P.video()?.paused ? 'Play for everyone' : 'Pause for everyone'}</span></button><button class="wp-btn" data-do="sync" title="Everyone restarts on the same frame"><span>Sync everyone</span></button></div>
+    setH($('#rmOwner', panel), runs
+      ? `<div class="rm-k">Room controls</div><div class="rm-btns"><button class="wp-btn" data-do="sync" title="Everyone restarts on the same frame"><span>Sync everyone</span></button></div>
          ${sw('wait', 'Wait for slow viewers', r.wait !== false, 'Hold the room when someone is stuck buffering')}${sw('ctl', 'Everyone can control', r.control === 'all')}${sw('open', 'Friends can join', r.open !== false)}${sw('cursors', 'Show cursors', showCursors())}${sw('sounds', 'Join and leave sounds', soundsOn())}
          ${r.media?.pinLabel ? `<div class="rm-ver" title="${esc(r.media.pinLabel)}">Version: ${esc(r.media.pinLabel)}</div>` : ''}`
-      : `<div class="rm-k">Hosted by ${esc(owner?.name || 'the owner')}</div><div class="rm-btns"><button class="wp-btn" data-do="resync"><span>Sync me</span></button></div>${sw('cursors', 'Show cursors', showCursors())}${sw('sounds', 'Join and leave sounds', soundsOn())}`;
+      : `<div class="rm-k">Hosted by ${esc(owner?.name || 'the owner')}</div><div class="rm-btns"><button class="wp-btn" data-do="resync"><span>Sync me</span></button></div>${sw('cursors', 'Show cursors', showCursors())}${sw('sounds', 'Join and leave sounds', soundsOn())}`);
     // health pill
     const worst = drifts.reduce((a, x) => (x.d != null && Math.abs(x.d) > Math.abs(a?.d ?? 0) ? x : a), null);
     const stuck = r.members.filter((u) => u.st?.state === 'buffering').length, away = r.members.filter((u) => u.st?.state === 'away').length;
@@ -287,17 +341,31 @@ export function attachRoom(P) {
     else if (stuck) { txt = `${stuck} buffering`; cls = 'warn'; }
     else if (worst && Math.abs(worst.d) > 500) { txt = `${worst.u.name} is ${(Math.abs(worst.d) / 1000).toFixed(1)} s ${worst.d > 0 ? 'ahead' : 'behind'}`; cls = 'bad'; }
     else { txt = worst ? `In sync · ${Math.round(Math.abs(worst.d))} ms` : 'In sync'; cls = 'ok'; }
-    pill.className = `rm-pill ${cls}`; pill.innerHTML = `${icon('users')}<span>${r.members.length} · ${esc(txt)}${away ? ` · ${away} tabbed out` : ''}</span>`;
-    // gate / waiting card
-    const before = !r.gate && !pb.playing && pb.pos < 1;
-    if (r.gate || before) {
-      const readyN = r.members.filter((u) => u.ready).length;
-      const title = r.gate ? (r.gate.reason === 'stall' ? `Waiting for ${esc(r.gate.who || 'someone')}` : r.gate.reason === 'seek' ? 'Jumping together' : 'Getting everyone ready') : (runs ? 'Ready when you are' : `Waiting for ${esc(owner?.name || 'the owner')} to start`);
-      gateEl.innerHTML = `<h3>${title}</h3><div class="rm-gm">${r.members.map((u) => { const b = Math.min(100, ((u.st?.buf || 0) / PREBUFFER) * 100); return `<div class="${u.ready ? 'on' : ''}" title="${esc(u.name)}"><span class="rm-ring" style="--p:${u.ready ? 100 : b}">${avatar({ avatar: u.avatar }, 40)}</span><small>${esc(u.name)}</small></div>`; }).join('')}</div>
-        <p>${readyN} of ${r.members.length} ready</p>${runs ? (r.gate ? '<button class="btn sm" data-do="start">Start now</button>' : `<button class="btn primary" data-do="play">${icon('play')} Play for everyone</button>`) : ''}`;
-      gateEl.classList.remove('hidden');
-    } else gateEl.classList.add('hidden');
+    if (pill.className !== `rm-pill ${cls}`) pill.className = `rm-pill ${cls}`; setH(pill, `${icon('users')}<span>${r.members.length} · ${esc(txt)}${away ? ` · ${away} tabbed out` : ''}</span>`);
+    paintGate(s);
   }
+  // The waiting card. A wait that ends by itself in under a second never shows it, so seeks don't flash a popup.
+  // "Start without Mia" only appears once someone else is actually holding things up. It can't help with your own buffer.
+  let gateSeen = 0, gateSince = 0, gateHtml = '';
+  function paintGate(s) {
+    const r = s?.room; if (!r) return;
+    const me = s.you?.id, runs = runsRoom(r, s), pb = r.pb, owner = r.members.find((u) => u.id === r.owner);
+    if (r.gate && r.gate.token !== gateSeen) { gateSeen = r.gate.token; gateSince = Date.now(); }
+    const age = Date.now() - gateSince, before = !r.gate && !pb.playing && pb.pos < 1;
+    if ((r.gate && age >= 900) || before) {
+      const readyN = r.members.filter((u) => u.ready).length, solo = r.members.length === 1;
+      const others = r.gate ? r.members.filter((u) => !u.ready && u.id !== me) : [];
+      const title = r.gate ? (r.gate.reason === 'stall' ? `Waiting for ${esc(r.gate.who || 'someone')}` : r.gate.reason === 'seek' ? (solo ? 'Loading this part' : 'Jumping together') : (solo ? 'Getting ready' : 'Getting everyone ready')) : (runs ? 'Ready when you are' : `Waiting for ${esc(owner?.name || 'the owner')} to start`);
+      const skip = runs && others.length && age > 4000 ? `<button class="btn sm" data-do="start">Start without ${others.length === 1 ? esc(others[0].name) : `${others.length} people`}</button>` : '';
+      const html = `<h3>${title}</h3><div class="rm-gm">${r.members.map((u) => { const b = Math.min(100, ((u.st?.buf || 0) / PREBUFFER) * 100); return `<div class="${u.ready ? 'on' : ''}" title="${esc(u.name)}"><span class="rm-ring" style="--p:${u.ready ? 100 : b}">${avatar({ avatar: u.avatar }, 40)}</span><small>${esc(u.name)}</small></div>`; }).join('')}</div>
+        <p>${solo ? '' : `${readyN} of ${r.members.length} ready`}<span class="rm-left"></span></p>${r.gate ? skip : runs ? `<button class="btn primary" data-do="play">${icon('play')} Play for everyone</button>` : ''}`;
+      if (html !== gateHtml) { gateHtml = html; gateEl.innerHTML = html; } // only when it changed: rebuilding under the pointer swallows clicks
+      const left = r.gate ? Math.ceil((r.gate.until - serverNow()) / 1000) : 0;
+      $('.rm-left', gateEl).textContent = left > 0 ? `${solo ? '' : ' · '}starts within ${left} s` : '';
+      gateEl.classList.remove('hidden'); root.classList.add('rm-gating');
+    } else { gateEl.classList.add('hidden'); root.classList.remove('rm-gating'); }
+  }
+  const gateT = setInterval(() => { if (social.state?.room?.gate) paintGate(social.state); }, 300);
 
   // ---------- who came and went ----------
   // A small notice over the movie (a toast if the player is in the corner) and a chime.
@@ -381,11 +449,11 @@ export function attachRoom(P) {
   report(); reconcile();
 
   return () => {
-    tok++; clearTimeout(startT); hideCount(); clearInterval(drift); clearInterval(readyT); clearInterval(rep); off.forEach((f) => f()); unChat();
+    tok++; clearTimeout(startT); hideCount(); clearInterval(drift); clearInterval(gateT); clearInterval(readyT); clearInterval(rep); off.forEach((f) => f()); unChat();
     instant.forEach((e) => vEl.removeEventListener(e, report)); document.removeEventListener('visibilitychange', report); removeEventListener('pagehide', bye); removeEventListener('pointerdown', unmute);
     root.removeEventListener('pointermove', move); root.removeEventListener('pointerleave', out); out(); bye();
     P.hooks.onToggle = null; P.hooks.onSeek = null; P.hooks.onDismiss = null;
     sapi('/room/ready', { ready: false }).catch(() => {});
-    [panel, gateEl, notes, count, layer, cursors, soundBtn, rxBar, pill, btn].forEach((n) => n.remove()); root.classList.remove('wp-roomed', 'locked', 'rm-open');
+    [panel, gateEl, notes, count, layer, cursors, soundBtn, rxBar, pill].forEach((n) => n.remove()); root.classList.remove('wp-roomed', 'locked', 'rm-open', 'rm-cd', 'rm-gating');
   };
 }

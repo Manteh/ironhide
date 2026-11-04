@@ -13,7 +13,7 @@ const WATCHLIST = join(CONFIG_DIR, 'watchlist.json');
 const defaults = () => ({
   profile: { name: cap(userInfo().username), avatar: { icon: 'film', color: 'indigo' } },
   appearance: { theme: 'dark', accent: 'indigo', density: 'comfortable', radius: 'round', motion: 'full', posterSize: 'm', layout: 'grid', showHero: true },
-  playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true, player: 'mpv', webMaxHeight: '1080', forceTranscode: false },
+  playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true, player: 'mpv', webMaxHeight: '1080', forceTranscode: false, audioLangs: ['en'], subLang: '', hideKinds: ['threed', 'cam', 'scr'], sortBy: 'qualitysize', resultCount: 60 },
 });
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : 'You');
 
@@ -33,8 +33,30 @@ const ALLOWED = {
     remux: ['prefer', 'any', 'avoid'],
     player: ['mpv', 'web'],
     webMaxHeight: ['source', '1080', '720'],
+    sortBy: ['qualitysize', 'quality', 'seeders', 'size'],
+    resultCount: [20, 60, 100],
   },
 };
+
+// Languages a person can prefer: Torrentio's name, the codes used in files, and how releases mention them
+export const STREAM_LANGS = {
+  en: { name: 'english', iso: ['eng', 'en'], re: /\beng(lish)?\b|\u{1F1EC}\u{1F1E7}|\u{1F1FA}\u{1F1F8}/iu },
+  lt: { name: 'lithuanian', iso: ['lit', 'lt'], re: /\blit(uanian)?\b|lietuv|\u{1F1F1}\u{1F1F9}/iu },
+  sv: { name: 'swedish', iso: ['swe', 'sv'], re: /\bswe(dish)?\b|\u{1F1F8}\u{1F1EA}/iu },
+  es: { name: 'spanish', iso: ['spa', 'es'], re: /\bspa(nish)?\b|castellano|latino|\besp\b|\u{1F1EA}\u{1F1F8}|\u{1F1F2}\u{1F1FD}/iu },
+  fr: { name: 'french', iso: ['fre', 'fra', 'fr'], re: /\bfre(nch)?\b|truefrench|\bvff\b|\u{1F1EB}\u{1F1F7}/iu },
+  de: { name: 'german', iso: ['ger', 'deu', 'de'], re: /\bger(man)?\b|deutsch|\u{1F1E9}\u{1F1EA}/iu },
+  it: { name: 'italian', iso: ['ita', 'it'], re: /\bita(lian)?\b|\u{1F1EE}\u{1F1F9}/iu },
+  pt: { name: 'portuguese', iso: ['por', 'pt'], re: /\bpor(tuguese)?\b|\u{1F1F5}\u{1F1F9}|\u{1F1E7}\u{1F1F7}/iu },
+  ru: { name: 'russian', iso: ['rus', 'ru'], re: /\brus(sian)?\b|\u{1F1F7}\u{1F1FA}|[\u0430-\u044f]{3}/iu },
+  pl: { name: 'polish', iso: ['pol', 'pl'], re: /\bpol(ish)?\b|lektor|\u{1F1F5}\u{1F1F1}/iu },
+};
+// Kinds of release a person can hide. The ids are Torrentio's; the patterns also cover results from Comet.
+export const HIDE_KINDS = {
+  '4k': /2160p|\b4k\b|\buhd\b/i, '1080p': /1080p/i, '720p': /720p/i, '480p': /480p/i, brremux: /remux/i, hdrall: /\bhdr/i,
+  dolbyvision: /dolby.?vision|\bdv\b|\bdovi\b/i, threed: /\b3d\b|\bh?sbs\b|\bh?ou\b/i, cam: /\bcam\b|hdcam|telesync|\bts\b/i, scr: /\bscr\b|screener/i,
+};
+export const hiddenKind = (q, hide = []) => hide.some((k) => HIDE_KINDS[k]?.test(q));
 
 let chain = Promise.resolve();
 const serialize = (fn) => (chain = chain.then(fn, fn));
@@ -61,6 +83,9 @@ export function updateSettings(patch) {
     }
     for (const section of ['appearance', 'playback']) {
       for (const [k, v] of Object.entries(patch[section] || {})) {
+        if (k === 'audioLangs') { if (Array.isArray(v)) cur[section][k] = [...new Set(v)].filter((c) => STREAM_LANGS[c]).slice(0, 4); continue; }
+        if (k === 'hideKinds') { if (Array.isArray(v)) cur[section][k] = [...new Set(v)].filter((c) => HIDE_KINDS[c]); continue; }
+        if (k === 'subLang') { if (v === '' || v === 'off' || STREAM_LANGS[v]) cur[section][k] = v; continue; }
         const allowed = ALLOWED[section][k];
         if (allowed ? allowed.includes(v) : k in cur[section]) {
           if (k === 'maxSizeGb') cur[section][k] = Math.max(0, Math.min(500, Number(v) || 0));
@@ -232,12 +257,20 @@ export function pickBest(streams, p, { exclude = new Set(), browserSafe = false 
     if (p.maxSizeGb > 0 && s.sizeBytes > p.maxSizeGb * 1e9) v -= 200;
     if (/\bDUAL\b|DUBBED|\bDUB\b/i.test(q)) v -= 30;
     if (/CAM|TELESYNC|\bTS\b|HDCAM/i.test(q)) v -= 300;
+    if (/\b3D\b|\bH?SBS\b|\bH?OU\b/i.test(q)) v -= 300; // two pictures in one frame: only right on a 3D screen
     if (browserSafe) { // files a browser can play untouched: mp4 with h264 + AAC
       if (/h\.?264|x264|avc/i.test(q)) v += 60;
       if (/hevc|x265|h\.?265|10.?bit|remux|av1/i.test(q)) v -= 80;
       if (/dts|truehd|atmos|dd\+|ddp|eac3|ac3/i.test(q)) v -= 50;
       if (/\.mkv\b/i.test(q)) v -= 20;
       if (r === '2160p') v -= 60;
+    }
+    // Your audio languages. Releases rarely mention English, so no language tag counts as probably original audio.
+    const pref = p.audioLangs || [];
+    if (pref.length) {
+      const tags = Object.keys(STREAM_LANGS).filter((c) => STREAM_LANGS[c].re.test(q)), at = pref.findIndex((c) => tags.includes(c));
+      if (tags.length) v += at === 0 ? 30 : at > 0 ? 15 : -40;
+      else if (pref[0] !== 'en') v += /\bmulti\b/i.test(q) ? 10 : -10;
     }
     v += Math.min(s.seeds, 500) / 100;
     return v;
