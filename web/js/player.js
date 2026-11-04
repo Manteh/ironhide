@@ -4,6 +4,8 @@ import { $, $$, esc, icon, fmtTime, toast, pad, posterOf } from './ui.js';
 
 const LANG = { eng: 'English', en: 'English', lit: 'Lithuanian', lt: 'Lithuanian', swe: 'Swedish', sv: 'Swedish', chi: 'Chinese', zho: 'Chinese', jpn: 'Japanese', spa: 'Spanish', fre: 'French', ger: 'German', ita: 'Italian', rus: 'Russian', und: 'Unknown' };
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const SYNCS = [-400, -300, -200, -150, -100, -50, 0, 50, 100, 200, 300]; // ms: <0 sound earlier, >0 sound later
+const syncLabel = (v) => (v === 0 ? 'In sync' : v < 0 ? `Sound ${-v} ms earlier` : `Sound ${v} ms later`);
 
 let wp = null, S = null, roomOff = null; // S: all live player state
 export const hooks = { onToggle: null, onSeek: null }; // set by roomplay.js in room mode
@@ -16,7 +18,7 @@ export function browserCaps() {
   return { hevc: ok('video/mp4; codecs="hvc1.1.6.L153.B0"') || ok('video/mp4; codecs="hev1.1.6.L153.B0"'), av1: ok('video/mp4; codecs="av01.0.08M.08"') };
 }
 
-const watchingNow = (info) => ({ title: info.title, type: info.meta?.type === 'movie' ? 'movie' : 'series', imdbId: info.meta?.imdbId || '', poster: info.meta?.imdbId ? posterOf(info.meta.imdbId) : '' });
+const watchingNow = (info) => ({ state: S?.video?.paused ? 'paused' : 'playing', title: info.title, type: info.meta?.type === 'movie' ? 'movie' : 'series', imdbId: info.meta?.imdbId || '', poster: info.meta?.imdbId ? posterOf(info.meta.imdbId) : '' });
 // closing the tab also ends the status
 addEventListener('pagehide', () => { try { fetch('/api/social/watching', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ watching: null }) }); } catch {} });
 
@@ -47,6 +49,7 @@ export function openPlayer(info, opts = {}) {
         <div class="wp-r">
           <button class="wp-btn" id="wpSubs"><span>Subtitles</span></button>
           <button class="wp-btn" id="wpAudio"><span>Audio</span></button>
+          <button class="wp-btn" id="wpSync" title="Line the sound up with the picture (Bluetooth headphones delay sound)"><span>Sync</span></button>
           <button class="wp-btn" id="wpSpeed"><span>1x</span></button>
           <button class="wp-btn ic" id="wpPip" aria-label="Picture in picture">${icon('pip')}</button>
           <button class="wp-btn ic" id="wpFs" aria-label="Fullscreen">${icon('expand')}</button>
@@ -59,13 +62,13 @@ export function openPlayer(info, opts = {}) {
 
   const video = $('.wp-video', wp);
   S = { info, video, offset: 0, audio: info.audio.findIndex((a) => a.default) >= 0 ? info.audio.findIndex((a) => a.default) : 0, wasPlaying: true, transcode: false, dragging: false,
-    cues: [], cueOn: -1, subIdx: -1, rate: 1, idle: 0, saver: 0, retried: false, lastUI: 0, room: !!opts.room };
+    sync: +(localStorage.getItem('wp-sync') || 0) || 0, cues: [], cueOn: -1, subIdx: -1, rate: 1, idle: 0, saver: 0, retried: false, lastUI: 0, room: !!opts.room };
   video.volume = +(localStorage.getItem('wp-vol') ?? 1); $('#wpVol', wp).value = video.volume;
 
   badges();
   bind();
   // rooms start paused at the beginning; the room decides when everyone presses play
-  load(S.room ? 0 : (info.start > 20 ? info.start : 0), !S.room);
+  load(S.room ? (info.start > 1 ? info.start : 0) : (info.start > 20 ? info.start : 0), !S.room);
   S.saver = setInterval(save, 10000);
   S.beat = setInterval(() => post('/api/social/watching', { watching: watchingNow(info) }).catch(() => {}), 45000); // keep the 'watching' status fresh while the player is open
   post('/api/social/watching', { watching: watchingNow(info) }).catch(() => {});
@@ -84,7 +87,7 @@ function load(start, autoplay) {
     return;
   }
   S.offset = Math.max(0, start); S.wasPlaying = autoplay; spin(true);
-  const url = `/api/wp/${info.id}/stream?start=${S.offset.toFixed(2)}&audio=${S.audio}${S.transcode ? '&transcode=1' : ''}&t=${Date.now()}`;
+  const url = `/api/wp/${info.id}/stream?start=${S.offset.toFixed(2)}&audio=${S.audio}${S.transcode ? '&transcode=1' : ''}${S.sync ? `&sync=${S.sync}` : ''}&t=${Date.now()}`;
   video.src = url; video.playbackRate = S.rate;
   if (autoplay) video.play().catch(() => {});
 }
@@ -117,6 +120,7 @@ function paintBuffer() {
   const end = S.offset + video.buffered.end(video.buffered.length - 1);
   $('#wpBuf', wp).style.width = Math.min(100, (end / d) * 100) + '%';
 }
+const syncBtn = () => { const b = $('#wpSync span', wp); if (b) b.textContent = S.sync ? `Sync ${S.sync > 0 ? '+' : ''}${S.sync}` : 'Sync'; };
 const spin = (on) => $('#wpSpin', wp)?.classList.toggle('on', on);
 function badges() {
   const v = S.info.video, mode = S.info.mode !== 'transcode' && !S.transcode;
@@ -138,7 +142,9 @@ function bind() {
   video.addEventListener('playing', () => { spin(false); wp.classList.add('started'); playIcon(); if (!S.thumbsOn && S.info.mode !== 'cdn') { S.thumbsOn = true; setTimeout(() => S && post(`/api/wp/${S.info.id}/thumbs`).catch(() => {}), 3000); } });
   video.addEventListener('canplay', () => spin(false));
   video.addEventListener('loadeddata', () => wp.classList.add('started'));
-  video.addEventListener('pause', () => { playIcon(); wake(); }); video.addEventListener('play', () => { playIcon(); wake(); });
+  // friends see Watching / Paused the moment it changes
+  const tellWatch = () => post('/api/social/watching', { watching: watchingNow(S.info) }).catch(() => {});
+  video.addEventListener('pause', () => { playIcon(); wake(); tellWatch(); }); video.addEventListener('play', () => { playIcon(); wake(); tellWatch(); });
   video.addEventListener('volumechange', () => { localStorage.setItem('wp-vol', video.volume); playIcon(); });
   video.addEventListener('ended', () => { save(); closePlayer(); toast('Finished', 'ok'); });
   video.addEventListener('error', () => {
@@ -154,7 +160,7 @@ function bind() {
   $('#wpVol', wp).oninput = (e) => { video.volume = +e.target.value; video.muted = false; };
   $('#wpPip', wp).onclick = () => { document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture?.().catch(() => toast('Picture in picture is not available', 'err')); };
   $('#wpFs', wp).onclick = fs;
-  $('#wpSubs', wp).onclick = (e) => menu('subs', e.currentTarget); $('#wpAudio', wp).onclick = (e) => menu('audio', e.currentTarget); $('#wpSpeed', wp).onclick = (e) => menu('speed', e.currentTarget);
+  $('#wpSubs', wp).onclick = (e) => menu('subs', e.currentTarget); $('#wpAudio', wp).onclick = (e) => menu('audio', e.currentTarget); $('#wpSync', wp).onclick = (e) => menu('sync', e.currentTarget); $('#wpSpeed', wp).onclick = (e) => menu('speed', e.currentTarget);
 
   // scrubber
   const scrub = $('#wpScrub', wp), tip = $('#wpTip', wp);
@@ -186,7 +192,7 @@ function bind() {
   scrub.addEventListener('pointerup', (e) => { if (!S.dragging) return; S.dragging = false; userSeek(at(e) * dur()); });
   scrub.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') userSeek(cur() - 10); if (e.key === 'ArrowRight') userSeek(cur() + 10); });
 
-  wp.addEventListener('pointermove', wake); wp.addEventListener('pointerdown', (e) => { wake(); if (!e.target.closest('#wpMenu, #wpSubs, #wpAudio, #wpSpeed')) $('#wpMenu', wp).classList.add('hidden'); });
+  wp.addEventListener('pointermove', wake); wp.addEventListener('pointerdown', (e) => { wake(); if (!e.target.closest('#wpMenu, #wpSubs, #wpAudio, #wpSync, #wpSpeed')) $('#wpMenu', wp).classList.add('hidden'); });
   playIcon();
 }
 
@@ -199,6 +205,7 @@ function menu(kind, anchor) {
   let items = [];
   if (kind === 'audio') items = S.info.audio.map((a, i) => ({ label: labelA(a), on: i === S.audio, act: () => { if (i === S.audio) return; S.audio = i; load(cur(), !S.video.paused || S.wasPlaying); } }));
   if (kind === 'subs') items = [{ label: 'Off', on: S.subIdx < 0, act: () => setSub(-1) }, ...S.info.subs.map((s) => ({ label: LANG[s.lang] || s.lang, on: S.subIdx === s.index, act: () => setSub(s.index) }))];
+  if (kind === 'sync') items = [{ label: 'Sound earlier  ·  fixes sound that is late', on: false, head: true, act() {} }, ...SYNCS.map((v) => ({ label: syncLabel(v), on: (S.sync || 0) === v, act: () => { S.sync = v; localStorage.setItem('wp-sync', String(v)); syncBtn(); load(cur(), !S.video.paused || S.wasPlaying); } }))];
   if (kind === 'speed') items = SPEEDS.map((r) => ({ label: r === 1 ? 'Normal' : r + 'x', on: S.rate === r, act: () => { S.rate = r; S.video.playbackRate = r; $('#wpSpeed span', wp).textContent = r + 'x'; } }));
   if (!items.length) items = [{ label: kind === 'subs' ? 'No subtitles found for this title' : 'Single audio track', on: false, act() {} }];
   m.dataset.kind = kind;
@@ -243,6 +250,9 @@ function onKey(e) {
 
 // ---------- persistence / teardown ----------
 function save() { if (!S) return; const d = dur(), p = cur(); if (d > 0 && p > 5) post(`/api/wp/${S.info.id}/progress`, { position: p, duration: d }).catch(() => {}); }
+
+// read-only snapshot of the player, for diagnostics and sync tests
+export const debugState = () => (S ? { pos: cur(), paused: S.video.paused, offset: S.offset, ready: S.video.readyState, rate: S.video.playbackRate, mode: S.info.mode } : null);
 
 export function closePlayer() {
   if (!wp) return;

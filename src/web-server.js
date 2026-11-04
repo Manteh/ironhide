@@ -11,7 +11,7 @@ import * as social from './social.js';
 import { listInstances, createInstance, startInstance, stopInstance } from './instances.js';
 import { addToHistory, updateEntryProgress } from './history.js';
 import { learnQuality } from './preferences.js';
-import { capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
+import { ensureSyncClip, syncClipPath, capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
 import { readFile as readFileAsync } from 'fs/promises';
 import {
   getSettings, updateSettings, resetProfile, connectorsView, setConnectorKey, setDebridProvider, testConnector,
@@ -269,12 +269,24 @@ async function handleApi(req, res, urlPath) {
       return res.end(buf);
     }
 
+    if (method === 'GET' && urlPath === '/api/synctest.mp4') {
+      const f = syncClipPath(); if (!existsSync(f)) return errorResponse(res, 'Not ready', 404);
+      const size = statSync(f).size, rg = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '');
+      let a = 0, b = size - 1; if (rg) { if (rg[1] !== '') a = +rg[1]; if (rg[2] !== '') b = Math.min(+rg[2], size - 1); if (rg[1] === '' && rg[2] !== '') { a = Math.max(0, size - +rg[2]); b = size - 1; } }
+      res.writeHead(rg ? 206 : 200, { 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': b - a + 1, ...(rg ? { 'Content-Range': `bytes ${a}-${b}/${size}` } : {}) });
+      return createReadStream(f, { start: a, end: b }).pipe(res);
+    }
     if (method === 'GET' && urlPath === '/api/webplay/capabilities') return jsonResponse(res, capabilities());
 
     // In-browser playback: pick a stream, resolve the direct link, probe it, return a session.
     if (method === 'POST' && urlPath === '/api/webplay') {
       const body = await parseBody(req);
       const settings = (await getSettings()).playback;
+      if (body.imdbId === 'synctest') {
+        await ensureSyncClip();
+        const info = await createSession({ url: `http://127.0.0.1:${WEB_PORT}/api/synctest.mp4`, title: 'Sync test clip', meta: { title: 'Sync test clip', imdbId: 'synctest', type: 'movie', year: '' }, subs: [], caps: body.caps || {}, settings, delivery: 'proxy' });
+        return jsonResponse(res, { ...info, start: typeof body.roomStart === 'number' ? body.roomStart : 0, quality: 'Sync test clip', size: '' });
+      }
       const type = body.type === 'series' || body.type === 'tv' ? 'tv' : 'movie';
       let { season, episode } = body, resumeFrom = body.resumeFrom;
       let stream;
@@ -334,6 +346,7 @@ async function handleApi(req, res, urlPath) {
         if (meta.imdbId) await learnQuality(meta.imdbId, stream).catch(() => {});
         setPlayState({ phase: 'playing', detail: 'Opening the player' });
         if (body.fromStart) resumeFrom = 0;
+        if (typeof body.roomStart === 'number' && body.roomStart >= 0) resumeFrom = body.roomStart; // a room that was paused here
         return jsonResponse(res, { ...info, start: resumeFrom || 0, quality: stream.quality, size: stream.size });
       } catch (err) {
         setPlayState({ phase: 'error', detail: err.message });
@@ -391,7 +404,9 @@ async function handleApi(req, res, urlPath) {
         if (method === 'POST' && sub === '/room') { social.createRoom(body.name); return ok(); }
         if (method === 'POST' && sub === '/room/join') { social.joinRoom(body.code); return ok(); }
         if (method === 'POST' && sub === '/room/leave') { social.leaveRoom(); return ok(); }
+        if (method === 'POST' && sub === '/visible') { social.tabSeen(body.tab, !!body.visible); return jsonResponse(res, { ok: true }); }
         if (method === 'POST' && sub === '/room/state') { social.roomState(body.state, body.pos); return jsonResponse(res, { ok: true }); }
+        if (method === 'POST' && sub === '/room/forget') { social.forgetRoom(body.code); return ok(); }
         if (method === 'POST' && sub === '/room/transfer') { social.transfer(body.id); return ok(); }
         if (method === 'POST' && sub === '/room/kick') { social.kick(body.id); return ok(); }
         if (method === 'POST' && sub === '/room/invite') { social.invite(body.id); return ok(); }

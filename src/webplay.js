@@ -12,6 +12,24 @@ const FFMPEG = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/f
 const FFPROBE = ['/opt/homebrew/bin/ffprobe', '/usr/local/bin/ffprobe', '/usr/bin/ffprobe'].find(existsSync);
 const sessions = new Map();
 
+// A built-in test clip for checking sync: the picture flashes and a beep sounds together every 2 s, with a running clock on screen.
+// Long keyframe gaps (5 s) on purpose, like real releases, so seeks behave as they do in real life.
+const SYNC_CLIP = join(tmpdir(), 'ironhide-synctest-v2.mp4');
+export const syncClipPath = () => SYNC_CLIP;
+let clipJob = null;
+export function ensureSyncClip() {
+  if (existsSync(SYNC_CLIP)) return Promise.resolve(SYNC_CLIP);
+  if (!FFMPEG) return Promise.reject(new Error('ffmpeg is not installed'));
+  clipJob ||= new Promise((resolve, reject) => {
+    const v = "testsrc=size=640x360:rate=30:duration=600,geq=lum='if(lt(mod(T,2),0.12),255,lum(X,Y))':cb='if(lt(mod(T,2),0.12),128,cb(X,Y))':cr='if(lt(mod(T,2),0.12),128,cr(X,Y))'";
+    const a = "aevalsrc='0.8*sin(2*PI*1000*t)*lt(mod(t,2),0.12)':s=48000:c=stereo:d=600";
+    const tmp = SYNC_CLIP + '.part.mp4';
+    const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', v, '-f', 'lavfi', '-i', a, '-c:v', 'libx264', '-preset', 'veryfast', '-g', '150', '-keyint_min', '150', '-sc_threshold', '0', '-bf', '2', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', tmp], { stdio: 'ignore' });
+    p.on('close', (c) => { clipJob = null; if (c !== 0) return reject(new Error('Could not make the test clip')); import('fs').then((fs) => { fs.renameSync(tmp, SYNC_CLIP); resolve(SYNC_CLIP); }); });
+  });
+  return clipJob;
+}
+
 export function capabilities() {
   return { ffmpeg: !!(FFMPEG && FFPROBE), gpu: FFMPEG ? 'VideoToolbox' : null };
 }

@@ -13,6 +13,7 @@ function open() {
   ws.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch { return; }
     if (m.type !== 'social') return;
+    if (m.event === 'kicked') social.lastKick = Date.now();
     if (m.event === 'state') setState(m.data); else social.events.forEach((f) => f(m.event, m.data));
   };
   ws.onopen = () => { retry = 1000; };

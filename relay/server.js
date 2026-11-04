@@ -6,6 +6,7 @@ import { createPublicKey, verify, createHash, randomBytes } from 'crypto';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT) || 8790;
+const VERSION = 4; // 2 = rooms visible to friends, 3 = owner + kick + saved rooms, 4 = live player states
 const DIRECTORY = process.env.RELAY_DIRECTORY === '1'; // hosted mode: let members see who else is online
 const MAX_CHAT = 500, HISTORY = 60, REACTIONS = new Set(['👍', '😂', '😮', '❤️', '🔥', '👏', '😢', '🤯']);
 
@@ -48,11 +49,11 @@ function roomBrief(u) {
 // ---------- presence (only between mutual friends) ----------
 const mutual = (a, b) => a.friends.has(b.id) && b.friends.has(a.id);
 function announce(u) {
-  for (const id of u.friends) { const f = users.get(id); if (f && mutual(u, f)) send(f.ws, { t: 'presence', id: u.id, online: !!u.ws, status: u.hide ? null : u.status, room: u.hide ? null : roomBrief(u), name: u.name, avatar: u.avatar }); }
+  for (const id of u.friends) { const f = users.get(id); if (f && mutual(u, f)) send(f.ws, { t: 'presence', id: u.id, online: !!u.ws, status: u.hide ? null : u.status, away: !!u.away, room: u.hide ? null : roomBrief(u), name: u.name, avatar: u.avatar }); }
 }
 function presenceFor(u) {
   const out = [];
-  for (const id of u.friends) { const f = users.get(id); if (f?.ws && mutual(u, f) && !f.hide) out.push({ id: f.id, online: true, status: f.status, room: roomBrief(f), name: f.name, avatar: f.avatar }); }
+  for (const id of u.friends) { const f = users.get(id); if (f?.ws && mutual(u, f) && !f.hide) out.push({ id: f.id, online: true, status: f.status, away: !!f.away, room: roomBrief(f), name: f.name, avatar: f.avatar }); }
   return out;
 }
 
@@ -66,19 +67,43 @@ const runs = (r, u) => r.host === u.id || r.owner === u.id;
 const toRoom = (r, msg) => { for (const id of r.members) send(users.get(id)?.ws, msg); };
 const pushRoom = (r) => { toRoom(r, { t: 'room', room: snapshot(r) }); for (const id of r.members) { const m = users.get(id); if (m && !m.hide) announce(m); } };
 function say(r, text) { const m = { from: null, text, ts: Date.now() }; r.chat.push(m); if (r.chat.length > HISTORY) r.chat.shift(); toRoom(r, { t: 'chat', msg: m }); }
+// Where the room's playback is right now, from its shared clock
+const posNow = (r, t = Date.now()) => (r.pb.playing ? r.pb.pos + Math.max(0, t - r.pb.at) / 1000 * (r.pb.rate || 1) : r.pb.pos);
+const ACTIVE = new Set(['playing', 'paused', 'buffering', 'away', 'loading']); // 'idle' = player closed
+const hasPlayer = (r, exceptId) => [...r.members].some((id) => id !== exceptId && ACTIVE.has(r.ms?.get(id)?.state) && Date.now() - r.ms.get(id).at < 20000);
+// When the last open player goes away, stop the shared clock at the last known position so the room can resume from there later
+function freezeIfIdle(r, lastPos) {
+  if (hasPlayer(r) || !r.pb.playing) return;
+  r.pb = { playing: false, pos: Math.max(0, lastPos ?? posNow(r)), at: Date.now(), rate: r.pb.rate || 1 }; r.startAt = 0;
+  toRoom(r, { t: 'room.pb', pb: r.pb, by: null, action: 'pause', now: Date.now() });
+}
+
 function leaveRoom(u) {
   const r = u.room && rooms.get(u.room); u.room = null; if (!u.hide) announce(u); if (!r) return;
-  r.members.delete(u.id); r.ready.delete(u.id); r.ms?.delete(u.id);
-  if (!r.members.size) { r.emptyTimer = setTimeout(() => rooms.delete(r.code), 5 * 60e3); return; }
+  const last = r.ms?.get(u.id); r.members.delete(u.id); r.ready.delete(u.id); r.ms?.delete(u.id); r.lastActive = Date.now();
+  // their player was the last one open: pause the room right where they were
+  if (last && ACTIVE.has(last.state)) freezeIfIdle(r, last.pos + (last.state === 'playing' ? Math.max(0, Date.now() - last.at) / 1000 : 0));
+  else freezeIfIdle(r);
+  if (!r.members.size) return; // an empty room is kept (paused at its position) so people can come back to it
   if (r.host === u.id) { r.host = [...r.members][0]; if (r.owner === u.id) say(r, `${u.name} (owner) left. ${users.get(r.host)?.name || 'Someone'} is hosting until they are back`); else say(r, `${u.name} left`); } else say(r, `${u.name} left`);
   pushRoom(r);
 }
 
 // ---------- connection handling ----------
 const server = http.createServer((req, res) => {
-  if (req.url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: true, service: 'ironhide-relay', online: [...users.values()].filter((u) => u.ws).length, rooms: rooms.size })); }
+  if (req.url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: true, service: 'ironhide-relay', v: VERSION, online: [...users.values()].filter((u) => u.ws).length, rooms: rooms.size })); }
   res.writeHead(404); res.end();
 });
+// A player that stopped reporting (browser closed, but the IronHide behind it is still connected) pauses the room where it last was
+setInterval(() => {
+  for (const r of rooms.values()) {
+    if (!r.pb.playing || !r.members.size || hasPlayer(r)) continue;
+    const latest = [...(r.ms?.values() || [])].sort((a, b) => b.at - a.at)[0];
+    if (latest && ACTIVE.has(latest.state)) freezeIfIdle(r, latest.pos); // their last reported position
+    else if (!latest) freezeIfIdle(r);
+  }
+}, 5000).unref?.();
+setInterval(() => { const cut = Date.now() - 7 * 864e5; for (const [c, r] of rooms) if (!r.members.size && (r.lastActive || 0) < cut) rooms.delete(c); }, 3600e3).unref?.();
 const wss = new WebSocketServer({ server, maxPayload: 80 * 1024 });
 
 wss.on('connection', (ws) => {
@@ -103,7 +128,7 @@ wss.on('connection', (ws) => {
         if (!u) { u = { id, friends: new Set(), status: null, room: null, hide: false }; users.set(id, u); }
         Object.assign(u, { name: uniqueName(clean(m.name, 32) || 'Guest', id), avatar: cleanAvatar(m.avatar), ws, hide: !!m.hide });
         me = u; clearTimeout(authTimer);
-        send(ws, { t: 'welcome', you: profile(u), now: Date.now(), directory: DIRECTORY });
+        send(ws, { t: 'welcome', you: profile(u), now: Date.now(), directory: DIRECTORY, v: VERSION });
         for (const req of offlineReq.get(id) || []) send(ws, { t: 'friend.req', from: req });
         offlineReq.delete(id);
         if (!u.hide) announce(u);
@@ -125,7 +150,7 @@ wss.on('connection', (ws) => {
         break;
       }
       case 'friend.accept': { const f = users.get(clean(m.to, 12)); if (f?.ws) send(f.ws, { t: 'friend.accepted', from: profile(u) }); break; }
-      case 'status': u.status = m.watching ? { title: clean(m.watching.title, 80), type: m.watching.type === 'movie' ? 'movie' : 'series', imdbId: clean(m.watching.imdbId, 12), poster: clean(m.watching.poster, 200) } : null; if (!u.hide) announce(u); break;
+      case 'status': u.status = m.watching ? { title: clean(m.watching.title, 80), type: m.watching.type === 'movie' ? 'movie' : 'series', state: m.watching.state === 'paused' ? 'paused' : 'playing', imdbId: clean(m.watching.imdbId, 12), poster: clean(m.watching.poster, 200) } : null; if (!u.hide) announce(u); break;
 
       case 'room.create': {
         leaveRoom(u);
@@ -137,8 +162,8 @@ wss.on('connection', (ws) => {
         const r = rooms.get(clean(m.code, 8).toUpperCase()); if (!r) return send(ws, { t: 'room.error', msg: 'That room code does not exist (or it has closed).' });
         if (r.banned?.has(u.id)) return send(ws, { t: 'room.error', msg: 'The host removed you from this room.' });
         if (r.members.size >= 12) return send(ws, { t: 'room.error', msg: 'This room is full.' });
-        leaveRoom(u); clearTimeout(r.emptyTimer);
-        r.members.add(u.id); u.room = r.code;
+        leaveRoom(u); r.lastActive = Date.now();
+        const wasEmpty = !r.members.size; r.members.add(u.id); u.room = r.code; if (wasEmpty && r.owner !== u.id && !users.get(r.host)?.room) r.host = u.id;
         if (r.owner === u.id && r.host !== u.id) { r.host = u.id; say(r, `${u.name} is back as host`); } else say(r, `${u.name} joined`); pushRoom(r); send(ws, { t: 'chat.history', msgs: r.chat });
         break;
       }
@@ -155,6 +180,17 @@ wss.on('connection', (ws) => {
         if (!r || r.owner !== u.id || !t || !r.members.has(t.id) || t.id === u.id) break;
         r.owner = r.host = t.id; say(r, `${u.name} made ${t.name} the owner`); pushRoom(r); break;
       }
+      case 'room.restore': {
+        for (const x of (Array.isArray(m.rooms) ? m.rooms : []).slice(0, 20)) {
+          const code = clean(x?.code, 8).toUpperCase(); if (!/^[A-Z0-9]{4,8}$/.test(code) || rooms.has(code)) continue;
+          const media = x.media && x.media.imdbId ? { imdbId: clean(x.media.imdbId, 12), type: x.media.type === 'series' ? 'series' : 'movie', title: clean(x.media.title, 100), year: clean(x.media.year, 12), poster: clean(x.media.poster, 200), season: Number(x.media.season) || null, episode: Number(x.media.episode) || null } : null;
+          const chat = (Array.isArray(x.chat) ? x.chat : []).slice(-HISTORY).map((c) => ({ from: c?.from ? { id: clean(c.from.id, 12), name: clean(c.from.name, 32), avatar: cleanAvatar(c.from.avatar) } : null, text: clean(c.text, MAX_CHAT), ts: Number(c.ts) || now }));
+          const owner = clean(x.owner, 12) || u.id;
+          rooms.set(code, { code, name: clean(x.name, 40) || 'Room', owner, host: owner, members: new Set(), ready: new Set(), control: x.control === 'all' ? 'all' : 'host', open: x.open !== false, media, pb: { playing: false, pos: Math.max(0, Math.min(1e6, Number(x.pos) || 0)), at: now, rate: 1 }, startAt: 0, chat, lastActive: Number(x.savedAt) || now });
+        }
+        break;
+      }
+      case 'away': u.away = !!m.away; if (!u.hide) announce(u); break; // their window is hidden, or their browser is closed
       case 'room.invite': { const r = rooms.get(u.room), f = users.get(clean(m.to, 12)); if (r && f?.ws && mutual(u, f)) send(f.ws, { t: 'room.invite', from: profile(u), code: r.code, name: r.name, media: r.media }); break; }
       case 'room.settings': { const r = rooms.get(u.room); if (!r || !runs(r, u)) break; if (['host', 'all'].includes(m.control)) r.control = m.control; if (typeof m.open === 'boolean') r.open = m.open; if (m.name) r.name = clean(m.name, 40); pushRoom(r); break; }
       case 'room.media': {
@@ -165,9 +201,11 @@ wss.on('connection', (ws) => {
         pushRoom(r); break;
       }
       case 'room.state': { // a light, frequent update: what this person's player is doing and where it is
-        const r = rooms.get(u.room); if (!r || !['playing', 'paused', 'buffering', 'away', 'loading'].includes(m.state)) break;
+        const r = rooms.get(u.room); if (!r || !['playing', 'paused', 'buffering', 'away', 'loading', 'idle'].includes(m.state)) break;
         const st = { state: m.state, pos: Math.max(0, Math.min(1e6, Number(m.pos) || 0)), at: now };
-        (r.ms ||= new Map()).set(u.id, st); toRoom(r, { t: 'room.ms', id: u.id, st }); break;
+        (r.ms ||= new Map()).set(u.id, st); toRoom(r, { t: 'room.ms', id: u.id, st });
+        if (m.state === 'idle') freezeIfIdle(r, st.pos); // the last player just closed
+        break;
       }
       case 'room.ready': { const r = rooms.get(u.room); if (!r) break; m.ready ? r.ready.add(u.id) : r.ready.delete(u.id); pushRoom(r); break; }
       case 'room.control': {

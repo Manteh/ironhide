@@ -163,3 +163,4 @@ select.input, .sel { appearance: none; -webkit-appearance: none; padding-right: 
 
 .savestat { display: inline-flex; align-items: center; gap: 6px; color: var(--ok); font-weight: 600; opacity: 0; transform: translateY(3px); transition: opacity .3s var(--ease), transform .35s var(--ease); }
 .savestat.show { opacity: 1; transform: none; } .savestat svg { font-size: 14px; }
+.banner.warn { background: color-mix(in srgb, #f5a524 13%, var(--surface)); border-color: color-mix(in srgb, #f5a524 40%, var(--border)); }

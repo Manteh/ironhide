@@ -244,6 +244,12 @@ document.addEventListener('keydown', (e) => {
   splash(); renderNav(); setupNowPlaying();
   window.pollRemote = pollRemote; setInterval(pollRemote, 2000); pollRemote();
   connectSocial();
+  // Tell the daemon whether anyone is looking, so friends see "tabbed out" instead of a stale "active".
+  const tab = crypto.randomUUID?.() || String(Math.random());
+  const seen = () => post('/api/social/visible', { tab, visible: document.visibilityState === 'visible' }).catch(() => {});
+  document.addEventListener('visibilitychange', seen); addEventListener('focus', seen);
+  addEventListener('pagehide', () => { try { fetch('/api/social/visible', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tab, visible: false }) }); } catch {} });
+  seen(); setInterval(() => { if (document.visibilityState === 'visible') seen(); }, 20000);
   onEvent((ev, d) => { if (ev === 'reset') { location.href = '/'; return; } if (ev === 'toast') toast(d.text, d.kind === 'err' ? 'err' : d.kind === 'ok' ? 'ok' : ''); });
   onState((st) => { const n = st.incoming.length + st.invites.length, on = st.friends.filter((f) => f.online).length; if (n !== store.socialCount || on !== store.friendsOnline) { store.socialCount = n; store.friendsOnline = on; renderNav(); } });
   window.addEventListener('hashchange', navigate);

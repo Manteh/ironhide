@@ -8,7 +8,9 @@ export async function joinRoomPlayback() {
   const r = social.state?.room, m = r?.media;
   if (!m) return toast('Nothing has been picked yet', 'err');
   const { playWeb } = await import('./main.js');
-  playWeb({ imdbId: m.imdbId, type: m.type, title: m.title, poster: m.poster, season: m.season, episode: m.episode, fromStart: true, room: true });
+  // start where the room is paused (not at the beginning, not at this person's own history)
+  const pb = r.pb, at = pb?.playing ? (pb.pos + Math.max(0, serverNow() - pb.at) / 1000 * (pb.rate || 1)) : (pb?.pos || 0);
+  playWeb({ imdbId: m.imdbId, type: m.type, title: m.title, poster: m.poster, season: m.season, episode: m.episode, roomStart: Math.max(0, Math.floor(at)), room: true });
 }
 
 // Called by the player once its DOM and stream are up.
@@ -35,7 +37,7 @@ export function attachRoom(P) {
   // --- membership / readiness UI ---
   let lastMedia = '';
   on(onState((s) => {
-    const r = s.room; if (!r) { toast('The room closed'); P.close(); return; }
+    const r = s.room; if (!r) { if (Date.now() - (social.lastKick || 0) > 4000) toast('You left the room'); P.close(); return; }
     $('#dwName', drawer).textContent = r.name;
     $('#wpRoomN', root).textContent = r.members.length;
     $('#dwMem', drawer).innerHTML = r.members.map((u) => `<span class="dmb ${u.ready ? 'ready' : ''}" title="${esc(u.name)}${u.ready ? ' · ready' : ' · loading'}">${avatar({ avatar: u.avatar }, 30)}<i></i>${(r.host === s.you?.id || r.owner === s.you?.id) && u.id !== r.owner && u.id !== s.you?.id ? `<button class="dmb-x" data-kick="${u.id}" data-kname="${esc(u.name)}" aria-label="Remove ${esc(u.name)}" title="Remove ${esc(u.name)}">${icon('x')}</button>` : ''}</span>`).join('');
@@ -98,8 +100,27 @@ export function attachRoom(P) {
   };
   const chk = setInterval(ready, 700);
 
+  // --- tell the room what this player is doing (watching, paused, buffering, tabbed out) and where it is ---
+  // The relay uses this to pause the whole room at the right spot when the last player closes.
+  let lastPos = 0;
+  const stateNow = () => {
+    const v = P.video(); if (!v) return 'idle';
+    if (document.hidden) return 'away';
+    if (!readySent && v.readyState < 3) return 'loading';
+    if (v.readyState < 3 && !v.paused) return 'buffering';
+    return v.paused ? 'paused' : 'playing';
+  };
+  const report = () => { lastPos = P.cur() || lastPos; sapi('/room/state', { state: stateNow(), pos: lastPos }).catch(() => {}); };
+  const rep = setInterval(report, 2000);
+  const vEl = P.video(); const instant = ['play', 'pause', 'waiting', 'playing', 'seeked', 'canplay']; instant.forEach((e) => vEl?.addEventListener(e, report));
+  document.addEventListener('visibilitychange', report);
+  const bye = () => { try { fetch('/api/social/room/state', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: 'idle', pos: lastPos }) }); } catch {} };
+  addEventListener('pagehide', bye);
+  report();
+
   return () => {
-    clearTimeout(startT); clearInterval(drift); clearInterval(chk); left.forEach((f) => f()); unChat();
+    clearTimeout(startT); clearInterval(drift); clearInterval(chk); clearInterval(rep); left.forEach((f) => f()); unChat();
+    instant.forEach((e) => vEl?.removeEventListener(e, report)); document.removeEventListener('visibilitychange', report); removeEventListener('pagehide', bye); bye(); // player closed: say so, with the last position
     P.hooks.onToggle = null; P.hooks.onSeek = null;
     sapi('/room/ready', { ready: false }).catch(() => {});
     drawer.remove(); layer.remove(); count.remove(); btn.remove(); root.classList.remove('wp-roomed', 'locked');
