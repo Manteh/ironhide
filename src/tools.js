@@ -1059,7 +1059,7 @@ server.registerTool(
   }
 );
 
-export function getLoadedStreams() { return { streams: globalStreams, meta: globalMeta }; }
+export function getLoadedStreams() { return { streams: globalStreams, meta: globalMeta, subs: globalSubs }; }
 
 // Called once by the daemon: background monitors that used to live in the MCP process.
 export function startBackground() {

@@ -21,7 +21,30 @@ export async function saveSettings(patch) {
 }
 
 // ---------- Shared actions ----------
+const usingWeb = () => store.settings?.playback?.player === 'web';
+
+// In-browser player: the daemon picks/resolves/probes, then the player streams it.
+export async function playWeb(body) {
+  watchLaunch({ title: body.title || '', imdbId: body.imdbId, poster: body.poster }, 'web');
+  try {
+    const { browserCaps, openPlayer } = await import('./player.js');
+    const info = await post('/api/webplay', { ...body, caps: browserCaps() });
+    hideLaunch(); openPlayer(info);
+    setTimeout(() => refreshHistory(), 3000);
+    return true;
+  } catch (e) { hideLaunch(); toast(e.message, 'err'); return false; }
+}
+
+// play a specific stream row from the version picker
+export async function playIndex(index, info) {
+  if (usingWeb()) return playWeb({ index, ...info });
+  watchLaunch(info);
+  try { await post('/api/play', { index }); return true; } catch (e) { hideLaunch(); toast(e.message, 'err'); return false; }
+}
+window.playIndex = playIndex;
+
 export async function quickPlay(item) {
+  if (usingWeb()) return playWeb(item);
   watchLaunch({ title: item.title, imdbId: item.imdbId, poster: item.poster });
   try {
     await post('/api/quickplay', item);
@@ -32,15 +55,17 @@ export async function quickPlay(item) {
 
 // ---------- Launch overlay: between "Play" and mpv taking over ----------
 const STEPS = [['finding', 'Finding the best stream'], ['resolving', 'Resolving the link'], ['launching', 'Starting the player'], ['buffering', 'Buffering a few seconds'], ['playing', 'Opening fullscreen']];
+const WEB_STEPS = [['finding', 'Finding the best stream'], ['resolving', 'Resolving the link'], ['probing', 'Checking codecs and tracks'], ['playing', 'Opening the player']];
 let launch = null;
 
-export function watchLaunch(info) {
+export function watchLaunch(info, mode = 'mpv') {
   hideLaunch(true);
+  const STEPS_ = mode === 'web' ? WEB_STEPS : STEPS;
   const el = document.createElement('div');
   el.className = 'launch';
   el.innerHTML = `<div class="lcard"><div class="lposter" style="${info.imdbId || info.poster ? `background-image:url('${esc(info.poster || posterOf(info.imdbId))}')` : ''}"></div>
     <div class="lbody"><div class="lkick">Getting ready</div><h3>${esc(info.title || 'Your title')}</h3><div class="ldetail" id="lDetail">Finding the best stream</div>
-      <ol class="lsteps">${STEPS.map(([k, l]) => `<li data-s="${k}"><i></i><span>${l}</span></li>`).join('')}</ol>
+      <ol class="lsteps">${STEPS_.map(([k, l]) => `<li data-s="${k}"><i></i><span>${l}</span></li>`).join('')}</ol>
       <div class="lbar"><div id="lFill"></div></div>
       <button class="btn ghost" id="lCancel">Cancel</button></div></div>`;
   document.body.appendChild(el);
@@ -49,13 +74,14 @@ export function watchLaunch(info) {
   launch = { el, startedAt, done: false, timer: null };
   const apply = (st) => {
     if (st.phase === 'error') { toast(st.detail || 'Could not start playback', 'err'); hideLaunch(); return; }
-    const idx = STEPS.findIndex(([k]) => k === st.phase);
+    const idx = STEPS_.findIndex(([k]) => k === st.phase);
     if (idx < 0) return;
     $$li(el).forEach((li, i) => { li.classList.toggle('done', i < idx || (i === idx && st.phase === 'playing')); li.classList.toggle('now', i === idx && st.phase !== 'playing'); });
-    $('#lFill', el).style.width = Math.round(((idx + (st.phase === 'playing' ? 1 : 0.55)) / STEPS.length) * 100) + '%';
-    $('#lDetail', el).textContent = st.detail || STEPS[idx][1];
+    $('#lFill', el).style.width = Math.round(((idx + (st.phase === 'playing' ? 1 : 0.55)) / STEPS_.length) * 100) + '%';
+    $('#lDetail', el).textContent = st.detail || STEPS_[idx][1];
     if (st.phase === 'playing' && !launch.done) {
       launch.done = true;
+      if (mode === 'web') return; // the player opens when the session is ready
       el.querySelector('.lkick').textContent = 'Now playing';
       setTimeout(() => { hideLaunch(); import('./now.js').then((m) => m.openNow()); }, 1500);
     }

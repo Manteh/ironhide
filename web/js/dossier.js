@@ -193,11 +193,7 @@ export async function openDossier({ type, id }) {
     $$('[data-t]', out).forEach((b) => (b.onclick = () => { st.tier = b.dataset.t; st.more = false; renderStreams(); }));
     $('#dSort', out)?.addEventListener('change', (e) => { st.sort = e.target.value; renderStreams(); });
     $('#dMore', out)?.addEventListener('click', () => { st.more = true; renderStreams(); });
-    $$('[data-p]', out).forEach((b) => (b.onclick = async () => {
-      window.watchLaunch?.({ title: meta.title, imdbId: id, poster: meta.poster });
-      try { await post('/api/play', { index: +b.dataset.p }); }
-      catch (e) { toast(e.message, 'err'); window.cancelLaunchUI?.(); }
-    }));
+    $$('[data-p]', out).forEach((b) => (b.onclick = () => window.playIndex?.(+b.dataset.p, { title: meta.title, imdbId: id, poster: meta.poster, type })));
   }
 
   draw(true);

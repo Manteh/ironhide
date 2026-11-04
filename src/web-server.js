@@ -7,6 +7,9 @@ import { tools, getLoadedStreams } from './tools.js';
 import { FEEDS, getFeed, getGenres, search as catalogSearch, getTitle } from './catalog.js';
 import { getHistory } from './history.js';
 import { parseLangs } from './ui.js';
+import { addToHistory, updateEntryProgress } from './history.js';
+import { learnQuality } from './preferences.js';
+import { capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession } from './webplay.js';
 import {
   getSettings, updateSettings, connectorsView, setConnectorKey, setDebridProvider, testConnector,
   getNodes, pickBest, getWatchlist, toggleWatchlist,
@@ -249,6 +252,81 @@ async function handleApi(req, res, urlPath) {
       res.writeHead(200, { 'Content-Type': r.headers.get('content-type') || 'image/jpeg', 'Cache-Control': 'public, max-age=604800', 'Access-Control-Allow-Origin': '*' });
       return res.end(buf);
     }
+
+    if (method === 'GET' && urlPath === '/api/webplay/capabilities') return jsonResponse(res, capabilities());
+
+    // In-browser playback: pick a stream, resolve the direct link, probe it, return a session.
+    if (method === 'POST' && urlPath === '/api/webplay') {
+      const body = await parseBody(req);
+      const settings = (await getSettings()).playback;
+      const type = body.type === 'series' || body.type === 'tv' ? 'tv' : 'movie';
+      let { season, episode } = body, resumeFrom = body.resumeFrom;
+      let stream;
+      if (body.index) {
+        const loaded = getLoadedStreams();
+        stream = loaded.streams[Number(body.index) - 1];
+        if (!stream) return errorResponse(res, 'Pick a stream first', 400);
+        season = loaded.meta.season; episode = loaded.meta.episode;
+        beginLaunch({ title: loaded.meta.title || '', imdbId: loaded.meta.imdbId || '', detail: 'Resolving the link' });
+      } else {
+        const hist = await getHistory(200);
+        if (type === 'tv' && !(season && episode)) {
+          const last = hist.find(h => h.imdbId === body.imdbId && h.season);
+          if (last) { season = last.season; episode = (last.percent || 0) >= 90 ? last.episode + 1 : last.episode; if (episode === last.episode) resumeFrom = last.position; }
+          else { season = 1; episode = 1; }
+        } else if (type === 'movie') {
+          const last = hist.find(h => h.imdbId === body.imdbId);
+          if (last && (last.percent || 0) < 90 && last.position > 30) resumeFrom = last.position;
+        }
+        beginLaunch({ title: body.title || '', imdbId: body.imdbId });
+        await tools.ironhide_streams.handler({ imdbId: body.imdbId, title: body.title || '', type, season, episode });
+        const loaded = getLoadedStreams();
+        const best = pickBest(loaded.streams, settings);
+        if (!best) { setPlayState({ phase: 'error', detail: 'No streams found for this title' }); return errorResponse(res, 'No streams found for this title', 404); }
+        stream = loaded.streams[best - 1];
+      }
+      try {
+        if (!stream.isRD || !stream.url) throw new Error('The web player needs a debrid stream (this one is a torrent)');
+        setPlayState({ phase: 'resolving', detail: `Resolving ${stream.size || 'stream'}` });
+        const r = await fetch(stream.url, { redirect: 'manual' });
+        const direct = r.headers.get('location') || (r.status < 300 ? stream.url : null);
+        if (!direct || /failed_|error|denied/i.test(direct)) throw new Error('That stream is not available right now');
+        setPlayState({ phase: 'probing', detail: 'Checking codecs and tracks' });
+        const loaded = getLoadedStreams(), meta = { ...loaded.meta, season, episode };
+        const info = await createSession({ url: direct, title: meta.title || body.title || 'Playing', meta, subs: loaded.subs || [], caps: body.caps || {}, settings });
+        await addToHistory({ title: meta.title || stream.quality.slice(0, 40), imdbId: meta.imdbId || '', type: meta.type || type, season, episode, quality: stream.quality.slice(0, 80), streamUrl: stream.url, streamIsRD: true }).catch(() => {});
+        if (meta.imdbId) await learnQuality(meta.imdbId, stream).catch(() => {});
+        setPlayState({ phase: 'playing', detail: 'Opening the player' });
+        return jsonResponse(res, { ...info, start: resumeFrom || 0, quality: stream.quality, size: stream.size });
+      } catch (err) {
+        setPlayState({ phase: 'error', detail: err.message });
+        return errorResponse(res, err.message, 502);
+      }
+    }
+
+    const wpMatch = urlPath.match(/^\/api\/wp\/([a-z0-9-]+)\/(stream|progress|sub\/(\d+)\.vtt)$/);
+    if (wpMatch) {
+      const [, id, what, subIdx] = wpMatch;
+      if (what === 'stream' && method === 'GET') {
+        const q = new URL(req.url, 'http://localhost').searchParams;
+        return streamTo(res, id, Number(q.get('start')) || 0, Number(q.get('audio')) || 0, q.get('transcode') === '1');
+      }
+      if (what.startsWith('sub/') && method === 'GET') {
+        const vtt = await subtitleVtt(id, Number(subIdx));
+        if (!vtt) return errorResponse(res, 'No such subtitle', 404);
+        res.writeHead(200, { 'Content-Type': 'text/vtt; charset=utf-8', 'Cache-Control': 'no-store' });
+        return res.end(vtt);
+      }
+      if (what === 'progress' && method === 'POST') {
+        const b = await parseBody(req), sess = getSession(id);
+        if (sess && b.position >= 0 && b.duration > 0) {
+          await updateEntryProgress({ imdbId: sess.meta?.imdbId, season: sess.meta?.season, episode: sess.meta?.episode }, { position: b.position, duration: b.duration, percent: (b.position / b.duration) * 100 }).catch(() => {});
+        }
+        return jsonResponse(res, { ok: true });
+      }
+    }
+    const wpDel = urlPath.match(/^\/api\/wp\/([a-z0-9-]+)$/);
+    if (wpDel && method === 'DELETE') { closeSession(wpDel[1]); return jsonResponse(res, { ok: true }); }
 
     if (method === 'GET' && urlPath === '/api/health') {
       return jsonResponse(res, { ok: true, service: 'ironhide', pid: process.pid });

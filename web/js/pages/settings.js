@@ -69,10 +69,18 @@ function appearance(body) {
 }
 
 // ---------- Playback ----------
-function playback(body) {
+async function playback(body) {
   const p = { ...store.settings.playback };
+  const cap = await api('/api/webplay/capabilities').catch(() => ({ ffmpeg: false }));
+  const { browserCaps } = await import('../player.js'); const bc = browserCaps();
   const draw = () => {
-    body.innerHTML = card({ title: 'Preferred quality', desc: 'IronHide uses this to pick the “Best match” stream and for one-click play.', body:
+    body.innerHTML =
+      card({ title: 'Player', desc: 'Where playback happens when you press Play.', body:
+        row('Player', 'mpv opens a native fullscreen window. The web player plays inside this page.', seg('player', [['mpv', 'mpv (native)', 'monitor'], ['web', 'Web player', 'laptop']], p.player)) +
+        (p.player === 'web' ? row('Quality when transcoding', 'Only used if the browser cannot decode the video directly.', seg('webMaxHeight', [['source', 'Source'], ['1080', '1080p'], ['720', '720p']], p.webMaxHeight)) +
+          row('Always use GPU transcode', 'Skips direct play. Use if a file stutters or has no picture.', `<button class="switch ${p.forceTranscode ? 'on' : ''}" id="ftx" role="switch" aria-checked="${p.forceTranscode}" aria-label="Force transcode"></button>`) : '') +
+        `<div class="banner" style="margin-top:var(--s4)">${icon('info')}<span>${cap.ffmpeg ? `ffmpeg found · GPU encoding via ${esc(cap.gpu)}. ` : 'ffmpeg not found, the web player is unavailable. '}This browser decodes HEVC: <b>${bc.hevc ? 'yes' : 'no'}</b>. Web playback streams the video untouched when possible (no CPU use) and converts audio to AAC.</span></div>` }) +
+      card({ title: 'Preferred quality', desc: 'IronHide uses this to pick the “Best match” stream and for one-click play.', body:
       row('Resolution', 'Auto picks the highest available.', seg('quality', [['auto', 'Auto'], ['2160p', '4K'], ['1080p', '1080p'], ['720p', '720p']], p.quality)) +
       row('HDR / Dolby Vision', 'Needs a capable display.', seg('hdr', [['prefer', 'Prefer'], ['any', 'No preference'], ['avoid', 'Avoid']], p.hdr)) +
       row('Remux releases', 'Largest files, untouched quality.', seg('remux', [['prefer', 'Prefer'], ['any', 'No preference'], ['avoid', 'Avoid']], p.remux)) +
@@ -80,6 +88,9 @@ function playback(body) {
       row('Cached streams only', 'Skip downloads that are not instantly available.', `<button class="switch ${p.cachedOnly ? 'on' : ''}" id="cached" role="switch" aria-checked="${p.cachedOnly}" aria-label="Cached only"></button>`),
       foot: `<span>Applies to the web app and Claude tools.</span><button class="btn primary" id="savePb">Save changes</button>` });
     ['quality', 'hdr', 'remux'].forEach((k) => bindSeg(body, k, (v) => { p[k] = v; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); }));
+    bindSeg(body, 'player', (v) => { p.player = v; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); });
+    bindSeg(body, 'webMaxHeight', (v) => { p.webMaxHeight = v; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); });
+    $('#ftx', body)?.addEventListener('click', () => { p.forceTranscode = !p.forceTranscode; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); });
     $('#cached', body).onclick = () => { p.cachedOnly = !p.cachedOnly; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); };
     $('#savePb', body).onclick = () => { p.maxSizeGb = +$('#maxsz', body).value || 0; saveSettings({ playback: p }).then(() => toast('Playback preferences saved', 'ok')); };
   };

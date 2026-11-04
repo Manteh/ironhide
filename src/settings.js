@@ -12,7 +12,7 @@ const WATCHLIST = join(CONFIG_DIR, 'watchlist.json');
 const defaults = () => ({
   profile: { name: cap(userInfo().username), avatar: { icon: 'film', color: 'indigo' } },
   appearance: { theme: 'dark', accent: 'indigo', density: 'comfortable', radius: 'round', motion: 'full', posterSize: 'm' },
-  playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true },
+  playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true, player: 'mpv', webMaxHeight: '1080', forceTranscode: false },
 });
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : 'You');
 
@@ -29,6 +29,8 @@ const ALLOWED = {
     quality: ['auto', '2160p', '1080p', '720p'],
     hdr: ['prefer', 'any', 'avoid'],
     remux: ['prefer', 'any', 'avoid'],
+    player: ['mpv', 'web'],
+    webMaxHeight: ['source', '1080', '720'],
   },
 };
 
@@ -63,7 +65,7 @@ export function updateSettings(patch) {
         const allowed = ALLOWED[section][k];
         if (allowed ? allowed.includes(v) : k in cur[section]) {
           if (k === 'maxSizeGb') cur[section][k] = Math.max(0, Math.min(500, Number(v) || 0));
-          else if (k === 'cachedOnly') cur[section][k] = !!v;
+          else if (k === 'cachedOnly' || k === 'forceTranscode') cur[section][k] = !!v;
           else cur[section][k] = v;
         }
       }
