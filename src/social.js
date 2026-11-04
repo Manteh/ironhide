@@ -141,8 +141,16 @@ export function setSocialSettings(p) {
   save();
   if (reconnect) connect(); else push();
 }
-export async function sendProfile() { if (link === 'online') tx({ t: 'profile', ...(await profileNow()) }); }
+export async function sendProfile() {
+  const p = await profileNow();
+  if (S.you) { S.you = { ...S.you, name: p.name, avatar: p.avatar }; push(); }
+  if (link === 'online') tx({ t: 'profile', ...p });
+}
 export function setWatching(w) { S.watching = w; if (link === 'online') tx({ t: 'status', watching: data.shareStatus ? w : null }); }
 
-export function startSocial() { load(); S.you = null; if (data.relayUrl) connect(); }
+export function startSocial() {
+  load(); S.you = null;
+  if (!data.relayUrl && process.env.IRONHIDE_RELAY) { data.relayUrl = process.env.IRONHIDE_RELAY; save(); } // hosted mode preset
+  if (data.relayUrl) connect();
+}
 export const myCode = () => S.you?.id || '';
