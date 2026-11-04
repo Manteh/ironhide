@@ -9,6 +9,13 @@ const SECTIONS = [
 const seg = (name, opts, cur) => `<div class="seg" data-seg="${name}">${opts.map(([v, l, ic]) => `<button data-v="${v}" class="${String(cur) === String(v) ? 'on' : ''}">${ic ? icon(ic) : ''}${l}</button>`).join('')}</div>`;
 const card = ({ title, desc, body, foot, danger }) => `<section class="scard ${danger ? 'danger' : ''}"><div class="body"><h3>${title}</h3>${desc ? `<p class="desc">${desc}</p>` : ''}${body}</div>${foot ? `<div class="foot">${foot}</div>` : ''}</section>`;
 const row = (label, hint, ctl) => `<div class="srow"><div class="lbl"><b>${label}</b>${hint ? `<span>${hint}</span>` : ''}</div>${ctl}</div>`;
+// Settings save themselves; a small "Saved" confirmation appears in the card footer.
+const savestat = (id) => `<span class="savestat" id="${id}" aria-live="polite"></span>`;
+function flash(root, id) {
+  const el = $('#' + id, root); if (!el) return;
+  el.innerHTML = `${icon('check')} Saved`; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1700);
+}
+const debounce = (fn, ms = 500) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 const bindSeg = (root, name, fn) => $$(`[data-seg="${name}"] button`, root).forEach((b) => (b.onclick = () => fn(b.dataset.v)));
 
 export default async function settings(el, { section = 'profile' }) {
@@ -27,18 +34,18 @@ function profile(body) {
     body.innerHTML =
       card({ title: 'Display name', desc: 'Shown in the menu and the welcome screen.',
         body: `<div class="field"><label for="pname">Name</label><input id="pname" class="input" maxlength="40" value="${esc(p.name)}" style="max-width:340px"></div>`,
-        foot: `<span>Up to 40 characters.</span><button class="btn primary" id="saveName">Save</button>` }) +
+        foot: `<span>Up to 40 characters. Saves automatically.</span>${savestat('s1')}` }) +
       card({ title: 'Avatar', desc: 'Pick an icon and a colour.',
         body: `<div style="display:flex;gap:var(--s6);align-items:flex-start;flex-wrap:wrap">${avatar(p, 88)}
           <div style="display:flex;flex-direction:column;gap:var(--s4);flex:1;min-width:240px">
             <div class="avatar-picker" role="radiogroup" aria-label="Icon">${AVATAR_ICONS.map((i) => `<button class="av-opt ${p.avatar.icon === i ? 'on' : ''}" data-i="${i}" aria-label="${i}">${icon(i)}</button>`).join('')}</div>
             <div class="swatches" role="radiogroup" aria-label="Colour">${AVATAR_COLORS.map((c) => `<button class="color-opt av-${c} ${p.avatar.color === c ? 'on' : ''}" data-c="${c}" aria-label="${c}"></button>`).join('')}</div></div></div>`,
-        foot: `<span>Changes preview live. Save to keep them.</span><button class="btn primary" id="saveAv">Save</button>` });
-    $('#pname', body).oninput = (e) => (p.name = e.target.value);
-    $('#saveName', body).onclick = () => saveSettings({ profile: { name: p.name } }).then(() => toast('Name saved', 'ok')).catch((e) => toast(e.message, 'err'));
-    $('#saveAv', body).onclick = () => saveSettings({ profile: { avatar: p.avatar } }).then(() => toast('Avatar saved', 'ok'));
-    $$('[data-i]', body).forEach((b) => (b.onclick = () => { p.avatar.icon = b.dataset.i; const n = $('#pname', body).value; draw(); $('#pname', body).value = n; }));
-    $$('[data-c]', body).forEach((b) => (b.onclick = () => { p.avatar.color = b.dataset.c; const n = $('#pname', body).value; draw(); $('#pname', body).value = n; }));
+        foot: `<span>Saves automatically.</span>${savestat('s2')}` });
+    const saveName = debounce(() => saveSettings({ profile: { name: p.name } }).then(() => flash(body, 's1')).catch((e) => toast(e.message, 'err')));
+    $('#pname', body).oninput = (e) => { p.name = e.target.value; if (p.name.trim()) saveName(); };
+    const saveAv = () => saveSettings({ profile: { avatar: p.avatar } }).then(() => flash(body, 's2')).catch((e) => toast(e.message, 'err'));
+    $$('[data-i]', body).forEach((b) => (b.onclick = () => { p.avatar.icon = b.dataset.i; const n = $('#pname', body).value; draw(); $('#pname', body).value = n; saveAv(); }));
+    $$('[data-c]', body).forEach((b) => (b.onclick = () => { p.avatar.color = b.dataset.c; const n = $('#pname', body).value; draw(); $('#pname', body).value = n; saveAv(); }));
   };
   draw();
 }
@@ -86,13 +93,16 @@ async function playback(body) {
       row('Remux releases', 'Largest files, untouched quality.', seg('remux', [['prefer', 'Prefer'], ['any', 'No preference'], ['avoid', 'Avoid']], p.remux)) +
       row('Maximum file size', '0 means no limit.', `<div style="display:flex;align-items:center;gap:8px"><input id="maxsz" class="input" type="number" min="0" max="500" value="${p.maxSizeGb}" style="width:90px"><span class="muted">GB</span></div>`) +
       row('Cached streams only', 'Skip downloads that are not instantly available.', `<button class="switch ${p.cachedOnly ? 'on' : ''}" id="cached" role="switch" aria-checked="${p.cachedOnly}" aria-label="Cached only"></button>`),
-      foot: `<span>Applies to the web app and Claude tools.</span><button class="btn primary" id="savePb">Save changes</button>` });
-    ['quality', 'hdr', 'remux'].forEach((k) => bindSeg(body, k, (v) => { p[k] = v; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); }));
-    bindSeg(body, 'player', (v) => { p.player = v; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); });
-    bindSeg(body, 'webMaxHeight', (v) => { p.webMaxHeight = v; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); });
-    $('#ftx', body)?.addEventListener('click', () => { p.forceTranscode = !p.forceTranscode; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); });
-    $('#cached', body).onclick = () => { p.cachedOnly = !p.cachedOnly; p.maxSizeGb = +$('#maxsz', body).value || 0; draw(); };
-    $('#savePb', body).onclick = () => { p.maxSizeGb = +$('#maxsz', body).value || 0; saveSettings({ playback: p }).then(() => toast('Playback preferences saved', 'ok')); };
+      foot: `<span>Applies to the web app and Claude tools. Saves automatically.</span>${savestat('spb')}` });
+    const persist = async (patch) => {
+      Object.assign(p, patch, { maxSizeGb: +$('#maxsz', body).value || 0 });
+      try { await saveSettings({ playback: p }); } catch (e) { return toast(e.message, 'err'); }
+      draw(); flash(body, 'spb');
+    };
+    ['quality', 'hdr', 'remux', 'player', 'webMaxHeight'].forEach((k) => bindSeg(body, k, (v) => persist({ [k]: v })));
+    $('#ftx', body)?.addEventListener('click', () => persist({ forceTranscode: !p.forceTranscode }));
+    $('#cached', body).onclick = () => persist({ cachedOnly: !p.cachedOnly });
+    $('#maxsz', body).oninput = debounce(() => { p.maxSizeGb = +$('#maxsz', body).value || 0; saveSettings({ playback: p }).then(() => flash(body, 'spb')).catch((e) => toast(e.message, 'err')); });
   };
   draw();
 }
