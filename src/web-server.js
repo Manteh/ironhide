@@ -391,6 +391,7 @@ async function handleApi(req, res, urlPath) {
         if (method === 'POST' && sub === '/room') { social.createRoom(body.name); return ok(); }
         if (method === 'POST' && sub === '/room/join') { social.joinRoom(body.code); return ok(); }
         if (method === 'POST' && sub === '/room/leave') { social.leaveRoom(); return ok(); }
+        if (method === 'POST' && sub === '/room/kick') { social.kick(body.id); return ok(); }
         if (method === 'POST' && sub === '/room/invite') { social.invite(body.id); return ok(); }
         if (method === 'POST' && sub === '/room/invite/dismiss') { social.dismissInvite(body.code); return ok(); }
         if (method === 'POST' && sub === '/room/media') { social.roomMedia(body.media); return ok(); }

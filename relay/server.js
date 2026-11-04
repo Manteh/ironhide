@@ -38,28 +38,35 @@ function uniqueName(name, selfId) {
 }
 const profile = (u) => ({ id: u.id, name: u.name, avatar: u.avatar });
 
+// What friends see of the room someone is in (code included, so they can just press Join). Hosts can switch this off.
+function roomBrief(u) {
+  const r = u.room && rooms.get(u.room);
+  if (!r || r.open === false) return null;
+  return { code: r.code, name: r.name, count: r.members.size, media: r.media ? { title: r.media.title, type: r.media.type, imdbId: r.media.imdbId, poster: r.media.poster, season: r.media.season, episode: r.media.episode } : null };
+}
+
 // ---------- presence (only between mutual friends) ----------
 const mutual = (a, b) => a.friends.has(b.id) && b.friends.has(a.id);
 function announce(u) {
-  for (const id of u.friends) { const f = users.get(id); if (f && mutual(u, f)) send(f.ws, { t: 'presence', id: u.id, online: !!u.ws, status: u.hide ? null : u.status, name: u.name, avatar: u.avatar }); }
+  for (const id of u.friends) { const f = users.get(id); if (f && mutual(u, f)) send(f.ws, { t: 'presence', id: u.id, online: !!u.ws, status: u.hide ? null : u.status, room: u.hide ? null : roomBrief(u), name: u.name, avatar: u.avatar }); }
 }
 function presenceFor(u) {
   const out = [];
-  for (const id of u.friends) { const f = users.get(id); if (f?.ws && mutual(u, f) && !f.hide) out.push({ id: f.id, online: true, status: f.status, name: f.name, avatar: f.avatar }); }
+  for (const id of u.friends) { const f = users.get(id); if (f?.ws && mutual(u, f) && !f.hide) out.push({ id: f.id, online: true, status: f.status, room: roomBrief(f), name: f.name, avatar: f.avatar }); }
   return out;
 }
 
 // ---------- rooms ----------
 const newCode = () => { let c; do { c = b32(randomBytes(4)).slice(0, 6); } while (rooms.has(c)); return c; };
 const snapshot = (r) => ({
-  code: r.code, name: r.name, host: r.host, control: r.control, media: r.media, pb: r.pb, startAt: r.startAt,
+  code: r.code, name: r.name, host: r.host, control: r.control, open: r.open !== false, media: r.media, pb: r.pb, startAt: r.startAt,
   members: [...r.members].map((id) => { const u = users.get(id); return u ? { ...profile(u), ready: r.ready.has(id) } : null; }).filter(Boolean),
 });
 const toRoom = (r, msg) => { for (const id of r.members) send(users.get(id)?.ws, msg); };
-const pushRoom = (r) => toRoom(r, { t: 'room', room: snapshot(r) });
+const pushRoom = (r) => { toRoom(r, { t: 'room', room: snapshot(r) }); for (const id of r.members) { const m = users.get(id); if (m && !m.hide) announce(m); } };
 function say(r, text) { const m = { from: null, text, ts: Date.now() }; r.chat.push(m); if (r.chat.length > HISTORY) r.chat.shift(); toRoom(r, { t: 'chat', msg: m }); }
 function leaveRoom(u) {
-  const r = u.room && rooms.get(u.room); u.room = null; if (!r) return;
+  const r = u.room && rooms.get(u.room); u.room = null; if (!u.hide) announce(u); if (!r) return;
   r.members.delete(u.id); r.ready.delete(u.id);
   if (!r.members.size) { r.emptyTimer = setTimeout(() => rooms.delete(r.code), 5 * 60e3); return; }
   if (r.host === u.id) r.host = [...r.members][0];
@@ -127,14 +134,22 @@ wss.on('connection', (ws) => {
       }
       case 'room.join': {
         const r = rooms.get(clean(m.code, 8).toUpperCase()); if (!r) return send(ws, { t: 'room.error', msg: 'That room code does not exist (or it has closed).' });
+        if (r.banned?.has(u.id)) return send(ws, { t: 'room.error', msg: 'The host removed you from this room.' });
         if (r.members.size >= 12) return send(ws, { t: 'room.error', msg: 'This room is full.' });
         leaveRoom(u); clearTimeout(r.emptyTimer);
         r.members.add(u.id); u.room = r.code; say(r, `${u.name} joined`); pushRoom(r); send(ws, { t: 'chat.history', msgs: r.chat });
         break;
       }
       case 'room.leave': leaveRoom(u); send(ws, { t: 'room', room: null }); break;
+      case 'room.kick': { // host only: remove someone, and keep them out of this room
+        const r = rooms.get(u.room), id = clean(m.to, 12), t = users.get(id);
+        if (!r || r.host !== u.id || id === u.id || !r.members.has(id)) break;
+        (r.banned ||= new Set()).add(id); r.members.delete(id); r.ready.delete(id);
+        if (t) { t.room = null; send(t.ws, { t: 'room', room: null }); send(t.ws, { t: 'room.kicked', by: u.name, room: r.name }); if (!t.hide) announce(t); }
+        say(r, `${t?.name || 'Someone'} was removed by ${u.name}`); pushRoom(r); break;
+      }
       case 'room.invite': { const r = rooms.get(u.room), f = users.get(clean(m.to, 12)); if (r && f?.ws && mutual(u, f)) send(f.ws, { t: 'room.invite', from: profile(u), code: r.code, name: r.name, media: r.media }); break; }
-      case 'room.settings': { const r = rooms.get(u.room); if (!r || r.host !== u.id) break; if (['host', 'all'].includes(m.control)) r.control = m.control; if (m.name) r.name = clean(m.name, 40); pushRoom(r); break; }
+      case 'room.settings': { const r = rooms.get(u.room); if (!r || r.host !== u.id) break; if (['host', 'all'].includes(m.control)) r.control = m.control; if (typeof m.open === 'boolean') r.open = m.open; if (m.name) r.name = clean(m.name, 40); pushRoom(r); break; }
       case 'room.media': {
         const r = rooms.get(u.room); if (!r || r.host !== u.id) break;
         r.media = m.media ? { imdbId: clean(m.media.imdbId, 12), type: m.media.type === 'series' ? 'series' : 'movie', title: clean(m.media.title, 100), year: clean(m.media.year, 12), poster: clean(m.media.poster, 200), season: Number(m.media.season) || null, episode: Number(m.media.episode) || null } : null;
@@ -162,7 +177,7 @@ wss.on('connection', (ws) => {
     }
   });
 
-  ws.on('close', () => { clearTimeout(authTimer); if (!me || me.ws !== ws) return; me.ws = null; leaveRoom(me); announce(me); });
+  ws.on('close', () => { clearTimeout(authTimer); if (!me || me.ws !== ws) return; me.ws = null; me.status = null; leaveRoom(me); announce(me); }); // a status only lives as long as the connection
   ws.on('error', () => {});
 });
 

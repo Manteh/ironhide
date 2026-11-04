@@ -98,6 +98,10 @@
 .fw { flex: none; width: 34px; aspect-ratio: 2/3; border-radius: 7px; background: var(--surface-2) center / cover; box-shadow: 0 6px 16px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.1); transition: transform .2s; }
 .fw:hover { transform: scale(1.12) rotate(-2deg); }
 
+/* a friend's open room, shown right in the friends list */
+.fr-room { display: flex !important; align-items: center; gap: 6px; margin-top: 3px; color: var(--text-2) !important; }
+.fr-room svg { width: 14px; height: 14px; opacity: .8; flex: none; } .fr-room em { font-style: normal; font-weight: 600; color: var(--text); }
+
 /* settings: extra instances on this Mac */
 .inst-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; } .inst-list:empty { display: none; }
 .inst { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
@@ -105,3 +109,9 @@
 .inst-i { flex: 1; min-width: 0; } .inst-i b { display: block; font-weight: 600; font-size: 14.5px; } .inst-i span { font-size: 12.5px; color: var(--muted); }
 .inst-new { display: flex; gap: 8px; } .inst-new .input { flex: 1; }
 .inst-keys { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13.5px; color: var(--text-2); cursor: pointer; } .inst-keys input { accent-color: var(--accent, #8f8cff); }
+
+/* host: remove someone from the room */
+.mb { position: relative; } .mb-x { margin-left: 4px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(255,255,255,.08); color: var(--text-2); display: grid; place-items: center; cursor: pointer; font-size: 13px; opacity: .6; transition: opacity .15s, background .15s, color .15s; }
+.mb:hover .mb-x, .mb-x:focus-visible { opacity: 1; } .mb-x:hover { background: #ef4444; color: #fff; }
+.dmb-x { position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 0; background: #ef4444; color: #fff; display: none; place-items: center; font-size: 9px; cursor: pointer; }
+.dmb:hover .dmb-x { display: grid; }

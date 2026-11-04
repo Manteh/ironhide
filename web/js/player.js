@@ -16,6 +16,10 @@ export function browserCaps() {
   return { hevc: ok('video/mp4; codecs="hvc1.1.6.L153.B0"') || ok('video/mp4; codecs="hev1.1.6.L153.B0"'), av1: ok('video/mp4; codecs="av01.0.08M.08"') };
 }
 
+const watchingNow = (info) => ({ title: info.title, type: info.meta?.type === 'movie' ? 'movie' : 'series', imdbId: info.meta?.imdbId || '', poster: info.meta?.imdbId ? posterOf(info.meta.imdbId) : '' });
+// closing the tab also ends the status
+addEventListener('pagehide', () => { try { fetch('/api/social/watching', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ watching: null }) }); } catch {} });
+
 export function openPlayer(info, opts = {}) {
   if (wp) closePlayer();
   const ep = info.meta?.season ? `S${pad(info.meta.season)}E${pad(info.meta.episode)}` : '';
@@ -63,7 +67,8 @@ export function openPlayer(info, opts = {}) {
   // rooms start paused at the beginning; the room decides when everyone presses play
   load(S.room ? 0 : (info.start > 20 ? info.start : 0), !S.room);
   S.saver = setInterval(save, 10000);
-  post('/api/social/watching', { watching: { title: info.title, type: info.meta?.type === 'movie' ? 'movie' : 'series', imdbId: info.meta?.imdbId || '', poster: info.meta?.imdbId ? posterOf(info.meta.imdbId) : '' } }).catch(() => {});
+  S.beat = setInterval(() => post('/api/social/watching', { watching: watchingNow(info) }).catch(() => {}), 45000); // keep the 'watching' status fresh while the player is open
+  post('/api/social/watching', { watching: watchingNow(info) }).catch(() => {});
   if (S.room) import('./roomplay.js').then((m) => { if (S && wp) roomOff = m.attachRoom({ root: () => wp, video: () => S?.video, cur: () => (S ? cur() : 0), seek: (t) => S && seekTo(t), close: () => closePlayer(), hooks }); });
   document.addEventListener('keydown', onKey, true);
   wake();
@@ -241,7 +246,7 @@ function save() { if (!S) return; const d = dur(), p = cur(); if (d > 0 && p > 5
 
 export function closePlayer() {
   if (!wp) return;
-  save(); clearInterval(S.saver); clearTimeout(S.idle);
+  save(); clearInterval(S.saver); clearInterval(S.beat); clearTimeout(S.idle);
   roomOff?.(); roomOff = null;
   post('/api/social/watching', { watching: null }).catch(() => {});
   document.removeEventListener('keydown', onKey, true);

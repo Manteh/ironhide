@@ -39,7 +39,7 @@ const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length 
 
 // ---------- state for the UI ----------
 export function snapshot() {
-  const friends = data.friends.map((f) => { const p = S.presence.get(f.id); return { ...f, name: p?.name || f.name, avatar: p?.avatar || f.avatar, online: !!p?.online, status: p?.status || null }; });
+  const friends = data.friends.map((f) => { const p = S.presence.get(f.id); return { ...f, name: p?.name || f.name, avatar: p?.avatar || f.avatar, online: !!p?.online, status: p?.status || null, inRoom: p?.room || null }; });
   friends.sort((a, b) => (b.online - a.online) || (!!b.status - !!a.status) || a.name.localeCompare(b.name)); // online first, then watchers
   return {
     you: S.you, relayHost: relayHost(), directory: S.directory, people: S.people.filter((p) => !data.friends.some((f) => f.id === p.id)), relay: { url: data.relayUrl, status: link }, friends, incoming: S.incoming, outgoing: S.outgoing, room: S.room, chat: S.chat, invites: S.invites,
@@ -81,13 +81,13 @@ async function handle(m) {
       S.you = m.you; link = 'online'; S.directory = !!m.directory; if (S.directory) tx({ t: 'directory' }); S.offsets = [Date.now() - m.now];
       tx({ t: 'friends', ids: data.friends.map((f) => f.id) });
       clearInterval(pingTimer); pingTimer = setInterval(() => tx({ t: 'ping', c: Date.now() }), 8000); tx({ t: 'ping', c: Date.now() });
-      if (S.watching && data.shareStatus) tx({ t: 'status', watching: S.watching });
+      tx({ t: 'status', watching: data.shareStatus ? S.watching : null }); // always say what is true now, so an old status on the relay can never linger
       push(); break;
     case 'pong': { const rtt = Date.now() - m.c; S.offsets.push(m.s + rtt / 2 - Date.now()); if (S.offsets.length > 7) S.offsets.shift(); break; } // server clock - local clock
     case 'you': S.you = m.you; push(); break; // the relay may have adjusted our name to keep it unique
     case 'directory': S.people = m.list; push(); break;
     case 'presence.all': S.presence = new Map(m.list.map((p) => [p.id, p])); push(); break;
-    case 'presence': { if (!data.friends.some((f) => f.id === m.id)) break; S.presence.set(m.id, m); const f = data.friends.find((x) => x.id === m.id); if (m.name) { f.name = m.name; f.avatar = m.avatar; save(); } push(); break; }
+    case 'presence': { if (!data.friends.some((f) => f.id === m.id)) break; { const was = S.presence.get(m.id); if (m.room && m.room.code !== was?.room?.code && m.online) emit('toast', { kind: 'info', text: `${m.name} opened a room${m.room.media ? `: ${m.room.media.title}` : ''}` }); } S.presence.set(m.id, m); const f = data.friends.find((x) => x.id === m.id); if (m.name) { f.name = m.name; f.avatar = m.avatar; save(); } push(); break; }
     case 'friend.req':
       if (data.friends.some((f) => f.id === m.from.id)) { acceptFriend(m.from.id, m.from); break; }
       if (!S.incoming.some((r) => r.id === m.from.id)) S.incoming.push(m.from);
@@ -101,6 +101,7 @@ async function handle(m) {
     case 'chat': S.chat.push(m.msg); if (S.chat.length > 80) S.chat.shift(); emit('chat', m.msg); break;
     case 'react': emit('react', m); break;
     case 'room.invite': S.invites = [m, ...S.invites.filter((i) => i.code !== m.code)].slice(0, 5); emit('toast', { kind: 'info', text: `${m.from.name} invited you to ${m.name}` }); push(); break;
+    case 'room.kicked': emit('toast', { kind: 'err', text: `${m.by} removed you from ${m.room}` }); break;
     case 'room.error': emit('toast', { kind: 'err', text: m.msg }); break;
     case 'replaced': stopped = true; link = 'replaced'; push(); break;
   }
@@ -129,6 +130,7 @@ export const createRoom = (name) => tx({ t: 'room.create', name });
 export const joinRoom = (code) => { S.invites = S.invites.filter((i) => i.code !== String(code).toUpperCase()); tx({ t: 'room.join', code }); };
 export const leaveRoom = () => { tx({ t: 'room.leave' }); S.room = null; S.chat = []; push(); };
 export const invite = (id) => tx({ t: 'room.invite', to: id });
+export const kick = (id) => tx({ t: 'room.kick', to: id });
 export const roomMedia = (media) => tx({ t: 'room.media', media });
 export const roomReady = (ready) => tx({ t: 'room.ready', ready: !!ready });
 export const roomControl = (action, pos, extra = {}) => tx({ t: 'room.control', action, pos, ...extra });
@@ -152,7 +154,10 @@ export async function sendProfile() {
   if (S.you) { S.you = { ...S.you, name: p.name, avatar: p.avatar }; push(); }
   if (link === 'online') tx({ t: 'profile', ...p });
 }
-export function setWatching(w) { S.watching = w; if (link === 'online') tx({ t: 'status', watching: data.shareStatus ? w : null }); }
+export function setWatching(w) { S.watching = w; S.watchingAt = Date.now(); if (link === 'online') tx({ t: 'status', watching: data.shareStatus ? w : null }); }
+
+// A status the player stopped refreshing (tab closed, crash) expires on its own after a couple of minutes.
+setInterval(() => { if (S.watching && Date.now() - (S.watchingAt || 0) > 150000) setWatching(null); }, 30000).unref?.();
 
 export function startSocial() {
   load(); S.you = null;
