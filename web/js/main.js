@@ -1,5 +1,5 @@
 import { api, post } from './api.js';
-import { $, esc, icon, avatar, LOGO, applyAppearance, fmtTime, toast, wl } from './ui.js';
+import { $, esc, icon, avatar, LOGO, applyAppearance, fmtTime, toast, wl, posterOf } from './ui.js';
 
 export const store = { settings: null, nodes: [], history: [], watchlist: [] };
 const routes = [];
@@ -22,15 +22,62 @@ export async function saveSettings(patch) {
 
 // ---------- Shared actions ----------
 export async function quickPlay(item) {
-  toast(`Finding the best stream for ${item.title}…`);
+  watchLaunch({ title: item.title, imdbId: item.imdbId, poster: item.poster });
   try {
-    const r = await post('/api/quickplay', item);
-    const ep = r.played?.season ? ` S${String(r.played.season).padStart(2, '0')}E${String(r.played.episode).padStart(2, '0')}` : '';
-    toast(`Playing ${item.title}${ep}`, 'ok');
-    setTimeout(() => { window.pollRemote?.(); refreshHistory(); }, 3000);
+    await post('/api/quickplay', item);
+    setTimeout(() => refreshHistory(), 4000);
     return true;
-  } catch (e) { toast(e.message, 'err'); return false; }
+  } catch (e) { hideLaunch(); toast(e.message, 'err'); return false; }
 }
+
+// ---------- Launch overlay: between "Play" and mpv taking over ----------
+const STEPS = [['finding', 'Finding the best stream'], ['resolving', 'Resolving the link'], ['launching', 'Starting the player'], ['buffering', 'Buffering a few seconds'], ['playing', 'Opening fullscreen']];
+let launch = null;
+
+export function watchLaunch(info) {
+  hideLaunch(true);
+  const el = document.createElement('div');
+  el.className = 'launch';
+  el.innerHTML = `<div class="lcard"><div class="lposter" style="${info.imdbId || info.poster ? `background-image:url('${esc(info.poster || posterOf(info.imdbId))}')` : ''}"></div>
+    <div class="lbody"><div class="lkick">Getting ready</div><h3>${esc(info.title || 'Your title')}</h3><div class="ldetail" id="lDetail">Finding the best stream</div>
+      <ol class="lsteps">${STEPS.map(([k, l]) => `<li data-s="${k}"><i></i><span>${l}</span></li>`).join('')}</ol>
+      <div class="lbar"><div id="lFill"></div></div>
+      <button class="btn ghost" id="lCancel">Cancel</button></div></div>`;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('in'));
+  const startedAt = Date.now();
+  launch = { el, startedAt, done: false, timer: null };
+  const apply = (st) => {
+    if (st.phase === 'error') { toast(st.detail || 'Could not start playback', 'err'); hideLaunch(); return; }
+    const idx = STEPS.findIndex(([k]) => k === st.phase);
+    if (idx < 0) return;
+    $$li(el).forEach((li, i) => { li.classList.toggle('done', i < idx || (i === idx && st.phase === 'playing')); li.classList.toggle('now', i === idx && st.phase !== 'playing'); });
+    $('#lFill', el).style.width = Math.round(((idx + (st.phase === 'playing' ? 1 : 0.55)) / STEPS.length) * 100) + '%';
+    $('#lDetail', el).textContent = st.detail || STEPS[idx][1];
+    if (st.phase === 'playing' && !launch.done) {
+      launch.done = true;
+      el.querySelector('.lkick').textContent = 'Now playing';
+      setTimeout(() => { hideLaunch(); import('./now.js').then((m) => m.openNow()); }, 1500);
+    }
+  };
+  const poll = async () => {
+    if (!launch || launch.el !== el) return;
+    try { const st = await api('/api/playstate'); if (st.at >= startedAt - 400) apply(st); } catch {}
+    if (Date.now() - startedAt > 90000) { toast('Starting took too long', 'err'); hideLaunch(); }
+  };
+  launch.timer = setInterval(poll, 350); poll();
+  $('#lCancel', el).onclick = async () => { hideLaunch(); await post('/api/play/cancel').catch(() => {}); toast('Cancelled'); };
+}
+const $$li = (el) => [...el.querySelectorAll('.lsteps li')];
+
+export function hideLaunch(instant = false) {
+  if (!launch) return;
+  clearInterval(launch.timer);
+  const el = launch.el; launch = null;
+  if (instant) return el.remove();
+  el.classList.remove('in'); setTimeout(() => el.remove(), 500);
+}
+window.watchLaunch = watchLaunch; window.cancelLaunchUI = () => hideLaunch();
 
 export async function toggleSave(item) {
   const r = await post('/api/watchlist/toggle', item);
@@ -52,24 +99,22 @@ export function renderNav() {
   const online = store.nodes.filter((n) => n.status === 'online').length;
   const on = (re) => (re.test(hash) ? 'on' : '');
   $('#nav').innerHTML = `
-    <a class="brand" href="#/" aria-label="IronHide home">${LOGO}<span>IronHide</span></a>
-    <nav class="ncenter" aria-label="Main">
-      <a href="#/" class="${on(/^#\/?$|^#\/feed|^#\/title/)}" aria-label="Home" title="Home">${icon('home')}</a>
-      <button id="nSearch" aria-label="Search" title="Search ( / )">${icon('search')}</button>
-      <a href="#/continue" class="${on(/^#\/continue/)}" aria-label="Continue watching" title="Continue watching">${icon('play')}</a>
-      <a href="#/shelf" class="${on(/^#\/shelf/)}" aria-label="Shelf" title="Shelf">${icon('bookmark')}</a>
-    </nav>
-    <div class="nright">
-      <a class="nodes" href="#/settings/nodes" title="${online} node${online === 1 ? '' : 's'} online"><span class="dot ${online ? 'online' : 'offline'}"></span>${online}</a>
-      <a href="#/settings/profile" class="me" aria-label="Settings" title="${esc(s.profile.name)}">${avatar(s.profile, 36)}</a>
-    </div>`;
+    <a class="rlogo" href="#/" aria-label="IronHide home" data-tip="IronHide">${LOGO}</a>
+    <i class="rsep"></i>
+    <a href="#/" class="ri ${on(/^#\/?$|^#\/feed|^#\/title/)}" aria-label="Home" data-tip="Home">${icon('home')}</a>
+    <button id="nSearch" class="ri" aria-label="Search" data-tip="Search  /">${icon('search')}</button>
+    <a href="#/continue" class="ri ${on(/^#\/continue/)}" aria-label="Continue watching" data-tip="Continue watching">${icon('play')}</a>
+    <a href="#/shelf" class="ri ${on(/^#\/shelf/)}" aria-label="Shelf" data-tip="Shelf">${icon('bookmark')}</a>
+    <i class="rsep"></i>
+    <a class="rnode" href="#/settings/nodes" data-tip="${online} node${online === 1 ? '' : 's'} online"><span class="dot ${online ? 'online' : 'offline'}"></span><b>${online}</b></a>
+    <a class="rme" href="#/settings/profile" aria-label="Settings" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 38)}</a>`;
   $('#nSearch').onclick = () => import('./palette.js').then((m) => m.openPalette());
 }
 
 // ---------- Now playing pill ----------
 function npMarkup() {
   return `<button class="rb main" data-r="toggle" aria-label="Play or pause"></button>
-    <div class="npi"><div class="npt"></div><div class="npbar"><i></i></div></div><span class="npx"></span>
+    <button class="npi" data-r="open" aria-label="Open now playing"><span class="npt"></span><span class="npbar"><i></i></span></button><span class="npx"></span>
     <button class="rb" data-r="back" aria-label="Back 30 seconds">${icon('back')}</button>
     <button class="rb" data-r="fwd" aria-label="Forward 30 seconds">${icon('fwd')}</button>
     <button class="rb" data-r="stop" aria-label="Stop">${icon('stop')}</button>`;
@@ -79,7 +124,7 @@ function setupNowPlaying() {
   const ctl = (action, value) => post('/api/control', { action, value }).then(() => pollRemote()).catch((e) => toast(e.message, 'err'));
   np.onclick = (e) => {
     const b = e.target.closest('[data-r]'); if (!b) return;
-    ({ toggle: () => ctl('toggle'), back: () => ctl('seek_back', 30), fwd: () => ctl('seek_forward', 30), stop: () => ctl('stop') })[b.dataset.r]();
+    ({ open: () => import('./now.js').then((m) => m.openNow()), toggle: () => ctl('toggle'), back: () => ctl('seek_back', 30), fwd: () => ctl('seek_forward', 30), stop: () => ctl('stop') })[b.dataset.r]();
   };
 }
 async function pollRemote() {
@@ -154,7 +199,7 @@ document.addEventListener('keydown', (e) => {
   store.settings = settings; store.history = history; store.watchlist = list; list.forEach((w) => wl.add(w.imdbId));
   applyAppearance(settings.appearance);
   matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => applyAppearance(store.settings.appearance));
-  $('#app').innerHTML = `<header id="nav" class="nav"></header><div id="browse" class="hidden"></div><div id="page" class="hidden"></div><div id="np" class="np hidden"></div>`;
+  $('#app').innerHTML = `<nav id="nav" class="rail" aria-label="Main"></nav><div id="browse" class="hidden"></div><div id="page" class="hidden"></div><div id="np" class="np hidden"></div>`;
   splash(); renderNav(); setupNowPlaying();
   window.pollRemote = pollRemote; setInterval(pollRemote, 2000); pollRemote();
   window.addEventListener('hashchange', navigate);

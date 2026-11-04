@@ -4,6 +4,8 @@ import { unlinkSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
+import { getProp, setProp, isMpvRunning as ipcRunning } from './mpv-ipc.js';
+import { setPlayState, getPlayState } from './playstate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LUA_SCRIPT = join(__dirname, 'mpv-progress.lua');
@@ -135,11 +137,14 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
   if (stream.isRD && stream.url) {
     const res = await fetch(stream.url, { redirect: 'manual' });
     const location = res.headers.get('location') || (res.status < 300 ? stream.url : null);
-    if (!location) return { status: 'not_cached', progressFile: null };
-    if (/failed_|error|denied/i.test(location)) return { status: 'not_cached', progressFile: null };
+    if (!location) { setPlayState({ phase: 'error', detail: 'Stream is not available' }); return { status: 'not_cached', progressFile: null }; }
+    if (/failed_|error|denied/i.test(location)) { setPlayState({ phase: 'error', detail: 'Stream is not cached' }); return { status: 'not_cached', progressFile: null }; }
+    setPlayState({ phase: 'launching', detail: 'Starting the player' });
 
     const mpvArgs = [
       '--really-quiet', `--script=${LUA_SCRIPT}`, '--alang=eng,en,lit,lt,swe,sv',
+      // open behind everything, paused, until the stream is buffered; then we reveal it
+      '--log-file=/tmp/ironhide-mpv.log', '--focus-on=never', '--pause', '--fullscreen=no', '--demuxer-readahead-secs=10',
       `--input-ipc-server=${ipcSocket}`,
       ...(title ? [`--force-media-title=${title}`] : []),
       ...(resumeFrom > 0 ? [`--start=${Math.floor(resumeFrom)}`] : []),
@@ -152,6 +157,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
     ]);
 
     const interval = watchMpvProcess(progressFile, onFinish);
+    presentWhenReady(getPlayState().token);
     return { status: 'playing', progressFile, cancel: () => clearInterval(interval) };
 
   } else if (stream.magnet) {
@@ -184,3 +190,35 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
 }
 
 export { readProgress, formatTime };
+
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Wait until mpv has the file open and a few seconds buffered, then unpause,
+// go fullscreen and raise the window so the hand-over is seamless.
+export async function presentWhenReady(token) {
+  const t0 = Date.now();
+  const stale = () => getPlayState().token !== token || getPlayState().phase === 'idle';
+  let seenWindow = false;
+  while (Date.now() - t0 < 60000) {
+    await sleep(500);
+    if (stale()) return;
+    if (!(await ipcRunning().catch(() => false))) { if (Date.now() - t0 > 12000) break; continue; }
+    seenWindow = true;
+    const dur = await getProp('duration').catch(() => null);
+    if (!(dur > 0)) continue;
+    setPlayState({ phase: 'buffering', detail: 'Buffering' });
+    const [cache, pos] = await Promise.all([getProp('demuxer-cache-time').catch(() => 0), getProp('time-pos').catch(() => 0)]);
+    if ((cache || 0) - (pos || 0) >= 3 || Date.now() - t0 > 35000) break;
+  }
+  if (stale()) return;
+  if (!seenWindow || !(await ipcRunning().catch(() => false))) { setPlayState({ phase: 'error', detail: 'The player did not start' }); return; }
+  setPlayState({ phase: 'playing', detail: 'Opening fullscreen' });
+  await setProp('fullscreen', true).catch(() => {});
+  await setProp('pause', false).catch(() => {});
+  // bring to front: toggling ontop raises the window without needing extra permissions
+  await setProp('ontop', true).catch(() => {});
+  await sleep(250);
+  await setProp('ontop', false).catch(() => {});
+  setTimeout(() => { if (getPlayState().token === token && getPlayState().phase === 'playing') setPlayState({ detail: 'Playing' }); }, 1200);
+}

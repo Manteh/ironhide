@@ -51,6 +51,9 @@ async function setProperty(name, value) {
   return sendCommand(['set_property', name, value]);
 }
 
+export const getProp = (name) => getProperty(name);
+export const setProp = (name, value) => setProperty(name, value);
+
 // ── Status ──
 
 export async function getNowPlaying() {

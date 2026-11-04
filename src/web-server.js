@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { tools, getLoadedStreams } from './tools.js';
 import { FEEDS, getFeed, getGenres, search as catalogSearch, getTitle } from './catalog.js';
 import { getHistory } from './history.js';
+import { parseLangs } from './ui.js';
 import {
   getSettings, updateSettings, connectorsView, setConnectorKey, setDebridProvider, testConnector,
   getNodes, pickBest, getWatchlist, toggleWatchlist,
@@ -21,6 +22,7 @@ import {
 
 import { searchMedia, getImdbId, getLatestEpisode } from './tmdb.js';
 import { getNowPlaying, isMpvRunning } from './mpv-ipc.js';
+import { getPlayState, setPlayState, beginLaunch } from './playstate.js';
 
 const WEB_DIR = fileURLToPath(new URL('../web', import.meta.url));
 export const WEB_PORT = Number(process.env.IRONHIDE_PORT) || 7676;
@@ -38,6 +40,16 @@ const TAG_PATTERNS = [
   ['REMUX', /remux/i], ['DV', /\bDV\b|dolby.?vision|dovi/i], ['HDR', /hdr/i],
   ['IMAX', /imax/i], ['Atmos', /atmos|truehd|dts-hd/i],
 ];
+function describeStream(q) {
+  const source = /remux/i.test(q) ? 'Remux' : /blu-?ray|bdrip|brrip/i.test(q) ? 'Blu-ray' : /web-?dl/i.test(q) ? 'WEB-DL' : /webrip/i.test(q) ? 'WEBRip' : /hdtv/i.test(q) ? 'HDTV' : /dvd/i.test(q) ? 'DVD' : /\bcam\b|telesync|\bts\b|hdcam/i.test(q) ? 'CAM' : '';
+  const codec = /\bav1\b/i.test(q) ? 'AV1' : /hevc|x265|h\.?265/i.test(q) ? 'HEVC' : /x264|h\.?264|\bavc\b/i.test(q) ? 'H.264' : '';
+  const audio = /atmos/i.test(q) ? 'Atmos' : /truehd/i.test(q) ? 'TrueHD' : /dts-?hd/i.test(q) ? 'DTS-HD' : /\bdts\b/i.test(q) ? 'DTS' : /ddp ?5\.1|ddp ?7\.1|dd\+/i.test(q) ? 'DD+ 5.1' : /dd ?5\.1|\bac-?3\b/i.test(q) ? 'DD 5.1' : /\baac\b/i.test(q) ? 'AAC' : '';
+  const hdr = [];
+  if (/dolby.?vision|\bdv\b|dovi/i.test(q)) hdr.push('Dolby Vision');
+  if (/hdr10\+/i.test(q)) hdr.push('HDR10+'); else if (/hdr/i.test(q)) hdr.push('HDR10');
+  const group = (q.match(/-([A-Za-z0-9]{2,14})(?:\[[^\]]*\])?(?:\.\w{2,4})?\s*$/) || [])[1] || '';
+  return { source, codec, audio, hdr, group, langs: parseLangs(q).filter((l) => l !== 'EN').slice(0, 3) };
+}
 const streamTags = (q) => TAG_PATTERNS.filter(([, re]) => re.test(q)).map(([t]) => t);
 
 const clients = new Set();
@@ -152,6 +164,7 @@ async function handleApi(req, res, urlPath) {
         seeds: s.seeds,
         resolution: (s.quality.match(/2160p|4k|1080p|720p|480p/i) || [''])[0].toLowerCase().replace('4k', '2160p'),
         tags: streamTags(s.quality),
+        ...describeStream(s.quality),
       })));
     }
 
@@ -170,16 +183,24 @@ async function handleApi(req, res, urlPath) {
         const last = hist.find(h => h.imdbId === body.imdbId);
         if (last && (last.percent || 0) < 90 && last.position > 30) resumeFrom = last.position;
       }
+      beginLaunch({ title: body.title || '', imdbId: body.imdbId });
       await tools.ironhide_streams.handler({ imdbId: body.imdbId, title: body.title || '', type, season, episode });
       const { streams } = getLoadedStreams();
       const best = pickBest(streams, playback);
-      if (!best) return errorResponse(res, 'No streams found for this title', 404);
+      if (!best) { setPlayState({ phase: 'error', detail: 'No streams found for this title' }); return errorResponse(res, 'No streams found for this title', 404); }
+      setPlayState({ phase: 'resolving', detail: `Resolving ${streams[best - 1].size || 'stream'}` });
       const out = await tools.ironhide_play.handler({ index: best, resumeFrom });
       return jsonResponse(res, { ...out, played: { season, episode, resumeFrom: resumeFrom || 0 } });
     }
 
+    if (method === 'GET' && urlPath === '/api/playstate') return jsonResponse(res, getPlayState());
+    if (method === 'POST' && urlPath === '/api/play/cancel') { setPlayState({ phase: 'idle', detail: '' }); await tools.ironhide_control.handler({ action: 'stop' }).catch(() => {}); return jsonResponse(res, { ok: true }); }
+
     if (method === 'POST' && urlPath === '/api/play') {
       const body = await parseBody(req);
+      const meta0 = getLoadedStreams().meta || {};
+      beginLaunch({ title: meta0.title || '', imdbId: meta0.imdbId || '', detail: 'Resolving the link' });
+      setPlayState({ phase: 'resolving' });
       return jsonResponse(res, await tools.ironhide_play.handler({ index: Number(body.index), resumeFrom: body.resumeFrom }));
     }
 
@@ -248,7 +269,7 @@ async function handleApi(req, res, urlPath) {
       const running = await isMpvRunning();
       if (!running) return jsonResponse(res, null);
       const np = await getNowPlaying();
-      return jsonResponse(res, np);
+      return jsonResponse(res, np && { ...np, meta: getLoadedStreams().meta });
     }
 
     if (method === 'GET' && urlPath.startsWith('/api/search')) {

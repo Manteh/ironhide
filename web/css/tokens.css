@@ -2,7 +2,7 @@
 :root {
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s7: 32px; --s8: 48px;
   --sans: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
-  --ease: cubic-bezier(.2,.7,.2,1);
+  --ease: cubic-bezier(.2,.7,.2,1); --spring: cubic-bezier(.34,1.45,.64,1);
   --ok: #3fcf8e; --warn: #f5a524; --err: #f2555a;
   --nav-h: 64px; --content-w: 1240px;
 }

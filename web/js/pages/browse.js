@@ -80,7 +80,13 @@ async function renderHero(items) {
 async function loadTab(reset = true) {
   const my = ++st.token;
   const grid = $('#grid', root), hero = $('#hero', root), more = $('#more', root);
-  if (reset) { st.items = []; grid.innerHTML = skeleton(8); hero.innerHTML = ''; more.innerHTML = ''; }
+  if (reset) {
+    st.items = [];
+    if (grid.children.length && !grid.querySelector('.sk')) { grid.classList.add('leaving'); hero.classList.add('leaving'); await new Promise((r) => setTimeout(r, 170)); }
+    if (my !== st.token) return;
+    grid.classList.remove('leaving'); hero.classList.remove('leaving');
+    grid.innerHTML = skeleton(8); hero.innerHTML = ''; more.innerHTML = '';
+  }
   st.busy = true;
   let items = [], label = '';
   if (st.tab === 'continue') { items = continueItems(store.history); }
@@ -111,8 +117,15 @@ async function loadTab(reset = true) {
   $('#loadMore', root)?.addEventListener('click', () => loadTab(false));
 }
 
+function moveInd() {
+  const tabs = $('#tabs', root), on = tabs?.querySelector('a.on'), ind = tabs?.querySelector('.ind');
+  if (!on || !ind) return;
+  ind.style.width = on.offsetWidth + 'px'; ind.style.transform = `translateX(${on.offsetLeft}px)`;
+}
+
 function paintChrome() {
-  $('#tabs', root).innerHTML = TABS.map((t) => `<a href="${hrefOf(t)}" class="${t[0] === st.tab ? 'on' : ''}">${t[1]}${t[0] === 'shelf' && wl.size ? `<em>${wl.size}</em>` : ''}</a>`).join('');
+  $('#tabs', root).innerHTML = TABS.map((t) => `<a href="${hrefOf(t)}" class="${t[0] === st.tab ? 'on' : ''}">${t[1]}${t[0] === 'shelf' && wl.size ? `<em>${wl.size}</em>` : ''}</a>`).join('') + '<i class="ind"></i>';
+  requestAnimationFrame(() => moveInd());
   const isFeed = !['home', 'continue', 'shelf', 'boxoffice'].includes(st.tab);
   $('#tools', root).innerHTML = isFeed ? `<select id="gsel" class="sel" aria-label="Genre"><option value="">All genres</option>${genres.map((g) => `<option ${g === st.genre ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select>` : '';
   $('#gsel', root)?.addEventListener('change', (e) => { st.genre = e.target.value; loadTab(true); });
@@ -150,6 +163,7 @@ export async function mount(el) {
   el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const c = e.target.closest?.('.bc[data-id]'); if (c) location.hash = `#/title/${c.dataset.type}/${c.dataset.id}`; } });
   el.addEventListener('pointerover', (e) => { const c = e.target.closest('.bc[data-poster]'); if (c) ambient(c.dataset.poster); else if (e.target.closest('.hero2')) ambient($('.hero2', el)?.dataset.bg); });
   el.addEventListener('pointerleave', () => ambient($('.hero2', el)?.dataset.bg || ''));
+  window.addEventListener('resize', moveInd);
   window.browseRefresh = () => { paintChrome(); if (['continue', 'shelf'].includes(st.tab)) loadTab(true); };
 }
 

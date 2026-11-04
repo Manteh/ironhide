@@ -9,8 +9,9 @@ svg.i { width: 1em; height: 1em; flex-shrink: 0; stroke: currentColor; fill: non
 :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 .hidden { display: none !important; }
 .muted { color: var(--muted); } .t2 { color: var(--text-2); }
-@keyframes fadeup { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes fadeup { from { opacity: 0; filter: blur(10px); transform: translateY(14px) scale(.99); } to { opacity: 1; filter: blur(0); transform: none; } }
+@keyframes pop { from { opacity: 0; filter: blur(8px); transform: translateY(10px) scale(.96); } to { opacity: 1; filter: blur(0); transform: none; } }
+@keyframes blurin { from { opacity: 0; filter: blur(12px); transform: translateY(16px) scale(.985); } to { opacity: 1; filter: blur(0); transform: none; } }
 
 /* ---------- Status dots & avatars ---------- */
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
@@ -79,10 +80,10 @@ select.input, .sel { appearance: none; -webkit-appearance: none; padding-right: 
 
 /* ---------- Episodes and streams (detail sheet) ---------- */
 .eps { display: flex; flex-direction: column; gap: 2px; }
-.ep { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 12px; border-radius: var(--r-sm); background: none; border: 0; text-align: left; transition: background .2s; }
+.ep { transition: background .25s var(--ease); display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 12px; border-radius: var(--r-sm); background: none; border: 0; text-align: left; transition: background .2s; }
 .ep:hover { background: var(--hover); } .ep.on { background: color-mix(in srgb, var(--text) 10%, transparent); }
-.ep .n { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; font-size: 12.5px; font-weight: 650; background: var(--hover); color: var(--text-2); font-variant-numeric: tabular-nums; }
-.ep.on .n { background: var(--text); color: var(--bg); }
+.ep .n { transition: background .3s var(--ease), color .3s var(--ease), transform .3s var(--spring, var(--ease)); width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; font-size: 12.5px; font-weight: 650; background: var(--hover); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.ep.on .n { background: var(--text); color: var(--bg); transform: scale(1.08); }
 .ep > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ep .d { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 
@@ -95,6 +96,8 @@ select.input, .sel { appearance: none; -webkit-appearance: none; padding-right: 
 .stream .sz { margin-top: 8px; color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
 .stream .q { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; margin-top: 3px; }
 .stream .acts .btn { height: 38px; padding: 0 18px; }
+.stream { animation: blurin .5s var(--ease) backwards; }
+.stream:nth-child(2) { animation-delay: .04s } .stream:nth-child(3) { animation-delay: .08s } .stream:nth-child(4) { animation-delay: .12s } .stream:nth-child(5) { animation-delay: .16s } .stream:nth-child(n+6) { animation-delay: .2s }
 
 /* ---------- Settings ---------- */
 .settings { display: block; }
@@ -148,7 +151,7 @@ select.input, .sel { appearance: none; -webkit-appearance: none; padding-right: 
 .ncard .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
 
 /* ---------- Toasts & splash ---------- */
-.toasts { position: fixed; left: 50%; transform: translateX(-50%); top: 84px; align-items: center; display: flex; flex-direction: column; gap: 8px; z-index: 600; pointer-events: none; }
+.toasts { position: fixed; left: 50%; transform: translateX(-50%); top: 24px; align-items: center; display: flex; flex-direction: column; gap: 8px; z-index: 600; pointer-events: none; }
 .toast { padding: 12px 20px; border-radius: var(--r-md); background: color-mix(in srgb, var(--bg-elev) 92%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid var(--border-strong); box-shadow: var(--shadow); max-width: min(420px, 92vw); font-weight: 560; animation: pop .25s var(--ease) both; }
 .toast.err { border-color: color-mix(in srgb, var(--err) 55%, transparent); } .toast.ok { border-color: color-mix(in srgb, var(--ok) 55%, transparent); }
 #gate { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s4); background: var(--bg); transition: opacity .7s var(--ease), visibility .7s; }
