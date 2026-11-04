@@ -163,7 +163,7 @@ body.is-browse { background: var(--bg); }
 .pal-q kbd { font: inherit; font-size: 11px; border: 1px solid var(--border-strong); border-radius: 6px; padding: 1px 7px; }
 .pal-r { max-height: 62vh; overflow-y: auto; padding: 16px; }
 .pal-strip { display: flex; gap: 14px; overflow-x: auto; padding: 6px 6px 18px; }
-.pal-t { flex: 0 0 120px; cursor: pointer; opacity: .6; transition: opacity .2s; } .pal-t.on { opacity: 1; }
+.pal-t { flex: 0 0 120px; width: 120px; min-width: 0; max-width: 120px; overflow: hidden; cursor: pointer; opacity: .6; transition: opacity .2s; } .pal-t.on { opacity: 1; }
 .pal-t .pp { aspect-ratio: 2/3; border-radius: 14px; background: var(--surface) center / cover; transition: box-shadow .2s; } .pal-t.on .pp { box-shadow: 0 0 0 2px var(--text); }
 .pal-t b { display: block; font-size: 12.5px; margin-top: 8px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .pal-t span { font-size: 11.5px; color: var(--muted); }
 .pal-c { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 12px; color: var(--text-2); cursor: pointer; } .pal-c.on { background: var(--hover); color: var(--text); }
@@ -330,3 +330,11 @@ body.is-browse { background: var(--bg); }
 html { scrollbar-gutter: stable; }
 html:has(.dossier.open, .wp, .pal, .nowv, .launch), html:has(.dossier.open, .wp, .pal, .nowv, .launch) body { overflow: hidden; }
 .dleft, .dright, .dgrid, .pal-r, .wp-menu { overscroll-behavior: contain; }
+
+/* phones: the bottom bar must fit the screen (it used to run past the right edge) */
+@media (max-width: 720px) {
+  .rail { width: calc(100vw - 20px); max-width: 520px; justify-content: space-between; padding: 8px 8px; }
+  .rail .ri { width: auto; flex: 1 1 0; min-width: 0; }
+  .rail .rme { flex: none; margin: 0 0 0 4px; }
+  .rail .rnode { display: none; }
+}
