@@ -144,7 +144,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
     const mpvArgs = [
       '--really-quiet', `--script=${LUA_SCRIPT}`, '--alang=eng,en,lit,lt,swe,sv',
       // open behind everything, paused, until the stream is buffered; then we reveal it
-      '--log-file=/tmp/ironhide-mpv.log', '--focus-on=never', '--pause', '--fullscreen=no', '--demuxer-readahead-secs=10',
+      '--focus-on=never', '--pause', '--fullscreen=no', '--demuxer-readahead-secs=10',
       `--input-ipc-server=${ipcSocket}`,
       ...(title ? [`--force-media-title=${title}`] : []),
       ...(resumeFrom > 0 ? [`--start=${Math.floor(resumeFrom)}`] : []),
