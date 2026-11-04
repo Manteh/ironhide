@@ -7,7 +7,7 @@ import { onLeave } from '../main.js';
 const STATUS = { off: 'Not connected', connecting: 'Connecting…', online: 'Connected', invalid: 'Invalid relay address', replaced: 'Signed in elsewhere' };
 const copy = async (text, msg) => { try { await navigator.clipboard.writeText(text); toast(msg, 'ok'); } catch { toast('Copy failed', 'err'); } };
 const sig = (o) => JSON.stringify(o);
-const RELAY_NEEDS = 4; // live player states, owner, kick and saved rooms need relay version 4
+const RELAY_NEEDS = 6; // live player states, owner, kick and saved rooms need relay version 4
 const relayWarn = (s) => (s.relay.status === 'online' && (s.relay.version || 0) < RELAY_NEEDS
   ? `<div class="banner warn" style="margin-bottom:var(--s4)">${icon('info')}<span><b>The relay is out of date.</b> Live states (watching, paused, tabbed out), room owner, kicking and saved rooms need a newer relay. Redeploy <b>${esc(s.relayHost || 'it')}</b> on Render from the latest code.</span></div>` : '');
 // What a player is doing, in words (from the room's live state)
@@ -84,10 +84,9 @@ export default async function together(el) {
       <div class="tg-card"><div class="tg-k">Friends <span class="muted">${s.friends.filter((f) => f.online).length} online</span></div>
         ${s.friends.length ? s.friends.map((f) => `<div class="fr ${f.online ? 'on' : ''} ${f.online && f.status ? 'watching' : ''} ${f.online && f.away ? 'away' : ''}"><span class="av ${f.online ? 'live' : ''}">${avatar({ avatar: f.avatar }, 38)}</span>
           <div class="fi"><b>${esc(f.name)}</b>${presenceLine(f, s)}
-            ${f.online && f.inRoom ? `<span class="fr-room">${icon('users')}<em>${esc(f.inRoom.name)}</em> · ${f.inRoom.count} in${f.inRoom.media ? ` · ${esc(f.inRoom.media.title)}` : ''}</span>` : ''}
+            ${f.online && f.inRoom ? `<span class="fr-room">${icon('users')}<span class="fr-rt"><em>${esc(f.inRoom.name)}</em><small>${f.inRoom.count} in${f.inRoom.media ? ` · ${esc(f.inRoom.media.title)}` : ''}</small></span></span>` : ''}
             ${f.online && f.status ? `<a class="fw-strip" href="#/title/${esc(f.status.type === 'movie' ? 'movie' : 'series')}/${esc(f.status.imdbId)}" title="Open ${esc(f.status.title)}"><span class="fw" style="background-image:url('${esc(f.status.poster || posterOf(f.status.imdbId))}')"></span><span class="fw-t"><small><i class="fw-dot ${f.status.state === 'paused' || f.away ? 'idle' : ''}"></i>${f.status.state === 'paused' ? 'Paused' : 'Watching now'}${f.away ? ' · tabbed out' : ''}</small><b>${esc(f.status.title)}</b></span></a>` : ''}</div>
-          ${f.online && f.inRoom ? (s.room?.code === f.inRoom.code ? '<span class="badge ok">Same room</span>' : `<button class="btn primary sm" data-joinroom="${esc(f.inRoom.code)}">Join</button>`) : ''}
-          ${s.room && f.online ? `<button class="btn sm" data-inv="${f.id}">Invite</button>` : ''}<button class="btn ghost sm icon" data-rm="${f.id}" aria-label="Remove ${esc(f.name)}" title="Remove">${icon('x')}</button></div>`).join('') : '<p class="tg-note" style="padding:var(--s3) 0">No friends yet. Share your code to get started.</p>'}</div>`;
+          <div class="fr-act">${f.online && f.inRoom && s.room?.code !== f.inRoom.code ? `<button class="btn primary sm" data-joinroom="${esc(f.inRoom.code)}">Join</button>` : ''}${s.room && f.online && !(f.inRoom && s.room.code === f.inRoom.code) ? `<button class="btn sm" data-inv="${f.id}">Invite</button>` : ''}<button class="btn ghost sm icon" data-rm="${f.id}" aria-label="Remove ${esc(f.name)}" title="Remove">${icon('x')}</button></div></div>`).join('') : '<p class="tg-note" style="padding:var(--s3) 0">No friends yet. Share your code to get started.</p>'}</div>`;
     $('#cpCode', el)?.addEventListener('click', () => copy(s.you.id, 'Friend code copied'));
     $('#addF', el).onsubmit = async (e) => { e.preventDefault(); const v = $('#fCode', el).value.trim(); if (!v) return; try { await sapi('/friends', { code: v }); $('#fCode', el).value = ''; } catch (err) { toast(err.message, 'err'); } };
     $('#rfP', el)?.addEventListener('click', () => sapi('/people'));

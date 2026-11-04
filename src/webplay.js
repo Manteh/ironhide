@@ -14,15 +14,16 @@ const sessions = new Map();
 
 // A built-in test clip for checking sync: the picture flashes and a beep sounds together every 2 s, with a running clock on screen.
 // Long keyframe gaps (5 s) on purpose, like real releases, so seeks behave as they do in real life.
-const SYNC_CLIP = join(tmpdir(), 'ironhide-synctest-v2.mp4');
+const SYNC_CLIP = join(tmpdir(), 'ironhide-synctest-v3.mp4');
 export const syncClipPath = () => SYNC_CLIP;
 let clipJob = null;
 export function ensureSyncClip() {
   if (existsSync(SYNC_CLIP)) return Promise.resolve(SYNC_CLIP);
   if (!FFMPEG) return Promise.reject(new Error('ffmpeg is not installed'));
   clipJob ||= new Promise((resolve, reject) => {
-    const v = "testsrc=size=640x360:rate=30:duration=600,geq=lum='if(lt(mod(T,2),0.12),255,lum(X,Y))':cb='if(lt(mod(T,2),0.12),128,cb(X,Y))':cr='if(lt(mod(T,2),0.12),128,cr(X,Y))'";
-    const a = "aevalsrc='0.8*sin(2*PI*1000*t)*lt(mod(t,2),0.12)':s=48000:c=stereo:d=600";
+    // drawbox is fast (a per-pixel filter took minutes); the picture flashes white for 0.12 s every 2 s
+    const v = "testsrc=size=640x360:rate=30:duration=240,drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='lt(mod(t,2),0.12)'";
+    const a = "aevalsrc='0.8*sin(2*PI*1000*t)*lt(mod(t,2),0.12)':s=48000:c=stereo:d=240";
     const tmp = SYNC_CLIP + '.part.mp4';
     const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', v, '-f', 'lavfi', '-i', a, '-c:v', 'libx264', '-preset', 'veryfast', '-g', '150', '-keyint_min', '150', '-sc_threshold', '0', '-bf', '2', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', tmp], { stdio: 'ignore' });
     p.on('close', (c) => { clipJob = null; if (c !== 0) return reject(new Error('Could not make the test clip')); import('fs').then((fs) => { fs.renameSync(tmp, SYNC_CLIP); resolve(SYNC_CLIP); }); });
@@ -115,6 +116,19 @@ export function publicInfo(s) {
 }
 
 export const getSession = (id) => sessions.get(id);
+
+// Copy-mode streams can only start on a keyframe. Report the keyframes either side of a time, so the player knows what it will really show
+// (and rooms can start every viewer on the same frame).
+export async function keyframesAround(id, t) {
+  const s = sessions.get(id); t = Math.max(0, Number(t) || 0);
+  if (!s || !s.plan.copyVideo || t < 0.01) return { prev: t < 0.01 ? 0 : t, next: t < 0.01 ? 0 : t };
+  try {
+    const out = await run(FFPROBE, ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time,flags', '-of', 'csv=p=0', '-read_intervals', `${Math.max(0, t - 40)}%${t + 40}`, s.url], 25000);
+    const ks = out.trim().split('\n').map((l) => l.split(',')).filter((a) => a[1]?.includes('K')).map((a) => parseFloat(a[0])).filter(Number.isFinite).sort((a, b) => a - b);
+    const prev = [...ks].reverse().find((k) => k <= t + 0.001) ?? 0, next = ks.find((k) => k > t + 0.001) ?? prev;
+    return { prev, next };
+  } catch { return { prev: t, next: t }; }
+}
 
 function ffArgs(s, start, audioIdx, force = false, sync = 0) {
   const copyVideo = s.plan.copyVideo && !force;

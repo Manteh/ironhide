@@ -74,7 +74,11 @@ function mountInstances(body) {
     let items = []; try { items = await api('/api/instances'); } catch {}
     if (!body.isConnected) return;
     list.innerHTML = items.map((i) => `<div class="inst"><span class="dot ${i.running ? 'online' : 'offline'}"></span><div class="inst-i"><b>${esc(i.name)}</b><span>localhost:${i.port} · ${i.running ? 'running' : 'stopped'}</span></div>
-      ${i.running ? `<a class="btn sm" href="${i.url}" target="_blank" rel="noopener">Open</a><button class="btn ghost sm" data-stop="${i.id}">Stop</button>` : `<button class="btn sm" data-start="${i.id}">Start</button>`}</div>`).join('');
+      ${i.running ? `<a class="btn sm" href="${i.url}" target="_blank" rel="noopener">Open</a><button class="btn ghost sm" data-stop="${i.id}">Stop</button>` : `<button class="btn sm" data-start="${i.id}">Start</button>`}<button class="btn ghost sm icon inst-rm" data-remove="${i.id}" data-rname="${esc(i.name)}" aria-label="Remove ${esc(i.name)}" title="Remove this person and their data">${icon('x')}</button></div>`).join('');
+    $$('[data-remove]', list).forEach((b) => (b.onclick = async () => {
+      if (!confirm(`Remove ${b.dataset.rname}? Their profile, friend code, history and keys on this Mac are deleted. This cannot be undone.`)) return;
+      b.disabled = true; try { await del(`/api/instances/${b.dataset.remove}`); toast('Removed', 'ok'); } catch (e) { toast(e.message, 'err'); } paint();
+    }));
     $$('[data-stop]', list).forEach((b) => (b.onclick = async () => { b.disabled = true; await post(`/api/instances/${b.dataset.stop}/stop`); setTimeout(paint, 800); }));
     $$('[data-start]', list).forEach((b) => (b.onclick = async () => { b.disabled = true; b.textContent = 'Starting…'; try { const r = await post(`/api/instances/${b.dataset.start}/start`); window.open(r.url, '_blank'); } catch (e) { toast(e.message, 'err'); } paint(); }));
   };

@@ -97,7 +97,9 @@ const dur = () => S.info.duration || (S.offset + (S.video.duration || 0));
 function seekTo(t) {
   const { video } = S; t = Math.min(Math.max(0, t), Math.max(0, dur() - 1)); const rel = t - S.offset;
   if (S.info.mode === 'cdn') { paintTime(t); video.currentTime = t; return; }
-  let inBuf = false; for (let i = 0; i < video.buffered.length; i++) if (rel >= video.buffered.start(i) - 0.1 && rel <= video.buffered.end(i) - 0.8) inBuf = true;
+  // Only jump inside video the browser says is SEEKABLE. These streams are piped, so 'buffered' can be large while 'seekable' is empty;
+  // setting currentTime there sends the video to 0:00. Anything else restarts the stream at the new spot.
+  let inBuf = false; for (let i = 0; i < video.seekable.length; i++) if (rel >= video.seekable.start(i) - 0.1 && rel <= video.seekable.end(i) - 0.8) inBuf = true;
   paintTime(t);
   if (inBuf) video.currentTime = rel; else load(t, !video.paused || S.wasPlaying);
 }

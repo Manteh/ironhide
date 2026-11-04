@@ -102,6 +102,8 @@
 .fr-room { display: flex !important; align-items: center; gap: 6px; margin-top: 3px; color: var(--text-2) !important; }
 .fr-room svg { width: 14px; height: 14px; opacity: .8; flex: none; } .fr-room em { font-style: normal; font-weight: 600; color: var(--text); }
 
+.inst-rm:hover { color: #ef4444; border-color: #ef444455; }
+
 /* settings: extra instances on this Mac */
 .inst-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; } .inst-list:empty { display: none; }
 .inst { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
@@ -160,3 +162,20 @@
 .fw-dot.idle { background: #f5a524 !important; filter: drop-shadow(0 0 4px #f5a52488) !important; animation: none !important; }
 .mb { flex-wrap: nowrap; } .mst { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 8px; background: rgba(255,255,255,.07); color: var(--text-2); white-space: nowrap; }
 .mst.ok { background: #3ddc8422; color: #3ddc84; } .mst.warn { background: #f5a52422; color: #f5a524; } .mst.info { background: #60a5fa22; color: #7db4ff; } .mst.away { background: rgba(148,163,184,.16); color: #b6c2d3; } .mst.idle { color: var(--muted); }
+
+/* friend row: the main block gets the room; actions sit together on the right and may wrap under it on narrow screens */
+.fr { align-items: flex-start; }
+.fr .fi { flex: 1 1 150px; min-width: 120px; }
+.fr .fr-act { display: flex; gap: 6px; align-items: center; flex: none; margin-left: auto; }
+.fr .fr-act .btn.icon { width: 32px; }
+.fr .fi .fr-room, .fr .fi .pl { white-space: normal; overflow: visible; text-overflow: clip; }
+.fr .fi > b { display: block; overflow-wrap: anywhere; }
+.fw-strip { max-width: 100%; box-sizing: border-box; }
+@media (max-width: 420px) { .fr { flex-wrap: wrap; } .fr .fr-act { margin-left: 50px; } }
+
+/* room line under a friend's name: icon, then the room name with its details underneath (wraps cleanly) */
+.fr .fi .fr-room { display: flex !important; align-items: flex-start; gap: 8px; margin-top: 4px; }
+.fr .fi .fr-room > svg { margin-top: 2px; }
+.fr .fi .fr-rt { display: flex; flex-direction: column; gap: 1px; min-width: 0; white-space: normal; }
+.fr .fi .fr-rt em { font-style: normal; font-weight: 600; color: var(--text); overflow-wrap: anywhere; text-transform: none; }
+.fr .fi .fr-rt small { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }

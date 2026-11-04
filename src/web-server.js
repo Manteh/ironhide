@@ -8,10 +8,10 @@ import { FEEDS, getFeed, getGenres, search as catalogSearch, getTitle } from './
 import { getHistory } from './history.js';
 import { parseLangs } from './ui.js';
 import * as social from './social.js';
-import { listInstances, createInstance, startInstance, stopInstance } from './instances.js';
+import { listInstances, createInstance, startInstance, stopInstance, removeInstance } from './instances.js';
 import { addToHistory, updateEntryProgress } from './history.js';
 import { learnQuality } from './preferences.js';
-import { ensureSyncClip, syncClipPath, capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
+import { keyframesAround, ensureSyncClip, syncClipPath, capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
 import { readFile as readFileAsync } from 'fs/promises';
 import {
   getSettings, updateSettings, resetProfile, connectorsView, setConnectorKey, setDebridProvider, testConnector,
@@ -221,15 +221,18 @@ async function handleApi(req, res, urlPath) {
 
     if (method === 'GET' && urlPath === '/api/settings') return jsonResponse(res, await getSettings());
     // extra IronHides on this Mac (another person, own friend code). Spawns processes, so only our own pages may call it.
-    if (urlPath === '/api/instances' || /^\/api\/instances\/[a-z0-9]+\/(start|stop)$/.test(urlPath)) {
+    if (urlPath === '/api/instances' || /^\/api\/instances\/[a-z0-9]+(\/(start|stop))?$/.test(urlPath)) {
       if (req.headers.origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.origin)) return errorResponse(res, 'Not allowed from this site', 403);
       const relay = social.snapshot().relay.url || '';
       if (method === 'GET' && urlPath === '/api/instances') return jsonResponse(res, await listInstances());
       if (method === 'POST' && urlPath === '/api/instances') { const b = await parseBody(req); return jsonResponse(res, await createInstance({ name: b.name, copyKeys: b.copyKeys !== false, relay })); }
+      const gone = urlPath.match(/^\/api\/instances\/([a-z0-9]+)$/);
+      if (method === 'DELETE' && gone) return jsonResponse(res, await removeInstance(gone[1]));
       const m = urlPath.match(/^\/api\/instances\/([a-z0-9]+)\/(start|stop)$/);
       if (method === 'POST' && m) return jsonResponse(res, m[2] === 'start' ? await startInstance(m[1], relay) : await stopInstance(m[1]));
     }
-    if (method === 'POST' && urlPath === '/api/account/reset') { await resetProfile(); social.resetIdentity(); return jsonResponse(res, { ok: true }); }
+    if (method === 'POST' && urlPath === '/api/account/purge') { if (req.headers.origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.origin)) return errorResponse(res, 'Not allowed from this site', 403); social.purgeFriends(); return jsonResponse(res, { ok: true }); }
+    if (method === 'POST' && urlPath === '/api/account/reset') { if (req.headers.origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.origin)) return errorResponse(res, 'Not allowed from this site', 403); await resetProfile(); social.resetIdentity(); return jsonResponse(res, { ok: true }); }
     if (method === 'PUT' && urlPath === '/api/settings') { const out = await updateSettings(await parseBody(req)); social.sendProfile(); return jsonResponse(res, out); }
 
     if (method === 'GET' && urlPath === '/api/connectors') return jsonResponse(res, connectorsView());
@@ -270,11 +273,11 @@ async function handleApi(req, res, urlPath) {
     }
 
     if (method === 'GET' && urlPath === '/api/synctest.mp4') {
-      const f = syncClipPath(); if (!existsSync(f)) return errorResponse(res, 'Not ready', 404);
-      const size = statSync(f).size, rg = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '');
+      const f = syncClipPath(); if (!fs.existsSync(f)) return errorResponse(res, 'Not ready', 404);
+      const size = fs.statSync(f).size, rg = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '');
       let a = 0, b = size - 1; if (rg) { if (rg[1] !== '') a = +rg[1]; if (rg[2] !== '') b = Math.min(+rg[2], size - 1); if (rg[1] === '' && rg[2] !== '') { a = Math.max(0, size - +rg[2]); b = size - 1; } }
       res.writeHead(rg ? 206 : 200, { 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': b - a + 1, ...(rg ? { 'Content-Range': `bytes ${a}-${b}/${size}` } : {}) });
-      return createReadStream(f, { start: a, end: b }).pipe(res);
+      return fs.createReadStream(f, { start: a, end: b }).pipe(res);
     }
     if (method === 'GET' && urlPath === '/api/webplay/capabilities') return jsonResponse(res, capabilities());
 
@@ -354,13 +357,14 @@ async function handleApi(req, res, urlPath) {
       }
     }
 
-    const wpMatch = urlPath.match(/^\/api\/wp\/([a-z0-9-]+)\/(stream|progress|thumbs|thumb|sub\/(\d+)\.vtt)$/);
+    const wpMatch = urlPath.match(/^\/api\/wp\/([a-z0-9-]+)\/(stream|progress|thumbs|thumb|keyframes|sub\/(\d+)\.vtt)$/);
     if (wpMatch) {
       const [, id, what, subIdx] = wpMatch;
       if (what === 'stream' && method === 'GET') {
         const q = new URL(req.url, 'http://localhost').searchParams;
         return streamTo(res, id, Number(q.get('start')) || 0, Number(q.get('audio')) || 0, q.get('transcode') === '1', Number(q.get('sync')) || 0);
       }
+      if (what === 'keyframes' && method === 'GET') return jsonResponse(res, await keyframesAround(id, new URL(req.url, 'http://localhost').searchParams.get('t')));
       if (what === 'thumbs' && method === 'POST') { const sess = getSession(id); if (sess) startThumbs(sess); return jsonResponse(res, { ok: true }); }
       if (what === 'thumb' && method === 'GET') {
         const q = new URL(req.url, 'http://localhost').searchParams, t = Number(q.get('t')) || 0;

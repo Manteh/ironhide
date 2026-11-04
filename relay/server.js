@@ -6,11 +6,12 @@ import { createPublicKey, verify, createHash, randomBytes } from 'crypto';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT) || 8790;
-const VERSION = 4; // 2 = rooms visible to friends, 3 = owner + kick + saved rooms, 4 = live player states
+const VERSION = 6; // 2 = rooms visible to friends, 3 = owner + kick + saved rooms, 4 = live player states, 5 = scheduled seeks, 6 = unfriend + temporary profiles
 const DIRECTORY = process.env.RELAY_DIRECTORY === '1'; // hosted mode: let members see who else is online
 const MAX_CHAT = 500, HISTORY = 60, REACTIONS = new Set(['👍', '😂', '😮', '❤️', '🔥', '👏', '😢', '🤯']);
 
 const users = new Map();      // id -> { id, name, avatar, ws, friends:Set, status, pending:[] }
+const removedBy = new Map(); // id -> Set of ids that unfriended them while offline
 const offlineReq = new Map(); // id -> [{ from }]  (friend requests waiting for someone to come online)
 const rooms = new Map();      // code -> room
 
@@ -49,11 +50,11 @@ function roomBrief(u) {
 // ---------- presence (only between mutual friends) ----------
 const mutual = (a, b) => a.friends.has(b.id) && b.friends.has(a.id);
 function announce(u) {
-  for (const id of u.friends) { const f = users.get(id); if (f && mutual(u, f)) send(f.ws, { t: 'presence', id: u.id, online: !!u.ws, status: u.hide ? null : u.status, away: !!u.away, room: u.hide ? null : roomBrief(u), name: u.name, avatar: u.avatar }); }
+  for (const id of u.friends) { const f = users.get(id); if (f && mutual(u, f)) send(f.ws, { t: 'presence', id: u.id, online: !!u.ws, status: u.hide ? null : u.status, away: !!u.away, temp: !!u.temp, room: u.hide ? null : roomBrief(u), name: u.name, avatar: u.avatar }); }
 }
 function presenceFor(u) {
   const out = [];
-  for (const id of u.friends) { const f = users.get(id); if (f?.ws && mutual(u, f) && !f.hide) out.push({ id: f.id, online: true, status: f.status, away: !!f.away, room: roomBrief(f), name: f.name, avatar: f.avatar }); }
+  for (const id of u.friends) { const f = users.get(id); if (f?.ws && mutual(u, f) && !f.hide) out.push({ id: f.id, online: true, status: f.status, away: !!f.away, temp: !!f.temp, room: roomBrief(f), name: f.name, avatar: f.avatar }); }
   return out;
 }
 
@@ -126,11 +127,13 @@ wss.on('connection', (ws) => {
         const id = idOf(der); let u = users.get(id);
         if (u?.ws && u.ws !== ws) { send(u.ws, { t: 'replaced' }); u.ws.close(); }
         if (!u) { u = { id, friends: new Set(), status: null, room: null, hide: false }; users.set(id, u); }
-        Object.assign(u, { name: uniqueName(clean(m.name, 32) || 'Guest', id), avatar: cleanAvatar(m.avatar), ws, hide: !!m.hide });
+        Object.assign(u, { name: uniqueName(clean(m.name, 32) || 'Guest', id), avatar: cleanAvatar(m.avatar), ws, hide: !!m.hide, temp: !!m.temp });
         me = u; clearTimeout(authTimer);
         send(ws, { t: 'welcome', you: profile(u), now: Date.now(), directory: DIRECTORY, v: VERSION });
         for (const req of offlineReq.get(id) || []) send(ws, { t: 'friend.req', from: req });
         offlineReq.delete(id);
+        for (const gone of removedBy.get(id) || []) send(ws, { t: 'friend.removed', id: gone });
+        removedBy.delete(id);
         if (!u.hide) announce(u);
       } catch { ws.close(); }
       return;
@@ -190,6 +193,14 @@ wss.on('connection', (ws) => {
         }
         break;
       }
+      case 'friend.remove': {
+        const to = clean(m.to, 12); if (!to || to === u.id) break;
+        u.friends.delete(to); const t = users.get(to);
+        if (t) t.friends.delete(u.id);
+        if (t?.ws) send(t.ws, { t: 'friend.removed', id: u.id, name: u.name });
+        else (removedBy.get(to) || removedBy.set(to, new Set()).get(to)).add(u.id);
+        offlineReq.delete(to); break;
+      }
       case 'away': u.away = !!m.away; if (!u.hide) announce(u); break; // their window is hidden, or their browser is closed
       case 'room.invite': { const r = rooms.get(u.room), f = users.get(clean(m.to, 12)); if (r && f?.ws && mutual(u, f)) send(f.ws, { t: 'room.invite', from: profile(u), code: r.code, name: r.name, media: r.media }); break; }
       case 'room.settings': { const r = rooms.get(u.room); if (!r || !runs(r, u)) break; if (['host', 'all'].includes(m.control)) r.control = m.control; if (typeof m.open === 'boolean') r.open = m.open; if (m.name) r.name = clean(m.name, 40); pushRoom(r); break; }
@@ -215,7 +226,10 @@ wss.on('connection', (ws) => {
           // everyone starts at the same server instant a moment from now, once they are ready
           const lead = m.scheduled ? 2500 : 0; r.startAt = now + lead; r.pb = { playing: true, pos, at: now + lead, rate: r.pb.rate };
         } else if (m.action === 'pause') { r.pb = { playing: false, pos, at: now, rate: r.pb.rate }; r.startAt = 0; }
-        else if (m.action === 'seek') { r.pb = { playing: r.pb.playing, pos, at: now, rate: r.pb.rate }; }
+        else if (m.action === 'seek') {
+          // while playing, a seek is a scheduled restart: everyone loads the new spot, then starts the same frame together
+          const lead = r.pb.playing ? 3500 : 0; r.pb = { playing: r.pb.playing, pos, at: now + lead, rate: r.pb.rate }; r.startAt = lead ? now + lead : 0;
+        }
         else if (m.action === 'rate') { const cur = r.pb.playing ? r.pb.pos + (now - r.pb.at) / 1000 * r.pb.rate : r.pb.pos; r.pb = { playing: r.pb.playing, pos: cur, at: now, rate: Math.min(2, Math.max(0.5, Number(m.rate) || 1)) }; }
         toRoom(r, { t: 'room.pb', pb: r.pb, by: u.id, action: m.action, now }); break;
       }

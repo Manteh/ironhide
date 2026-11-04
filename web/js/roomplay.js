@@ -83,13 +83,16 @@ export function attachRoom(P) {
   setTimeout(() => { const pb = social.state?.room?.pb; if (pb) applyPb(pb); }, 600);
 
   // --- keep drifting players aligned ---
+  // Small drift is eased out with tiny speed changes (no jump, no restart). A big gap restarts the stream at the right spot,
+  // but never more than once every 6 s, so a slow restart cannot trigger another one.
+  let lastRestart = 0;
   const drift = setInterval(() => {
     const pb = social.state?.room?.pb, v = P.video(); if (!pb || !pb.playing || !v || v.paused || pb.at > serverNow()) return;
-    const d = P.cur() - target(pb);
-    if (Math.abs(d) > 1.2) { P.seek(target(pb)); v.playbackRate = pb.rate || 1; }
-    else if (Math.abs(d) > 0.2) v.playbackRate = (pb.rate || 1) * (1 - Math.max(-0.06, Math.min(0.06, d * 0.08))); // ease back instead of jumping
-    else v.playbackRate = pb.rate || 1;
-  }, 1500);
+    const d = P.cur() - target(pb), rate = pb.rate || 1;
+    if (Math.abs(d) > 2 && Date.now() - lastRestart > 6000) { lastRestart = Date.now(); P.seek(target(pb) + 1.2); v.playbackRate = rate; } // aim a little ahead: the restart takes about a second
+    else if (Math.abs(d) > 0.04) v.playbackRate = rate * (1 - Math.max(-0.1, Math.min(0.1, d * 0.9))); // proportional nudge, up to 10 %
+    else v.playbackRate = rate;
+  }, 250);
 
   // --- tell the room when our copy is loaded enough to start ---
   const ready = () => {

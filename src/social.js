@@ -66,7 +66,7 @@ const push = () => { clearTimeout(pushTimer); pushTimer = setTimeout(() => emit(
 const tx = (msg) => { if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); };
 async function profileNow() {
   const p = (await getSettings()).profile;
-  return { name: p.name, avatar: p.avatar, hide: data.appearOffline };
+  return { name: p.name, avatar: p.avatar, hide: data.appearOffline, temp: process.env.IRONHIDE_TEMP === '1' };
 }
 
 export function connect() {
@@ -102,7 +102,7 @@ async function handle(m) {
     case 'you': S.you = m.you; push(); break; // the relay may have adjusted our name to keep it unique
     case 'directory': S.people = m.list; push(); break;
     case 'presence.all': S.presence = new Map(m.list.map((p) => [p.id, p])); push(); break;
-    case 'presence': { if (!data.friends.some((f) => f.id === m.id)) break; { const was = S.presence.get(m.id); if (m.room && m.room.code !== was?.room?.code && m.online) emit('toast', { kind: 'info', text: `${m.name} opened a room${m.room.media ? `: ${m.room.media.title}` : ''}` }); } S.presence.set(m.id, m); const f = data.friends.find((x) => x.id === m.id); if (m.name) { f.name = m.name; f.avatar = m.avatar; save(); } push(); break; }
+    case 'presence': { if (!data.friends.some((f) => f.id === m.id)) break; { const fr = data.friends.find((x) => x.id === m.id); if (fr) { if (m.online) fr.seen = Date.now(); if (m.temp) fr.temp = true; } } { const was = S.presence.get(m.id); if (m.room && m.room.code !== was?.room?.code && m.online) emit('toast', { kind: 'info', text: `${m.name} opened a room${m.room.media ? `: ${m.room.media.title}` : ''}` }); } S.presence.set(m.id, m); const f = data.friends.find((x) => x.id === m.id); if (m.name) { f.name = m.name; f.avatar = m.avatar; save(); } push(); break; }
     case 'friend.req':
       if (data.friends.some((f) => f.id === m.from.id)) { acceptFriend(m.from.id, m.from); break; }
       if (!S.incoming.some((r) => r.id === m.from.id)) S.incoming.push(m.from);
@@ -117,6 +117,7 @@ async function handle(m) {
     case 'react': emit('react', m); break;
     case 'room.invite': S.invites = [m, ...S.invites.filter((i) => i.code !== m.code)].slice(0, 5); emit('toast', { kind: 'info', text: `${m.from.name} invited you to ${m.name}` }); push(); break;
     case 'room.ms': { const mem = S.room?.members.find((x) => x.id === m.id); if (mem) { mem.st = m.st; push(); } break; }
+    case 'friend.removed': { const f = data.friends.find((x) => x.id === m.id); dropFriend(m.id); if (f) emit('toast', { kind: 'info', text: `${f.name} removed you from their friends` }); break; }
     case 'room.kicked': emit('kicked', { by: m.by, room: m.room }); if (S.prevRoom) { delete data.rooms?.[S.prevRoom.code]; save(); } emit('toast', { kind: 'err', text: `${m.by} removed you from ${m.room}` }); break;
     case 'room.error': emit('toast', { kind: 'err', text: m.msg }); break;
     case 'replaced': stopped = true; link = 'replaced'; push(); break;
@@ -139,7 +140,9 @@ export function addFriend(code) {
 }
 export function acceptFriend(id, prof) { const p = prof || S.incoming.find((r) => r.id === id); if (!p) return; addFriendLocal(p); tx({ t: 'friend.accept', to: id }); }
 export function declineFriend(id) { S.incoming = S.incoming.filter((r) => r.id !== id); push(); }
-export function removeFriend(id) { data.friends = data.friends.filter((f) => f.id !== id); S.presence.delete(id); save(); tx({ t: 'friends', ids: data.friends.map((f) => f.id) }); push(); }
+export function removeFriend(id) { tx({ t: 'friend.remove', to: id }); dropFriend(id); }
+// forget someone locally (and refresh what the relay knows)
+function dropFriend(id) { data.friends = data.friends.filter((f) => f.id !== id); S.presence.delete(id); S.incoming = S.incoming.filter((r) => r.id !== id); S.outgoing = S.outgoing.filter((r) => r.id !== id); save(); tx({ t: 'friends', ids: data.friends.map((f) => f.id) }); push(); }
 
 // ---------- rooms ----------
 export const createRoom = (name) => tx({ t: 'room.create', name });
@@ -178,6 +181,15 @@ export async function sendProfile() {
 }
 export function setWatching(w) { S.watching = w; S.watchingAt = Date.now(); if (link === 'online') tx({ t: 'status', watching: data.shareStatus ? w : null }); }
 
+// Temporary profiles (extra people started on someone's Mac) vanish from friends lists once they have been offline a while.
+const TEMP_TTL = Number(process.env.IRONHIDE_TEMP_TTL_MS) || 10 * 60e3;
+setInterval(() => {
+  for (const f of [...data.friends]) {
+    const online = S.presence.get(f.id)?.online;
+    if (f.temp && !online && Date.now() - (f.seen || 0) > TEMP_TTL) { emit('toast', { kind: 'info', text: `${f.name} was a temporary profile and has left` }); removeFriend(f.id); }
+  }
+}, 15000).unref?.();
+
 // A status the player stopped refreshing (tab closed, crash) expires on its own after a couple of minutes.
 setInterval(() => { if (S.watching && Date.now() - (S.watchingAt || 0) > 150000) setWatching(null); }, 30000).unref?.();
 
@@ -201,7 +213,9 @@ export const myCode = () => S.you?.id || '';
 
 // Sign out: forget this identity (new keys, so a new friend code), drop friends and rooms, and reconnect as a fresh user.
 // The relay address and privacy switches stay.
+export function purgeFriends() { for (const f of data.friends) tx({ t: 'friend.remove', to: f.id }); }
 export function resetIdentity() {
+  purgeFriends(); // everyone I was friends with forgets me too
   disconnect();
   data.friends = []; data.priv = ''; data.pub = ''; genKeys();
   Object.assign(S, { you: null, presence: new Map(), incoming: [], outgoing: [], room: null, chat: [], invites: [], people: [], offsets: [], watching: null });
