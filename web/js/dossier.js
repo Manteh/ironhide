@@ -7,23 +7,32 @@ const TIERS = [['2160p', '4K'], ['1080p', '1080p'], ['720p', '720p'], ['480p', '
 const tierLabel = (r) => (TIERS.find(([k]) => k === (r || ''))?.[1] || 'Other');
 const SORTS = [['best', 'Best first'], ['size', 'Largest'], ['small', 'Smallest'], ['seeds', 'Most seeders']];
 const PREF_NAME = { auto: 'highest quality', '2160p': '4K', '1080p': '1080p', '720p': '720p' };
-let el, token = 0;
+let el, scrim, token = 0;
+const dismiss = () => { location.hash = store.lastBrowse || '#/'; };
 
 function root() {
   if (el) return el;
+  scrim = document.createElement('div');
+  scrim.className = 'dscrim'; scrim.addEventListener('pointerdown', dismiss);
+  document.body.appendChild(scrim);
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !el?.classList.contains('open')) return;
+    if (document.querySelector('.wp, .pal, .nowv, .launch')) return; // those handle Esc themselves
+    e.preventDefault(); dismiss();
+  });
   el = document.createElement('aside');
   el.className = 'dossier'; el.setAttribute('aria-label', 'Title details');
   document.body.appendChild(el);
   return el;
 }
 
-export function closeDossier() { token++; if (el?.classList.contains('open')) window.setTitleTint?.(null, false); el?.classList.remove('open'); }
+export function closeDossier() { token++; if (el?.classList.contains('open')) window.setTitleTint?.(null, false); el?.classList.remove('open'); scrim?.classList.remove('on'); }
 
 export async function openDossier({ type, id }) {
   const my = ++token, box = root();
-  box.classList.add('open');
+  box.classList.add('open'); scrim.classList.add('on');
   box.innerHTML = '<button class="dclose" aria-label="Close">' + icon('x') + '</button><div class="dbody"><div class="note">Opening…</div></div>';
-  $('.dclose', box).onclick = () => { location.hash = '#/'; };
+  $('.dclose', box).onclick = dismiss;
   let meta;
   try { meta = await api(`/api/title/${id}?type=${type}`); } catch (e) { box.querySelector('.dbody').innerHTML = `<div class="note">${esc(e.message)}</div>`; return; }
   if (my !== token) return;
@@ -63,8 +72,8 @@ export async function openDossier({ type, id }) {
     t.innerHTML = `<b>${esc(epBarTitle())}</b><small>Season ${st.season}</small>`;
   }
   function toEpSection() {
-    const body = box.querySelector('.dbody'), sec = $('#dEpSec', box); if (!body || !sec) return;
-    setTimeout(() => body.scrollTo({ top: Math.max(0, sec.offsetTop - 14), behavior: 'smooth' }), 80);
+    const col = $('#dLeft', box), sec = $('#dEpSec', box); if (!col || !sec) return;
+    setTimeout(() => col.scrollTo({ top: Math.max(0, sec.offsetTop - 14), behavior: 'smooth' }), 80);
   }
   function toggleEps(open) {
     st.epOpen = open;
@@ -83,28 +92,39 @@ export async function openDossier({ type, id }) {
   }
 
   function draw(first = false) {
-    const keep = box.querySelector('.dbody')?.scrollTop || 0;
+    const keepL = $('#dLeft', box)?.scrollTop || 0, keepR = $('#dRight', box)?.scrollTop || 0;
     const seasons = Object.keys(meta.seasons || {}).map(Number).sort((a, b) => a - b);
     const q = encodeURIComponent(`${meta.title} ${meta.year}`);
     box.innerHTML = `<button class="dclose" aria-label="Close">${icon('x')}</button>
       <div class="dbody${first ? ' enter' : ''}">
-        ${meta.background ? `<div class="dbg" style="background-image:url('${esc(meta.background)}')"></div>` : ''}
-        <div class="dhead"><div class="dposter" style="background-image:url('${esc(meta.poster || posterOf(id))}')"></div>
-          <div><div class="dkick">${type === 'series' ? 'Series' : 'Film'}${meta.year ? ' · ' + esc(meta.year) : ''}</div><h2>${esc(meta.title)}</h2>
-            <div class="dfacts">${[meta.runtime, meta.rating && '★ ' + meta.rating, ...(meta.genres || []).slice(0, 2)].filter(Boolean).map((f) => `<span>${esc(f)}</span>`).join('')}</div></div></div>
-        <p class="dover">${esc(meta.overview)}</p>
-        <div class="dacts"><button class="btn primary" id="dPlay">${icon('play')} ${playLabel()}</button>
-          <button class="btn" id="dSave">${saveLabel()}</button>
-          <a class="btn ghost" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${q}+trailer">Trailer ${icon('ext')}</a>
-          <a class="btn ghost" target="_blank" rel="noopener" href="https://www.imdb.com/title/${esc(id)}/">IMDb ${icon('ext')}</a></div>
-        ${type === 'series' ? `<div class="dsec epsec ${st.epOpen ? '' : 'collapsed'}" id="dEpSec">
-          <button class="epbar" id="dEpBar" aria-expanded="${st.epOpen}"><span class="n">${st.episode ?? '–'}</span><span class="epbar-t"><b>${esc(epBarTitle())}</b><small>Season ${st.season}</small></span><span class="epbar-act">${actLabel()}</span></button>
-          <div class="epwrap"><div class="epin"><div class="seg" style="margin:14px 0 10px">${seasons.map((n) => `<button data-s="${n}" class="${n === st.season ? 'on' : ''}">S${n}</button>`).join('')}</div>
-            <div class="eps" id="dEps">${epsHTML()}</div></div></div></div>` : ''}
-        <div class="dsec"><h3>Choose a version <span class="h3r" id="dEpTag">${epTag()}</span></h3><div id="dList"></div></div>
+        <div class="dhero">
+          ${(meta.background || meta.poster) ? `<div class="dbg" style="background-image:url('${esc(meta.background || meta.poster)}')"></div>` : ''}
+          <div class="dhead"><div class="dposter" style="background-image:url('${esc(meta.poster || posterOf(id))}')"></div>
+            <div class="dtitle"><div class="dkick">${type === 'series' ? 'Series' : 'Film'}${meta.year ? ' · ' + esc(meta.year) : ''}</div><h2>${esc(meta.title)}</h2>
+              <div class="dfacts">${[meta.runtime, meta.rating && '★ ' + meta.rating, ...(meta.genres || []).slice(0, 3)].filter(Boolean).map((f) => `<span>${esc(f)}</span>`).join('')}</div>
+              <div class="dacts"><button class="btn primary" id="dPlay">${icon('play')} ${playLabel()}</button>
+                <button class="btn" id="dSave">${saveLabel()}</button>
+                ${meta.trailers?.length ? `<button class="btn ghost" id="dTrailer">${icon('trailer')} Trailer</button>` : `<a class="btn ghost" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${q}+trailer">Trailer ${icon('ext')}</a>`}
+                <a class="btn ghost" target="_blank" rel="noopener" href="https://www.imdb.com/title/${esc(id)}/">IMDb ${icon('ext')}</a></div></div></div>
+        </div>
+        <div class="dgrid">
+          <div class="dleft" id="dLeft">
+            <p class="dover">${esc(meta.overview)}</p>
+            ${meta.cast?.length ? `<div class="dsec"><h3>Cast</h3><div class="dcast">${meta.cast.map((c) => `<span>${esc(c)}</span>`).join('')}</div></div>` : ''}
+            ${type === 'series' ? `<div class="dsec epsec ${st.epOpen ? '' : 'collapsed'}" id="dEpSec"><h3>Episodes</h3>
+              <button class="epbar" id="dEpBar" aria-expanded="${st.epOpen}"><span class="n">${st.episode ?? '–'}</span><span class="epbar-t"><b>${esc(epBarTitle())}</b><small>Season ${st.season}</small></span><span class="epbar-act">${actLabel()}</span></button>
+              <div class="epwrap"><div class="epin"><div class="seg" style="margin:14px 0 10px">${seasons.map((n) => `<button data-s="${n}" class="${n === st.season ? 'on' : ''}">S${n}</button>`).join('')}</div>
+                <div class="eps" id="dEps">${epsHTML()}</div></div></div></div>` : ''}
+          </div>
+          <div class="dright" id="dRight"><div class="dsec"><h3>Choose a version <span class="h3r" id="dEpTag">${epTag()}</span></h3><div id="dList"></div></div></div>
+        </div>
       </div>`;
-    $('.dclose', box).onclick = () => { location.hash = '#/'; };
+    $('.dclose', box).onclick = dismiss;
     $('#dPlay', box).onclick = () => quickPlay({ ...item, ...(st.episode ? { season: st.season, episode: st.episode } : {}) });
+    $('#dTrailer', box)?.addEventListener('click', async () => {
+      const { openTrailer } = await import('./trailer.js');
+      openTrailer({ ids: meta.trailers, title: meta.title, year: meta.year, onPlay: () => quickPlay({ ...item, ...(st.episode ? { season: st.season, episode: st.episode } : {}) }) });
+    });
     $('#dSave', box).onclick = async () => { await toggleSave({ ...item }); $('#dSave', box).innerHTML = saveLabel(); };
     $('#dEpBar', box)?.addEventListener('click', () => toggleEps(!st.epOpen));
     $$('[data-s]', box).forEach((b) => (b.onclick = () => {
@@ -113,7 +133,7 @@ export async function openDossier({ type, id }) {
       $('#dEps', box).innerHTML = epsHTML(); bindEps(); setPlay(); setEpBar(); loadStreams();
     }));
     bindEps(); renderStreams();
-    const body = box.querySelector('.dbody'); if (body) body.scrollTop = keep;
+    const L = $('#dLeft', box), R = $('#dRight', box); if (L) L.scrollTop = keepL; if (R) R.scrollTop = keepR;
   }
 
   // ----- streams -----
@@ -197,5 +217,6 @@ export async function openDossier({ type, id }) {
   }
 
   draw(true);
+  if (meta.trailers?.length) import('./trailer.js').then((m) => m.preload());
   if (type === 'movie' || st.episode) loadStreams();
 }

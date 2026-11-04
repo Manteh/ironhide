@@ -117,7 +117,7 @@ function bind() {
   video.addEventListener('timeupdate', () => { const now = performance.now(); if (!S.dragging && now - S.lastUI > 200) { S.lastUI = now; paintTime(); } paintBuffer(); });
   video.addEventListener('progress', paintBuffer);
   video.addEventListener('waiting', () => spin(true)); video.addEventListener('stalled', () => spin(true));
-  video.addEventListener('playing', () => { spin(false); wp.classList.add('started'); playIcon(); });
+  video.addEventListener('playing', () => { spin(false); wp.classList.add('started'); playIcon(); if (!S.thumbsOn) { S.thumbsOn = true; setTimeout(() => S && post(`/api/wp/${S.info.id}/thumbs`).catch(() => {}), 3000); } });
   video.addEventListener('canplay', () => spin(false));
   video.addEventListener('loadeddata', () => wp.classList.add('started'));
   video.addEventListener('pause', () => { playIcon(); wake(); }); video.addEventListener('play', () => { playIcon(); wake(); });
@@ -142,14 +142,22 @@ function bind() {
   const scrub = $('#wpScrub', wp), tip = $('#wpTip', wp);
   const at = (e) => { const r = $('.wp-track', wp).getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); };
   scrub.addEventListener('pointerdown', (e) => { S.dragging = true; try { scrub.setPointerCapture(e.pointerId); } catch {} paintTime(at(e) * dur()); place(e); });
-  let thumbTimer = 0, thumbReq = 0;
+  // Preview: nearest frame we already have shows instantly; if the pointer rests, the exact frame replaces it.
+  let thumbReq = 0, nearTimer = 0, exactTimer = 0, ctl = null, lastUrl = '';
+  const fetchThumb = async (url, my, exact, t) => {
+    ctl?.abort(); ctl = new AbortController();
+    try {
+      const r = await fetch(url, { signal: ctl.signal }); if (r.status !== 200) return;
+      const actual = +r.headers.get('X-Thumb-Time'), blob = await r.blob();
+      if (my !== thumbReq || !S) return;
+      const img = $('img', tip), old = lastUrl; lastUrl = URL.createObjectURL(blob); img.src = lastUrl; if (old) setTimeout(() => URL.revokeObjectURL(old), 400);
+      tip.classList.add('has'); tip.classList.toggle('approx', !exact && Math.abs(actual - t) > 6);
+    } catch {}
+  };
   const showThumb = (t) => {
-    const my = ++thumbReq; clearTimeout(thumbTimer);
-    thumbTimer = setTimeout(() => {
-      const pre = new Image();
-      pre.onload = () => { if (my !== thumbReq || !S) return; const img = $('img', tip); img.src = pre.src; tip.classList.add('has'); };
-      pre.src = `/api/wp/${S.info.id}/thumb?t=${t.toFixed(1)}`;
-    }, 60);
+    const my = ++thumbReq; clearTimeout(nearTimer); clearTimeout(exactTimer);
+    nearTimer = setTimeout(() => fetchThumb(`/api/wp/${S.info.id}/thumb?t=${t.toFixed(1)}`, my, false, t), 30);
+    exactTimer = setTimeout(() => fetchThumb(`/api/wp/${S.info.id}/thumb?t=${Math.round(t)}&exact=1`, my, true, t), 260);
   };
   const place = (e) => {
     const r = scrub.getBoundingClientRect(), f = at(e), w = tip.offsetWidth || 200, x = Math.min(r.width - w / 2 - 4, Math.max(w / 2 + 4, f * r.width));

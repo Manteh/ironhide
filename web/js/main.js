@@ -189,6 +189,7 @@ async function navigate() {
     document.body.classList.toggle('is-browse', r.kind === 'browse');
     renderNav();
     if (r.kind === 'browse') {
+      if (r.loader !== 'title') store.lastBrowse = location.hash || '#/';
       page.innerHTML = ''; page.classList.add('hidden'); browseEl.classList.remove('hidden');
       if (!browse) browse = await import('./pages/browse.js').then(async (v) => { await v.mount(browseEl); return v; });
       browse.handle(r.loader, params);

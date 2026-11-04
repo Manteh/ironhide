@@ -45,7 +45,7 @@
 [data-density="compact"] { --card-pad: var(--s4); --gap: var(--s3); --row-pad: 8px 12px; --btn-h: 32px; --page-pad: var(--s5); }
 
 :root { --poster-w: 168px; }
-[data-poster="s"] { --poster-w: 136px; } [data-poster="l"] { --poster-w: 204px; }
+[data-poster="xs"] { --poster-w: 118px; } [data-poster="s"] { --poster-w: 142px; } [data-poster="l"] { --poster-w: 204px; } [data-poster="xl"] { --poster-w: 250px; }
 
 [data-motion="reduced"] *, [data-motion="reduced"] *::before, [data-motion="reduced"] *::after { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

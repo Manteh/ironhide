@@ -65,11 +65,14 @@ function appearance(body) {
       card({ title: 'Layout', desc: 'Tune spacing, corners and poster size.', body:
         row('Density', 'Compact fits more on screen.', seg('density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], a.density)) +
         row('Corners', 'Roundness of cards and buttons.', seg('radius', [['sharp', 'Sharp'], ['round', 'Rounded'], ['pill', 'Soft']], a.radius)) +
-        row('Poster size', 'Size of posters in rows and grids.', seg('posterSize', [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']], a.posterSize)) +
+        row('Layout', 'Posters in a grid, detailed cards with a synopsis, or a compact list.', seg('layout', [['grid', 'Grid', 'library'], ['detail', 'Detailed'], ['list', 'List']], a.layout)) +
+        row('Card size', 'How big each poster or card is.', seg('posterSize', [['xs', 'XS'], ['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']], a.posterSize)) +
+        row('Featured banner', 'Show the large banner at the top of For You.', `<button class="switch ${a.showHero !== false ? 'on' : ''}" id="hero" role="switch" aria-checked="${a.showHero !== false}" aria-label="Featured banner"></button>`) +
         row('Reduce motion', 'Turn off animations and transitions.', `<button class="switch ${a.motion === 'reduced' ? 'on' : ''}" id="motion" role="switch" aria-checked="${a.motion === 'reduced'}" aria-label="Reduce motion"></button>`) });
     $$('[data-th]', body).forEach((b) => (b.onclick = () => set('theme', b.dataset.th)));
     $$('[data-ac]', body).forEach((b) => (b.onclick = () => set('accent', b.dataset.ac)));
-    ['density', 'radius', 'posterSize'].forEach((k) => bindSeg(body, k, (v) => set(k, v)));
+    ['density', 'radius', 'posterSize', 'layout'].forEach((k) => bindSeg(body, k, (v) => set(k, v)));
+    $('#hero', body)?.addEventListener('click', () => set('showHero', a.showHero === false));
     $('#motion', body).onclick = () => set('motion', a.motion === 'reduced' ? 'full' : 'reduced');
   };
   draw();

@@ -9,7 +9,7 @@ import { getHistory } from './history.js';
 import { parseLangs } from './ui.js';
 import { addToHistory, updateEntryProgress } from './history.js';
 import { learnQuality } from './preferences.js';
-import { capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor } from './webplay.js';
+import { capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
 import { readFile as readFileAsync } from 'fs/promises';
 import {
   getSettings, updateSettings, connectorsView, setConnectorKey, setDebridProvider, testConnector,
@@ -305,19 +305,20 @@ async function handleApi(req, res, urlPath) {
       }
     }
 
-    const wpMatch = urlPath.match(/^\/api\/wp\/([a-z0-9-]+)\/(stream|progress|thumb|sub\/(\d+)\.vtt)$/);
+    const wpMatch = urlPath.match(/^\/api\/wp\/([a-z0-9-]+)\/(stream|progress|thumbs|thumb|sub\/(\d+)\.vtt)$/);
     if (wpMatch) {
       const [, id, what, subIdx] = wpMatch;
       if (what === 'stream' && method === 'GET') {
         const q = new URL(req.url, 'http://localhost').searchParams;
         return streamTo(res, id, Number(q.get('start')) || 0, Number(q.get('audio')) || 0, q.get('transcode') === '1');
       }
+      if (what === 'thumbs' && method === 'POST') { const sess = getSession(id); if (sess) startThumbs(sess); return jsonResponse(res, { ok: true }); }
       if (what === 'thumb' && method === 'GET') {
-        const t = Number(new URL(req.url, 'http://localhost').searchParams.get('t')) || 0;
-        const f = thumbFor(id, t);
+        const q = new URL(req.url, 'http://localhost').searchParams, t = Number(q.get('t')) || 0;
+        const f = (q.get('exact') === '1' && await exactThumb(id, t)) || thumbFor(id, t);
         if (!f) { res.writeHead(204); return res.end(); }
         const buf = await readFileAsync(f.path);
-        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=600', 'X-Thumb-Time': String(f.t) });
+        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=600', 'X-Thumb-Time': String(f.t), 'Access-Control-Expose-Headers': 'X-Thumb-Time' });
         return res.end(buf);
       }
       if (what.startsWith('sub/') && method === 'GET') {

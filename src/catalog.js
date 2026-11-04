@@ -100,7 +100,7 @@ export async function getTitle(imdbId, type) {
     const m = data.meta;
     if (!m) return null;
     const base = fromCinemeta(m, type);
-    const out = { ...base, runtime: m.runtime || '', cast: (m.cast || []).slice(0, 8), background: m.background || '' };
+    const out = { ...base, runtime: m.runtime || '', cast: (m.cast || []).slice(0, 8), background: m.background || '', trailers: [...new Set([...(m.trailerStreams || []).map((t) => t.ytId), ...(m.trailers || []).map((t) => t.source)].filter((x) => /^[\w-]{11}$/.test(x || '')))].slice(0, 3) };
     if (type === 'series') {
       const seasons = {};
       for (const v of m.videos || []) {

@@ -58,3 +58,20 @@
 .wp-menu button i { width: 18px; display: grid; place-items: center; }
 
 @media (max-width: 720px) { .wp-top, .wp-bottom { padding: 14px 14px; } .wp-badges, .wp-time, .wp-vol { display: none; } .wp-btn span { display: none; } .wp-cues { bottom: 130px; } }
+
+/* trailer (embedded player + our controls) */
+.wp-trailer .tr-frame { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity .6s var(--ease); }
+.wp-trailer.started .tr-frame { opacity: 1; }
+.wp-trailer .tr-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+.tr-hit { position: absolute; inset: 0; z-index: 1; cursor: pointer; }
+.wp-trailer .wp-top, .wp-trailer .wp-bottom { z-index: 3; }
+.wp-trailer .wp-spin { z-index: 2; }
+.tr-chip { height: 30px; padding: 0 13px; border-radius: 9px; border: 0; background: rgba(255,255,255,.12); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: #fff; font-size: 12.5px; font-weight: 600; }
+.tr-chip.on { background: #fff; color: #000; }
+.wp-trailer .wp-badges { align-items: center; }
+.wp-trailer .wp-badges .btn { height: 40px; }
+.tr-err { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; }
+.tr-err b { font-size: 20px; font-weight: 650; } .tr-err span { color: rgba(255,255,255,.65); margin-bottom: 10px; }
+
+.wp-thumb img { transition: filter .25s var(--ease); }
+.wp-tip.approx .wp-thumb img { filter: blur(3px) saturate(.8) brightness(.9); }

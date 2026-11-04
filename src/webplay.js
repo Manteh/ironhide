@@ -27,6 +27,17 @@ function run(cmd, args, timeoutMs) {
   });
 }
 
+// TorBox links bounce through their API on every request (~0.6s each). Resolve the final CDN address
+// once so probing, seeking and preview frames all hit the fast host directly.
+async function resolveFinal(url) {
+  try {
+    const r = await fetch(url, { headers: { Range: 'bytes=0-0' }, redirect: 'follow', signal: AbortSignal.timeout(8000) });
+    try { await r.arrayBuffer(); } catch {}
+    if (r.ok) return r.url || url;
+  } catch {}
+  return url;
+}
+
 async function probe(url) {
   const out = await run(FFPROBE, ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', '-analyzeduration', '8000000', '-probesize', '30000000', url], 40000);
   return JSON.parse(out);
@@ -34,6 +45,7 @@ async function probe(url) {
 
 export async function createSession({ url, title, meta, subs = [], caps = {}, settings = {} }) {
   if (!FFMPEG || !FFPROBE) throw new Error('ffmpeg is not installed (brew install ffmpeg)');
+  url = await resolveFinal(url);
   const info = await probe(url);
   const video = info.streams.find((s) => s.codec_type === 'video' && !s.disposition?.attached_pic);
   if (!video) throw new Error('No video stream found in this file');
@@ -56,7 +68,6 @@ export async function createSession({ url, title, meta, subs = [], caps = {}, se
     log: [],
   };
   sessions.set(id, sess);
-  setTimeout(() => startThumbs(sess), 4000); // let playback start first
   return publicInfo(sess);
 }
 
@@ -137,19 +148,19 @@ function coarseToFine(n) {
 }
 export function startThumbs(s) {
   if (!sessions.has(s.id) || !s.duration || s.duration < 30 || s.thumbs) return;
-  const step = Math.max(8, Math.ceil(s.duration / 120)), count = Math.max(1, Math.floor(s.duration / step));
+  const step = Math.max(10, Math.ceil(s.duration / 700)), count = Math.max(1, Math.floor(s.duration / step));
   const dir = join(tmpdir(), 'ironhide-thumbs', s.id); mkdirSync(dir, { recursive: true });
-  s.thumbs = { dir, step, count, ready: new Set(), queue: coarseToFine(count), running: 0, stopped: false, procs: new Set() };
+  s.thumbs = { dir, step, count, ready: new Set(), queue: coarseToFine(count), running: 0, hold: 0, stopped: false, procs: new Set() };
   pumpThumbs(s);
 }
 function pumpThumbs(s) {
   const T = s.thumbs;
-  while (!T.stopped && T.running < 4 && T.queue.length) { T.running++; genThumb(s, T.queue.shift()).finally(() => { T.running--; pumpThumbs(s); }); }
+  while (!T.stopped && T.hold === 0 && T.running < 4 && T.queue.length) { T.running++; genThumb(s, T.queue.shift()).finally(() => { T.running--; pumpThumbs(s); }); }
 }
 function genThumb(s, i) {
-  const T = s.thumbs, out = join(T.dir, `${i}.jpg`), t = Math.min(s.duration - 2, i * T.step + Math.min(3, T.step / 2));
+  const T = s.thumbs, out = join(T.dir, `${i}.jpg`), t = Math.min(s.duration - 2, i * T.step + 1);
   return new Promise((resolve) => {
-    const p = spawn('nice', ['-n', '12', FFMPEG, '-hide_banner', '-loglevel', 'error', '-nostdin', '-probesize', '1000000', '-analyzeduration', '500000', '-ss', String(t), '-i', s.url, '-frames:v', '1', '-an', '-sn', '-vf', 'scale=360:-2', '-q:v', '6', '-y', out], { stdio: 'ignore' });
+    const p = spawn('nice', ['-n', '12', FFMPEG, '-hide_banner', '-loglevel', 'error', '-nostdin', '-probesize', '500000', '-analyzeduration', '200000', '-noaccurate_seek', '-ss', String(t), '-i', s.url, '-frames:v', '1', '-an', '-sn', '-vf', 'scale=360:-2', '-q:v', '6', '-y', out], { stdio: 'ignore' });
     T.procs.add(p);
     const kill = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} }, 25000);
     p.on('close', (code) => { clearTimeout(kill); T.procs.delete(p); if (code === 0 && existsSync(out)) T.ready.add(i); resolve(); });
@@ -162,4 +173,24 @@ export function thumbFor(id, t) {
   const i0 = Math.min(T.count - 1, Math.max(0, Math.round(t / T.step)));
   for (let r = 0; r <= T.count; r++) for (const i of [i0 - r, i0 + r]) if (T.ready.has(i)) return { path: join(T.dir, `${i}.jpg`), t: i * T.step };
   return null;
+}
+
+
+// Exact frame on demand (used when the pointer rests on a spot): accurate seek, front of the line.
+const exactJobs = new Map();
+export function exactThumb(id, t) {
+  const s = sessions.get(id), T = s?.thumbs; if (!T) return Promise.resolve(null);
+  const sec = Math.max(0, Math.min(Math.round(t), Math.floor(s.duration) - 1)), out = join(T.dir, `x${sec}.jpg`), key = id + ':' + sec;
+  if (existsSync(out)) return Promise.resolve({ path: out, t: sec });
+  if (exactJobs.has(key)) return exactJobs.get(key);
+  T.hold++;
+  const job = new Promise((resolve) => {
+    const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-probesize', '500000', '-analyzeduration', '200000', '-noaccurate_seek', '-ss', String(sec), '-i', s.url, '-frames:v', '1', '-an', '-sn', '-vf', 'scale=360:-2', '-q:v', '5', '-y', out], { stdio: 'ignore' });
+    T.procs.add(p);
+    const kill = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} }, 9000);
+    p.on('close', (code) => { clearTimeout(kill); T.procs.delete(p); exactJobs.delete(key); T.hold--; pumpThumbs(s); resolve(code === 0 && existsSync(out) ? { path: out, t: sec } : null); });
+    p.on('error', () => { clearTimeout(kill); exactJobs.delete(key); T.hold--; pumpThumbs(s); resolve(null); });
+  });
+  exactJobs.set(key, job);
+  return job;
 }

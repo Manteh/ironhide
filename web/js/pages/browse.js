@@ -41,7 +41,7 @@ function card(it, i = 0) {
   return `<article class="bc" tabindex="0" style="--i:${Math.min(i, 24)}" data-id="${esc(it.imdbId)}" data-type="${esc(type)}" data-title="${esc(it.title)}" data-poster="${esc(it.poster || posterOf(it.imdbId))}" ${it.season ? `data-season="${it.season}" data-episode="${it.episode}"` : ''}>
     <div class="bposter"><div class="bimg" style="background-image:url('${esc(it.poster || posterOf(it.imdbId))}')"></div>
       ${it.pct ? `<div class="bprog"><i style="width:${Math.min(100, Math.max(4, Math.round(it.pct)))}%"></i></div>` : ''}</div>
-    <div class="binfo"><h3>${esc(it.title)}</h3><div class="bmeta"><span>${esc(it.tag && it.rating ? it.tag : sub)}</span>${right ? `<em>${esc(right)}</em>` : ''}</div></div></article>`;
+    <div class="binfo"><h3>${esc(it.title)}</h3><div class="bmeta"><span>${esc(it.tag && it.rating ? it.tag : sub)}</span>${right ? `<em>${esc(right)}</em>` : ''}</div>${it.overview ? `<p class="bdesc">${esc(it.overview)}</p>` : ''}</div></article>`;
 }
 const skeleton = (n = 8) => Array.from({ length: n }, () => '<div class="bc sk"></div>').join('');
 

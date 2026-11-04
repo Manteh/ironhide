@@ -85,5 +85,6 @@ export function applyAppearance(a) {
   const theme = a.theme === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : a.theme;
   root.dataset.theme = theme; root.dataset.accent = a.accent; root.dataset.density = a.density;
   root.dataset.radius = a.radius; root.dataset.motion = a.motion; root.dataset.poster = a.posterSize;
+  root.dataset.layout = a.layout || 'grid'; root.dataset.hero = a.showHero === false ? 'off' : 'on';
   try { localStorage.setItem('ih-appearance', JSON.stringify(a)); } catch {}
 }
