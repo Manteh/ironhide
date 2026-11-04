@@ -123,7 +123,7 @@ export async function refreshHistory() {
 export function renderNav() {
   const s = store.settings; if (!s) return;
   const hash = location.hash || '#/';
-  const online = store.nodes.filter((n) => n.status === 'online').length;
+  const online = store.friendsOnline || 0; // friends online right now (from the relay)
   const on = (re) => (re.test(hash) ? 'on' : '');
   $('#nav').innerHTML = `
     <a class="rlogo" href="#/" aria-label="IronHide home" data-tip="IronHide"><span class="tile">${LOGO}</span></a>
@@ -134,7 +134,7 @@ export function renderNav() {
     <a href="#/shelf" class="ri ${on(/^#\/shelf/)}" aria-label="Shelf" data-tip="Shelf">${icon('bookmark')}<span>Shelf</span></a>
     <a href="#/together" class="ri ${on(/^#\/together/)}" aria-label="Together" data-tip="Together">${icon('users')}<span>Together</span>${store.socialCount ? `<i class="rbadge">${store.socialCount}</i>` : ''}</a>
     <i class="rsep"></i>
-    <a class="rnode" href="#/settings/nodes" data-tip="${online} node${online === 1 ? '' : 's'} online"><span class="dot ${online ? 'online' : 'offline'}"></span><b>${online}</b></a>
+    <a class="rnode" href="#/together" data-tip="${online} friend${online === 1 ? '' : 's'} online"><span class="dot ${online ? 'online' : 'offline'}"></span><b>${online}</b></a>
     <a class="rme" href="#/settings/profile" aria-label="Settings" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 32)}</a>`;
   const railEl = $('#nav');
   if (!railEl.dataset.mag) {
@@ -245,7 +245,7 @@ document.addEventListener('keydown', (e) => {
   window.pollRemote = pollRemote; setInterval(pollRemote, 2000); pollRemote();
   connectSocial();
   onEvent((ev, d) => { if (ev === 'toast') toast(d.text, d.kind === 'err' ? 'err' : d.kind === 'ok' ? 'ok' : ''); });
-  onState((st) => { const n = st.incoming.length + st.invites.length; if (n !== store.socialCount) { store.socialCount = n; renderNav(); } });
+  onState((st) => { const n = st.incoming.length + st.invites.length, on = st.friends.filter((f) => f.online).length; if (n !== store.socialCount || on !== store.friendsOnline) { store.socialCount = n; store.friendsOnline = on; renderNav(); } });
   window.addEventListener('hashchange', navigate);
   navigate(); refreshNodes(); setInterval(refreshNodes, 30000);
 })();
