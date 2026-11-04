@@ -29,7 +29,7 @@ const cookieOf = (req) => /(?:^|;\s*)ih_hub=([a-f0-9]{32})/.exec(req.headers.coo
 
 // ---------- relay (child) ----------
 function startRelay() {
-  const p = spawn(process.execPath, [join(ROOT, 'relay', 'server.js')], { env: { ...process.env, PORT: String(RELAY_PORT) }, stdio: 'inherit' });
+  const p = spawn(process.execPath, [join(ROOT, 'relay', 'server.js')], { env: { ...process.env, PORT: String(RELAY_PORT), RELAY_DIRECTORY: '1' }, stdio: 'inherit' });
   p.on('exit', () => setTimeout(startRelay, 1500));
 }
 

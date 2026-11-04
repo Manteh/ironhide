@@ -12,7 +12,7 @@ const REACTIONS = ['👍', '😂', '😮', '❤️', '🔥', '👏', '😢', '�
 
 let data = { priv: '', pub: '', relayUrl: '', friends: [], shareStatus: true, appearOffline: false };
 let ws = null, link = 'off', backoff = 1000, timer = 0, pingTimer = 0, stopped = false;
-const S = { you: null, presence: new Map(), incoming: [], outgoing: [], room: null, chat: [], invites: [], offsets: [], watching: null };
+const S = { directory: false, people: [], you: null, presence: new Map(), incoming: [], outgoing: [], room: null, chat: [], invites: [], offsets: [], watching: null };
 let emit = () => {}, pushTimer = 0;
 export const onSocial = (fn) => { emit = fn; };
 
@@ -39,7 +39,7 @@ export function snapshot() {
   const friends = data.friends.map((f) => { const p = S.presence.get(f.id); return { ...f, name: p?.name || f.name, avatar: p?.avatar || f.avatar, online: !!p?.online, status: p?.status || null }; });
   friends.sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name));
   return {
-    you: S.you, relay: { url: data.relayUrl, status: link }, friends, incoming: S.incoming, outgoing: S.outgoing, room: S.room, chat: S.chat, invites: S.invites,
+    you: S.you, directory: S.directory, people: S.people.filter((p) => !data.friends.some((f) => f.id === p.id)), relay: { url: data.relayUrl, status: link }, friends, incoming: S.incoming, outgoing: S.outgoing, room: S.room, chat: S.chat, invites: S.invites,
     offset: median(S.offsets), shareStatus: data.shareStatus, appearOffline: data.appearOffline, reactions: REACTIONS,
   };
 }
@@ -75,12 +75,13 @@ async function handle(m) {
       break;
     }
     case 'welcome':
-      S.you = m.you; link = 'online'; S.offsets = [Date.now() - m.now];
+      S.you = m.you; link = 'online'; S.directory = !!m.directory; if (S.directory) tx({ t: 'directory' }); S.offsets = [Date.now() - m.now];
       tx({ t: 'friends', ids: data.friends.map((f) => f.id) });
       clearInterval(pingTimer); pingTimer = setInterval(() => tx({ t: 'ping', c: Date.now() }), 8000); tx({ t: 'ping', c: Date.now() });
       if (S.watching && data.shareStatus) tx({ t: 'status', watching: S.watching });
       push(); break;
     case 'pong': { const rtt = Date.now() - m.c; S.offsets.push(m.s + rtt / 2 - Date.now()); if (S.offsets.length > 7) S.offsets.shift(); break; } // server clock - local clock
+    case 'directory': S.people = m.list; push(); break;
     case 'presence.all': S.presence = new Map(m.list.map((p) => [p.id, p])); push(); break;
     case 'presence': { if (!data.friends.some((f) => f.id === m.id)) break; S.presence.set(m.id, m); const f = data.friends.find((x) => x.id === m.id); if (m.name) { f.name = m.name; f.avatar = m.avatar; save(); } push(); break; }
     case 'friend.req':
@@ -113,7 +114,7 @@ export function addFriend(code) {
   if (id === S.you?.id) throw new Error('That is your own code');
   if (link !== 'online') throw new Error('Not connected to the relay yet');
   if (data.friends.some((f) => f.id === id)) throw new Error('Already friends');
-  S.outgoing.push({ id, name: id }); tx({ t: 'friend.req', to: id }); push();
+  S.outgoing.push({ id, name: S.people.find((p) => p.id === id)?.name || id }); tx({ t: 'friend.req', to: id }); push();
 }
 export function acceptFriend(id, prof) { const p = prof || S.incoming.find((r) => r.id === id); if (!p) return; addFriendLocal(p); tx({ t: 'friend.accept', to: id }); }
 export function declineFriend(id) { S.incoming = S.incoming.filter((r) => r.id !== id); push(); }
@@ -130,6 +131,7 @@ export const roomControl = (action, pos, extra = {}) => tx({ t: 'room.control', 
 export const roomSettings = (s) => tx({ t: 'room.settings', ...s });
 export const chat = (text) => tx({ t: 'chat', text });
 export const react = (emoji) => tx({ t: 'react', emoji });
+export const refreshPeople = () => tx({ t: 'directory' });
 export const dismissInvite = (code) => { S.invites = S.invites.filter((i) => i.code !== code); push(); };
 
 // ---------- settings / profile / status ----------

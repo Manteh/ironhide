@@ -348,6 +348,7 @@ async function handleApi(req, res, urlPath) {
       try {
         if (method === 'GET' && sub === '/') return ok();
         if (method === 'PUT' && sub === '/settings') { social.setSocialSettings(body); return ok(); }
+        if (method === 'POST' && sub === '/people') { social.refreshPeople(); return ok(); }
         if (method === 'POST' && sub === '/friends') { social.addFriend(body.code); return ok(); }
         if (method === 'POST' && sub === '/friends/accept') { social.acceptFriend(body.id); return ok(); }
         if (method === 'POST' && sub === '/friends/decline') { social.declineFriend(body.id); return ok(); }

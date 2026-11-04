@@ -6,6 +6,7 @@ import { createPublicKey, verify, createHash, randomBytes } from 'crypto';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT) || 8790;
+const DIRECTORY = process.env.RELAY_DIRECTORY === '1'; // hosted mode: let members see who else is online
 const MAX_CHAT = 500, HISTORY = 60, REACTIONS = new Set(['👍', '😂', '😮', '❤️', '🔥', '👏', '😢', '🤯']);
 
 const users = new Map();      // id -> { id, name, avatar, ws, friends:Set, status, pending:[] }
@@ -75,7 +76,7 @@ wss.on('connection', (ws) => {
         if (!u) { u = { id, friends: new Set(), status: null, room: null, hide: false }; users.set(id, u); }
         Object.assign(u, { name: clean(m.name, 32) || 'Guest', avatar: { icon: clean(m.avatar?.icon, 20) || 'film', color: clean(m.avatar?.color, 12) || 'indigo' }, ws, hide: !!m.hide });
         me = u; clearTimeout(authTimer);
-        send(ws, { t: 'welcome', you: profile(u), now: Date.now() });
+        send(ws, { t: 'welcome', you: profile(u), now: Date.now(), directory: DIRECTORY });
         for (const req of offlineReq.get(id) || []) send(ws, { t: 'friend.req', from: req });
         offlineReq.delete(id);
         if (!u.hide) announce(u);
@@ -86,6 +87,7 @@ wss.on('connection', (ws) => {
     const u = me;
     switch (m.t) {
       case 'profile': u.name = clean(m.name, 32) || u.name; if (m.avatar) u.avatar = { icon: clean(m.avatar.icon, 20) || 'film', color: clean(m.avatar.color, 12) || 'indigo' }; u.hide = !!m.hide; announce(u); break;
+      case 'directory': if (DIRECTORY) send(ws, { t: 'directory', list: [...users.values()].filter((x) => x.ws && !x.hide && x.id !== u.id).map(profile).slice(0, 200) }); break;
       case 'friends': u.friends = new Set((m.ids || []).slice(0, 500).map((x) => clean(x, 12))); send(ws, { t: 'presence.all', list: presenceFor(u) }); announce(u); break;
       case 'friend.req': {
         const to = clean(m.to, 12).toUpperCase(); if (to === u.id) return;

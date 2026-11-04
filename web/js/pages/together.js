@@ -20,7 +20,7 @@ export default async function together(el) {
     // setup card until a relay is configured
     const setupKey = sig([s.relay.url, s.relay.status]);
     if (last.setup !== setupKey) { last.setup = setupKey; setup(s); }
-    const fKey = sig([s.you, s.friends, s.incoming, s.outgoing, !!s.room, s.relay.status]);
+    const fKey = sig([s.you, s.people, s.friends, s.incoming, s.outgoing, !!s.room, s.relay.status]);
     if (last.f !== fKey) { last.f = fKey; friends(s); }
     const rKey = sig([s.room, s.invites, s.relay.status, s.friends.map((f) => f.id)]);
     if (last.r !== rKey) { last.r = rKey; room(s); }
@@ -41,6 +41,7 @@ export default async function together(el) {
         <p class="tg-note">Send this to a friend. They add it under “Add a friend”, and you accept.</p></div>
       <form class="tg-card add" id="addF"><div class="tg-k">Add a friend</div><div class="tg-row"><input class="input" id="fCode" placeholder="Friend code" maxlength="12" autocomplete="off" spellcheck="false" ${live ? '' : 'disabled'}><button class="btn primary" ${live ? '' : 'disabled'}>Add</button></div>
         ${s.outgoing.length ? `<p class="tg-note">Waiting for ${s.outgoing.length} to accept…</p>` : ''}</form>
+      ${s.directory ? `<div class="tg-card"><div class="tg-k">People here <button class="btn ghost sm" id="rfP">Refresh</button></div>${s.people.length ? s.people.map((p) => `<div class="fr on"><span class="av live">${avatar({ avatar: p.avatar }, 38)}</span><div class="fi"><b>${esc(p.name)}</b><span>Online now</span></div>${s.outgoing.some((o) => o.id === p.id) ? '<span class="muted">Requested</span>' : `<button class="btn sm" data-add="${p.id}">Add</button>`}</div>`).join('') : '<p class="tg-note" style="padding:var(--s3) 0">No one else is online yet.</p>'}</div>` : ''}
       ${s.incoming.length ? `<div class="tg-card"><div class="tg-k">Requests</div>${s.incoming.map((r) => `<div class="fr"><span class="av">${avatar({ avatar: r.avatar }, 38)}</span><div class="fi"><b>${esc(r.name)}</b><span>wants to be friends</span></div><button class="btn primary sm" data-acc="${r.id}">Accept</button><button class="btn ghost sm" data-dec="${r.id}">Ignore</button></div>`).join('')}</div>` : ''}
       <div class="tg-card"><div class="tg-k">Friends <span class="muted">${s.friends.filter((f) => f.online).length} online</span></div>
         ${s.friends.length ? s.friends.map((f) => `<div class="fr ${f.online ? 'on' : ''}"><span class="av ${f.online ? 'live' : ''}">${avatar({ avatar: f.avatar }, 38)}</span>
@@ -48,6 +49,8 @@ export default async function together(el) {
           ${s.room && f.online ? `<button class="btn sm" data-inv="${f.id}">Invite</button>` : ''}<button class="btn ghost sm icon" data-rm="${f.id}" aria-label="Remove ${esc(f.name)}" title="Remove">${icon('x')}</button></div>`).join('') : '<p class="tg-note" style="padding:var(--s3) 0">No friends yet. Share your code to get started.</p>'}</div>`;
     $('#cpCode', el)?.addEventListener('click', () => copy(s.you.id, 'Friend code copied'));
     $('#addF', el).onsubmit = async (e) => { e.preventDefault(); const v = $('#fCode', el).value.trim(); if (!v) return; try { await sapi('/friends', { code: v }); $('#fCode', el).value = ''; } catch (err) { toast(err.message, 'err'); } };
+    $('#rfP', el)?.addEventListener('click', () => sapi('/people'));
+    $$('[data-add]', el).forEach((b) => (b.onclick = () => sapi('/friends', { code: b.dataset.add }).catch((e) => toast(e.message, 'err'))));
     $$('[data-acc]', el).forEach((b) => (b.onclick = () => sapi('/friends/accept', { id: b.dataset.acc })));
     $$('[data-dec]', el).forEach((b) => (b.onclick = () => sapi('/friends/decline', { id: b.dataset.dec })));
     $$('[data-inv]', el).forEach((b) => (b.onclick = () => { sapi('/room/invite', { id: b.dataset.inv }); toast('Invite sent', 'ok'); }));
@@ -87,5 +90,6 @@ export default async function together(el) {
   }
 
   const off = onState(draw);
-  onLeave(() => { off(); unChat?.(); });
+  const poll = setInterval(() => { if (social.state?.directory) sapi('/people').catch(() => {}); }, 8000); // see newcomers
+  onLeave(() => { off(); clearInterval(poll); unChat?.(); });
 }
