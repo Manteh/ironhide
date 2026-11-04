@@ -117,7 +117,7 @@ wss.on('connection', (ws) => {
         break;
       }
       case 'friend.accept': { const f = users.get(clean(m.to, 12)); if (f?.ws) send(f.ws, { t: 'friend.accepted', from: profile(u) }); break; }
-      case 'status': u.status = m.watching ? { title: clean(m.watching.title, 80), imdbId: clean(m.watching.imdbId, 12), poster: clean(m.watching.poster, 200) } : null; if (!u.hide) announce(u); break;
+      case 'status': u.status = m.watching ? { title: clean(m.watching.title, 80), type: m.watching.type === 'movie' ? 'movie' : 'series', imdbId: clean(m.watching.imdbId, 12), poster: clean(m.watching.poster, 200) } : null; if (!u.hide) announce(u); break;
 
       case 'room.create': {
         leaveRoom(u);

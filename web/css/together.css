@@ -89,3 +89,11 @@
 .wp-count.hidden { display: none; }
 .wp-roomed.locked #wpPlay, .wp-roomed.locked .wp-scrub { cursor: not-allowed; }
 .wp-roomed.locked .wp-btn.big { opacity: .6; }
+
+/* friends who are watching something right now */
+.fr.watching { padding: 10px; margin: 2px -10px; border-radius: 14px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent, #8f8cff) 14%, transparent), transparent 70%); border-top-color: transparent; }
+.fr .fi span em { font-style: normal; color: var(--text); font-weight: 600; }
+.fw-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #3ddc84; margin-right: 6px; box-shadow: 0 0 0 0 #3ddc8488; animation: fwpulse 1.8s ease-out infinite; vertical-align: 1px; }
+@keyframes fwpulse { 70% { box-shadow: 0 0 0 7px #3ddc8400; } 100% { box-shadow: 0 0 0 0 #3ddc8400; } }
+.fw { flex: none; width: 34px; aspect-ratio: 2/3; border-radius: 7px; background: var(--surface-2) center / cover; box-shadow: 0 6px 16px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.1); transition: transform .2s; }
+.fw:hover { transform: scale(1.12) rotate(-2deg); }

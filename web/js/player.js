@@ -63,7 +63,7 @@ export function openPlayer(info, opts = {}) {
   // rooms start paused at the beginning; the room decides when everyone presses play
   load(S.room ? 0 : (info.start > 20 ? info.start : 0), !S.room);
   S.saver = setInterval(save, 10000);
-  post('/api/social/watching', { watching: { title: info.title, imdbId: info.meta?.imdbId || '', poster: info.meta?.imdbId ? posterOf(info.meta.imdbId) : '' } }).catch(() => {});
+  post('/api/social/watching', { watching: { title: info.title, type: info.meta?.type === 'movie' ? 'movie' : 'series', imdbId: info.meta?.imdbId || '', poster: info.meta?.imdbId ? posterOf(info.meta.imdbId) : '' } }).catch(() => {});
   if (S.room) import('./roomplay.js').then((m) => { if (S && wp) roomOff = m.attachRoom({ root: () => wp, video: () => S?.video, cur: () => (S ? cur() : 0), seek: (t) => S && seekTo(t), close: () => closePlayer(), hooks }); });
   document.addEventListener('keydown', onKey, true);
   wake();

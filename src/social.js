@@ -38,7 +38,7 @@ const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length 
 // ---------- state for the UI ----------
 export function snapshot() {
   const friends = data.friends.map((f) => { const p = S.presence.get(f.id); return { ...f, name: p?.name || f.name, avatar: p?.avatar || f.avatar, online: !!p?.online, status: p?.status || null }; });
-  friends.sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name));
+  friends.sort((a, b) => (b.online - a.online) || (!!b.status - !!a.status) || a.name.localeCompare(b.name)); // online first, then watchers
   return {
     you: S.you, directory: S.directory, people: S.people.filter((p) => !data.friends.some((f) => f.id === p.id)), relay: { url: data.relayUrl, status: link }, friends, incoming: S.incoming, outgoing: S.outgoing, room: S.room, chat: S.chat, invites: S.invites,
     offset: median(S.offsets), shareStatus: data.shareStatus, appearOffline: data.appearOffline, reactions: REACTIONS,
