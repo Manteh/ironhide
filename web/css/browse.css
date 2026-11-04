@@ -325,3 +325,8 @@ body.is-browse { background: var(--bg); }
 [data-layout="list"] .bdesc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 6px; font-size: 13px; color: var(--muted); line-height: 1.5; }
 [data-layout="list"] .bc:hover .bposter, [data-layout="detail"] .bc:hover .bposter { transform: none; box-shadow: 0 0 0 1px var(--border-strong); }
 @media (max-width: 720px) { [data-layout="detail"] .bgrid { grid-template-columns: 1fr; } }
+
+/* lock the page behind any open overlay; keep inner scrolling inside the overlay */
+html { scrollbar-gutter: stable; }
+html:has(.dossier.open, .wp, .pal, .nowv, .launch), html:has(.dossier.open, .wp, .pal, .nowv, .launch) body { overflow: hidden; }
+.dleft, .dright, .dgrid, .pal-r, .wp-menu { overscroll-behavior: contain; }
