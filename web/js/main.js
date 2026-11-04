@@ -1,7 +1,8 @@
 import { api, post } from './api.js';
 import { $, esc, icon, avatar, LOGO, applyAppearance, fmtTime, toast, wl, posterOf } from './ui.js';
+import { connectSocial, onEvent, onState } from './social.js';
 
-export const store = { settings: null, nodes: [], history: [], watchlist: [] };
+export const store = { settings: null, nodes: [], history: [], watchlist: [], socialCount: 0 };
 const routes = [];
 let leaveFns = [];
 export const onLeave = (fn) => leaveFns.push(fn);
@@ -29,7 +30,7 @@ export async function playWeb(body) {
   try {
     const { browserCaps, openPlayer } = await import('./player.js');
     const info = await post('/api/webplay', { ...body, caps: browserCaps() });
-    hideLaunch(); openPlayer(info);
+    hideLaunch(); openPlayer(info, { room: !!body.room });
     setTimeout(() => refreshHistory(), 3000);
     return true;
   } catch (e) { hideLaunch(); toast(e.message, 'err'); return false; }
@@ -131,6 +132,7 @@ export function renderNav() {
     <button id="nSearch" class="ri" aria-label="Search" data-tip="Search  /">${icon('search')}<span>Search</span></button>
     <a href="#/continue" class="ri ${on(/^#\/continue/)}" aria-label="Continue watching" data-tip="Continue watching">${icon('play')}<span>Resume</span></a>
     <a href="#/shelf" class="ri ${on(/^#\/shelf/)}" aria-label="Shelf" data-tip="Shelf">${icon('bookmark')}<span>Shelf</span></a>
+    <a href="#/together" class="ri ${on(/^#\/together/)}" aria-label="Together" data-tip="Together">${icon('users')}<span>Together</span>${store.socialCount ? `<i class="rbadge">${store.socialCount}</i>` : ''}</a>
     <i class="rsep"></i>
     <a class="rnode" href="#/settings/nodes" data-tip="${online} node${online === 1 ? '' : 's'} online"><span class="dot ${online ? 'online' : 'offline'}"></span><b>${online}</b></a>
     <a class="rme" href="#/settings/profile" aria-label="Settings" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 32)}</a>`;
@@ -223,6 +225,7 @@ route('/continue', 'browse', 'continue');
 route('/shelf', 'browse', 'shelf');
 route('/title/:type/:id', 'browse', 'title');
 route('/search/:q', 'browse', 'search');
+route('/together', 'page', 'together');
 route('/settings', 'page', 'settings');
 route('/settings/:section', 'page', 'settings');
 
@@ -235,10 +238,14 @@ document.addEventListener('keydown', (e) => {
   const [settings, list, history] = await Promise.all([api('/api/settings'), api('/api/watchlist').catch(() => []), api('/api/history').catch(() => [])]);
   store.settings = settings; store.history = history; store.watchlist = list; list.forEach((w) => wl.add(w.imdbId));
   applyAppearance(settings.appearance);
+  if (!settings.profile.named) { const { welcome } = await import('./welcome.js'); store.settings = await welcome(settings); }
   matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => applyAppearance(store.settings.appearance));
   $('#app').innerHTML = `<nav id="nav" class="rail" aria-label="Main"></nav><div id="browse" class="hidden"></div><div id="page" class="hidden"></div><div id="np" class="np hidden"></div>`;
   splash(); renderNav(); setupNowPlaying();
   window.pollRemote = pollRemote; setInterval(pollRemote, 2000); pollRemote();
+  connectSocial();
+  onEvent((ev, d) => { if (ev === 'toast') toast(d.text, d.kind === 'err' ? 'err' : d.kind === 'ok' ? 'ok' : ''); });
+  onState((st) => { const n = st.incoming.length + st.invites.length; if (n !== store.socialCount) { store.socialCount = n; renderNav(); } });
   window.addEventListener('hashchange', navigate);
   navigate(); refreshNodes(); setInterval(refreshNodes, 30000);
 })();

@@ -55,6 +55,7 @@ export function updateSettings(patch) {
     if (patch.profile) {
       const n = String(patch.profile.name ?? cur.profile.name).trim().slice(0, 40);
       cur.profile.name = n || cur.profile.name;
+      if (patch.profile.name != null) cur.profile.named = true;
       if (patch.profile.avatar) {
         const { icon, color } = patch.profile.avatar;
         if (typeof icon === 'string' && /^[a-z-]{1,20}$/.test(icon)) cur.profile.avatar.icon = icon;

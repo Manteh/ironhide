@@ -4,7 +4,7 @@ import { $, $$, esc, icon, avatar, toast, AVATAR_ICONS, AVATAR_COLORS } from '..
 
 const SECTIONS = [
   ['profile', 'Profile', 'user'], ['appearance', 'Appearance', 'palette'], ['playback', 'Playback', 'sliders'],
-  ['connectors', 'Connectors', 'plug'], ['nodes', 'Nodes', 'nodes'], ['about', 'About', 'info'],
+  ['connectors', 'Connectors', 'plug'], ['together', 'Together', 'users'], ['nodes', 'Nodes', 'nodes'], ['about', 'About', 'info'],
 ];
 const seg = (name, opts, cur) => `<div class="seg" data-seg="${name}">${opts.map(([v, l, ic]) => `<button data-v="${v}" class="${String(cur) === String(v) ? 'on' : ''}">${ic ? icon(ic) : ''}${l}</button>`).join('')}</div>`;
 const card = ({ title, desc, body, foot, danger }) => `<section class="scard ${danger ? 'danger' : ''}"><div class="body"><h3>${title}</h3>${desc ? `<p class="desc">${desc}</p>` : ''}${body}</div>${foot ? `<div class="foot">${foot}</div>` : ''}</section>`;
@@ -24,7 +24,7 @@ export default async function settings(el, { section = 'profile' }) {
     <div class="settings"><nav class="snav" aria-label="Settings">${SECTIONS.map(([k, l, ic]) => `<a href="#/settings/${k}" class="${k === section ? 'on' : ''}">${icon(ic)} ${l}</a>`).join('')}</nav>
     <div class="scol" id="sbody"></div></div></div>`;
   const body = $('#sbody');
-  await ({ profile, appearance, playback, connectors, nodes, about }[section])(body);
+  await ({ profile, appearance, playback, connectors, together: togetherSettings, nodes, about }[section])(body);
 }
 
 // ---------- Profile ----------
@@ -172,6 +172,33 @@ async function nodes(body) {
   draw();
   const t = setInterval(async () => { if (!$('#rf')) return; list = await api('/api/nodes?refresh=1').catch(() => list); draw(); }, 20000);
   onLeave(() => clearInterval(t));
+}
+
+// ---------- Together (relay, privacy) ----------
+async function togetherSettings(body) {
+  const { onState, fmtCode } = await import('../social.js');
+  const draw = (s) => {
+    const live = s.relay.status === 'online';
+    const focus = document.activeElement?.id;
+    body.innerHTML =
+      card({ title: 'Relay', desc: 'A small server that passes friend, room and chat messages. No video goes through it. See relay/README.md to host your own on Render.', body:
+        `<div class="field"><label for="relay">Relay address</label><input id="relay" class="input" placeholder="wss://your-relay.onrender.com" value="${esc(s.relay.url)}" spellcheck="false" autocomplete="off"></div>
+         <div class="srow" style="margin-top:var(--s4)"><div class="lbl"><b>Status</b><span>${live ? 'Connected as ' + esc(s.you?.name || '') : s.relay.status === 'connecting' ? 'Connecting. A sleeping Render service can take a minute.' : s.relay.url ? 'Not connected' : 'Add an address to turn this on'}</span></div><span class="badge ${live ? 'ok' : s.relay.status === 'connecting' ? 'warn' : ''}">${esc(s.relay.status)}</span></div>`,
+        foot: `<span>Saves automatically.</span>${savestat('s5')}` }) +
+      card({ title: 'Your friend code', desc: 'Friends add this code to connect with you. Your name and avatar come from Profile.', body:
+        `<div class="tg-code" style="font-size:30px">${s.you ? esc(fmtCode(s.you.id)) : '—'}</div>`, foot: `<span>Your private key stays on this Mac.</span><button class="btn" id="cpc" ${s.you ? '' : 'disabled'}>Copy code</button>` }) +
+      card({ title: 'Privacy', body:
+        row('Show what I am watching', 'Friends see the title you have open in the player.', `<button class="switch ${s.shareStatus ? 'on' : ''}" id="sh" role="switch" aria-checked="${s.shareStatus}" aria-label="Share status"></button>`) +
+        row('Appear offline', 'Stay connected for rooms, but friends see you as offline.', `<button class="switch ${s.appearOffline ? 'on' : ''}" id="off" role="switch" aria-checked="${s.appearOffline}" aria-label="Appear offline"></button>`), foot: `<span>Saves automatically.</span>${savestat('s6')}` });
+    const save = (patch, id) => put('/api/social/settings', patch).then(() => flash(body, id)).catch((e) => toast(e.message, 'err'));
+    $('#relay', body).oninput = debounce((e) => save({ relayUrl: e.target.value.trim() }, 's5'), 700);
+    $('#cpc', body)?.addEventListener('click', () => navigator.clipboard.writeText(s.you.id).then(() => toast('Friend code copied', 'ok')));
+    $('#sh', body).onclick = () => save({ shareStatus: !s.shareStatus }, 's6'); $('#off', body).onclick = () => save({ appearOffline: !s.appearOffline }, 's6');
+    if (focus === 'relay') { const i = $('#relay', body); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+  };
+  let sig = '';
+  const off = onState((s) => { const k = JSON.stringify([s.relay, s.you?.id, s.shareStatus, s.appearOffline]); if (k === sig) return; sig = k; draw(s); });
+  onLeave(off);
 }
 
 // ---------- About ----------

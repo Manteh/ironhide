@@ -11,7 +11,7 @@ const COMMANDS = [
   ['Theme: Dark', { theme: 'dark' }, 'moon'], ['Theme: Midnight', { theme: 'midnight' }, 'moon'], ['Theme: Light', { theme: 'light' }, 'sun'], ['Theme: System', { theme: 'system' }, 'monitor'],
 ];
 
-export function openPalette(prefill = '') {
+export function openPalette(prefill = '', opts = {}) {
   if (box) return;
   box = document.createElement('div'); box.className = 'pal';
   box.innerHTML = `<div class="pal-in" role="dialog" aria-label="Search"><div class="pal-q">${icon('search')}<input id="pq" placeholder="Search a title, or type a command" autocomplete="off" spellcheck="false" aria-label="Search"><kbd>esc</kbd></div><div id="pr" class="pal-r"></div></div>`;
@@ -20,6 +20,7 @@ export function openPalette(prefill = '') {
 
   const close = () => { box.remove(); box = null; document.removeEventListener('keydown', key, true); };
   const go = (it) => {
+    if (opts.pick && it.r) { close(); opts.pick(it.r); return; }
     close();
     if (it.href) location.hash = it.href;
     else if (it.theme) saveSettings({ appearance: { theme: it.theme } });

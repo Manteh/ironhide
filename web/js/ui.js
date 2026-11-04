@@ -19,7 +19,7 @@ const P = {
   stop: '<rect x="6" y="6" width="12" height="12" rx="1.5"/>',
   back: '<path d="M11 6L5 12l6 6M19 6l-6 6 6 6"/>', fwd: '<path d="M13 6l6 6-6 6M5 6l6 6-6 6"/>',
   bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
-  check: '<path d="M5 12.5l4.5 4.5L19 7"/>', expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', pip: '<rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1"/>', chev: '<path d="M6 9l6 6 6-6"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7"/>', users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-3.7 3.2-5.5 6.5-5.5s6 1.8 6.5 5.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14.5c2.6 0 4.2 1.5 4.5 4"/>', expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', pip: '<rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1"/>', chev: '<path d="M6 9l6 6 6-6"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>', plus: '<path d="M12 5v14M5 12h14"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
   sliders: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
   palette: '<path d="M12 3a9 9 0 100 18c1.5 0 2-1 1.5-2.2-.5-1.2.3-2.3 1.6-2.3H17a4 4 0 004-4c0-5-4-9.5-9-9.5z"/><circle cx="8" cy="11" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="11" r="1"/>',

@@ -2,6 +2,7 @@
 import { api, post } from './api.js';
 import { store, quickPlay, toggleSave } from './main.js';
 import { $, $$, esc, icon, pad, posterOf, toast, wl } from './ui.js';
+import { social, sapi } from './social.js';
 
 const TIERS = [['2160p', '4K'], ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['', 'Other']];
 const tierLabel = (r) => (TIERS.find(([k]) => k === (r || ''))?.[1] || 'Other');
@@ -105,7 +106,8 @@ export async function openDossier({ type, id }) {
               <div class="dacts"><button class="btn primary" id="dPlay">${icon('play')} ${playLabel()}</button>
                 <button class="btn" id="dSave">${saveLabel()}</button>
                 ${meta.trailers?.length ? `<button class="btn ghost" id="dTrailer">${icon('trailer')} Trailer</button>` : `<a class="btn ghost" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${q}+trailer">Trailer ${icon('ext')}</a>`}
-                <a class="btn ghost" target="_blank" rel="noopener" href="https://www.imdb.com/title/${esc(id)}/">IMDb ${icon('ext')}</a></div></div></div>
+                <a class="btn ghost" target="_blank" rel="noopener" href="https://www.imdb.com/title/${esc(id)}/">IMDb ${icon('ext')}</a>
+                ${social.state?.relay?.status === 'online' && (!social.state.room || social.state.room.host === social.state.you?.id) ? `<button class="btn ghost" id="dTogether">${icon('users')} Watch together</button>` : ''}</div></div></div>
         </div>
         <div class="dgrid">
           <div class="dleft" id="dLeft">
@@ -124,6 +126,13 @@ export async function openDossier({ type, id }) {
     $('#dTrailer', box)?.addEventListener('click', async () => {
       const { openTrailer } = await import('./trailer.js');
       openTrailer({ ids: meta.trailers, title: meta.title, year: meta.year, onPlay: () => quickPlay({ ...item, ...(st.episode ? { season: st.season, episode: st.episode } : {}) }) });
+    });
+    $('#dTogether', box)?.addEventListener('click', async () => {
+      const media = { imdbId: id, type, title: meta.title, year: meta.year, poster: meta.poster, ...(type === 'series' ? { season: st.season || 1, episode: st.episode || 1 } : {}) };
+      try {
+        if (!social.state.room) { await sapi('/room', { name: `${meta.title} night` }); for (let i = 0; i < 25 && !social.state.room; i++) await new Promise((r) => setTimeout(r, 150)); }
+        await sapi('/room/media', { media }); toast('Sent to your room', 'ok'); location.hash = '#/together';
+      } catch (e) { toast(e.message, 'err'); }
     });
     $('#dSave', box).onclick = async () => { await toggleSave({ ...item }); $('#dSave', box).innerHTML = saveLabel(); };
     $('#dEpBar', box)?.addEventListener('click', () => toggleEps(!st.epOpen));

@@ -5,7 +5,8 @@ import { $, $$, esc, icon, fmtTime, toast, pad, posterOf } from './ui.js';
 const LANG = { eng: 'English', en: 'English', lit: 'Lithuanian', lt: 'Lithuanian', swe: 'Swedish', sv: 'Swedish', chi: 'Chinese', zho: 'Chinese', jpn: 'Japanese', spa: 'Spanish', fre: 'French', ger: 'German', ita: 'Italian', rus: 'Russian', und: 'Unknown' };
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-let wp = null, S = null; // S: all live player state
+let wp = null, S = null, roomOff = null; // S: all live player state
+export const hooks = { onToggle: null, onSeek: null }; // set by roomplay.js in room mode
 
 export const isPlayerOpen = () => !!wp;
 
@@ -15,7 +16,7 @@ export function browserCaps() {
   return { hevc: ok('video/mp4; codecs="hvc1.1.6.L153.B0"') || ok('video/mp4; codecs="hev1.1.6.L153.B0"'), av1: ok('video/mp4; codecs="av01.0.08M.08"') };
 }
 
-export function openPlayer(info) {
+export function openPlayer(info, opts = {}) {
   if (wp) closePlayer();
   const ep = info.meta?.season ? `S${pad(info.meta.season)}E${pad(info.meta.episode)}` : '';
   wp = document.createElement('div');
@@ -54,13 +55,16 @@ export function openPlayer(info) {
 
   const video = $('.wp-video', wp);
   S = { info, video, offset: 0, audio: info.audio.findIndex((a) => a.default) >= 0 ? info.audio.findIndex((a) => a.default) : 0, wasPlaying: true, transcode: false, dragging: false,
-    cues: [], cueOn: -1, subIdx: -1, rate: 1, idle: 0, saver: 0, retried: false, lastUI: 0 };
+    cues: [], cueOn: -1, subIdx: -1, rate: 1, idle: 0, saver: 0, retried: false, lastUI: 0, room: !!opts.room };
   video.volume = +(localStorage.getItem('wp-vol') ?? 1); $('#wpVol', wp).value = video.volume;
 
   badges();
   bind();
-  load(info.start > 20 ? info.start : 0, true);
+  // rooms start paused at the beginning; the room decides when everyone presses play
+  load(S.room ? 0 : (info.start > 20 ? info.start : 0), !S.room);
   S.saver = setInterval(save, 10000);
+  post('/api/social/watching', { watching: { title: info.title, imdbId: info.meta?.imdbId || '', poster: info.meta?.imdbId ? posterOf(info.meta.imdbId) : '' } }).catch(() => {});
+  if (S.room) import('./roomplay.js').then((m) => { if (S && wp) roomOff = m.attachRoom({ root: () => wp, video: () => S?.video, cur: () => (S ? cur() : 0), seek: (t) => S && seekTo(t), close: () => closePlayer(), hooks }); });
   document.addEventListener('keydown', onKey, true);
   wake();
 }
@@ -82,6 +86,8 @@ function seekTo(t) {
   paintTime(t);
   if (inBuf) video.currentTime = rel; else load(t, !video.paused || S.wasPlaying);
 }
+
+function userSeek(t) { if (S.room && hooks.onSeek) return hooks.onSeek(t); seekTo(t); }
 
 // ---------- UI painting ----------
 function paintTime(t = cur()) {
@@ -109,7 +115,7 @@ function playIcon() { $('#wpPlay', wp).innerHTML = icon(S.video.paused ? 'play' 
 function pulse(name) { const p = $('#wpPulse', wp); p.innerHTML = icon(name); p.classList.remove('go'); void p.offsetWidth; p.classList.add('go'); }
 
 // ---------- controls ----------
-function toggle() { const { video } = S; if (video.paused) { video.play().catch(() => {}); S.wasPlaying = true; pulse('play'); } else { video.pause(); S.wasPlaying = false; pulse('pause'); } }
+function toggle() { if (S.room && hooks.onToggle) return hooks.onToggle(!S.video.paused); const { video } = S; if (video.paused) { video.play().catch(() => {}); S.wasPlaying = true; pulse('play'); } else { video.pause(); S.wasPlaying = false; pulse('pause'); } }
 function wake() { wp.classList.remove('idle'); clearTimeout(S.idle); S.idle = setTimeout(() => { if (!S.video.paused && $('#wpMenu', wp).classList.contains('hidden') && !S.dragging) wp.classList.add('idle'); }, 2800); }
 
 function bind() {
@@ -131,7 +137,7 @@ function bind() {
 
   $('#wpBack', wp).onclick = closePlayer;
   $('#wpPlay', wp).onclick = toggle;
-  $('#wpBk', wp).onclick = () => { seekTo(cur() - 10); pulse('back'); }; $('#wpFw', wp).onclick = () => { seekTo(cur() + 10); pulse('fwd'); };
+  $('#wpBk', wp).onclick = () => { userSeek(cur() - 10); pulse('back'); }; $('#wpFw', wp).onclick = () => { userSeek(cur() + 10); pulse('fwd'); };
   $('#wpMute', wp).onclick = () => { video.muted = !video.muted; };
   $('#wpVol', wp).oninput = (e) => { video.volume = +e.target.value; video.muted = false; };
   $('#wpPip', wp).onclick = () => { document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture?.().catch(() => toast('Picture in picture is not available', 'err')); };
@@ -164,8 +170,8 @@ function bind() {
     tip.querySelector('span').textContent = fmtTime(f * dur()); tip.style.left = x + 'px'; showThumb(f * dur());
   };
   scrub.addEventListener('pointermove', (e) => { place(e); if (S.dragging) paintTime(at(e) * dur()); });
-  scrub.addEventListener('pointerup', (e) => { if (!S.dragging) return; S.dragging = false; seekTo(at(e) * dur()); });
-  scrub.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') seekTo(cur() - 10); if (e.key === 'ArrowRight') seekTo(cur() + 10); });
+  scrub.addEventListener('pointerup', (e) => { if (!S.dragging) return; S.dragging = false; userSeek(at(e) * dur()); });
+  scrub.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') userSeek(cur() - 10); if (e.key === 'ArrowRight') userSeek(cur() + 10); });
 
   wp.addEventListener('pointermove', wake); wp.addEventListener('pointerdown', (e) => { wake(); if (!e.target.closest('#wpMenu, #wpSubs, #wpAudio, #wpSpeed')) $('#wpMenu', wp).classList.add('hidden'); });
   playIcon();
@@ -210,8 +216,8 @@ function onKey(e) {
   if (!wp || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && e.key !== 'Escape') return;
   const k = e.key; let used = true;
   if (k === ' ' || k === 'k') toggle();
-  else if (k === 'ArrowLeft' || k === 'j') { seekTo(cur() - (e.shiftKey ? 30 : 10)); pulse('back'); }
-  else if (k === 'ArrowRight' || k === 'l') { seekTo(cur() + (e.shiftKey ? 30 : 10)); pulse('fwd'); }
+  else if (k === 'ArrowLeft' || k === 'j') { userSeek(cur() - (e.shiftKey ? 30 : 10)); pulse('back'); }
+  else if (k === 'ArrowRight' || k === 'l') { userSeek(cur() + (e.shiftKey ? 30 : 10)); pulse('fwd'); }
   else if (k === 'ArrowUp') S.video.volume = Math.min(1, S.video.volume + 0.08);
   else if (k === 'ArrowDown') S.video.volume = Math.max(0, S.video.volume - 0.08);
   else if (k === 'm') S.video.muted = !S.video.muted;
@@ -228,6 +234,8 @@ function save() { if (!S) return; const d = dur(), p = cur(); if (d > 0 && p > 5
 export function closePlayer() {
   if (!wp) return;
   save(); clearInterval(S.saver); clearTimeout(S.idle);
+  roomOff?.(); roomOff = null;
+  post('/api/social/watching', { watching: null }).catch(() => {});
   document.removeEventListener('keydown', onKey, true);
   const id = S.info.id, el = wp, video = S.video;
   wp = null; S = null;

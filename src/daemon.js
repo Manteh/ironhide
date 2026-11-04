@@ -4,6 +4,7 @@
 import { startWebServer, WEB_PORT } from './web-server.js';
 import { startBridge } from './tizen-bridge.js';
 import { startBackground } from './tools.js';
+import { startSocial } from './social.js';
 
 export async function isDaemonRunning() {
   try {
@@ -25,8 +26,9 @@ async function main() {
     console.error(`Cannot start web server on :${WEB_PORT}: ${err.message}`);
     process.exit(1);
   }
-  startBridge();
+  if (!process.env.IRONHIDE_NO_BRIDGE) startBridge();
   startBackground();
+  startSocial();
   console.error(`IronHide daemon: http://localhost:${WEB_PORT}`);
 }
 

@@ -7,6 +7,7 @@ import { tools, getLoadedStreams } from './tools.js';
 import { FEEDS, getFeed, getGenres, search as catalogSearch, getTitle } from './catalog.js';
 import { getHistory } from './history.js';
 import { parseLangs } from './ui.js';
+import * as social from './social.js';
 import { addToHistory, updateEntryProgress } from './history.js';
 import { learnQuality } from './preferences.js';
 import { capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
@@ -215,7 +216,7 @@ async function handleApi(req, res, urlPath) {
     }
 
     if (method === 'GET' && urlPath === '/api/settings') return jsonResponse(res, await getSettings());
-    if (method === 'PUT' && urlPath === '/api/settings') return jsonResponse(res, await updateSettings(await parseBody(req)));
+    if (method === 'PUT' && urlPath === '/api/settings') { const out = await updateSettings(await parseBody(req)); social.sendProfile(); return jsonResponse(res, out); }
 
     if (method === 'GET' && urlPath === '/api/connectors') return jsonResponse(res, connectorsView());
     if (method === 'PUT' && urlPath === '/api/connectors/provider') {
@@ -298,6 +299,7 @@ async function handleApi(req, res, urlPath) {
         await addToHistory({ title: meta.title || stream.quality.slice(0, 40), imdbId: meta.imdbId || '', type: meta.type || type, season, episode, quality: stream.quality.slice(0, 80), streamUrl: stream.url, streamIsRD: true }).catch(() => {});
         if (meta.imdbId) await learnQuality(meta.imdbId, stream).catch(() => {});
         setPlayState({ phase: 'playing', detail: 'Opening the player' });
+        if (body.fromStart) resumeFrom = 0;
         return jsonResponse(res, { ...info, start: resumeFrom || 0, quality: stream.quality, size: stream.size });
       } catch (err) {
         setPlayState({ phase: 'error', detail: err.message });
@@ -337,6 +339,35 @@ async function handleApi(req, res, urlPath) {
     }
     const wpDel = urlPath.match(/^\/api\/wp\/([a-z0-9-]+)$/);
     if (wpDel && method === 'DELETE') { closeSession(wpDel[1]); return jsonResponse(res, { ok: true }); }
+
+    // ---------- friends, rooms, chat (relay-backed) ----------
+    if (urlPath.startsWith('/api/social')) {
+      const sub = urlPath.slice('/api/social'.length) || '/';
+      const body = method === 'GET' ? {} : await parseBody(req);
+      const ok = () => jsonResponse(res, social.snapshot());
+      try {
+        if (method === 'GET' && sub === '/') return ok();
+        if (method === 'PUT' && sub === '/settings') { social.setSocialSettings(body); return ok(); }
+        if (method === 'POST' && sub === '/friends') { social.addFriend(body.code); return ok(); }
+        if (method === 'POST' && sub === '/friends/accept') { social.acceptFriend(body.id); return ok(); }
+        if (method === 'POST' && sub === '/friends/decline') { social.declineFriend(body.id); return ok(); }
+        const del = sub.match(/^\/friends\/([A-Z0-9]+)$/);
+        if (method === 'DELETE' && del) { social.removeFriend(del[1]); return ok(); }
+        if (method === 'POST' && sub === '/room') { social.createRoom(body.name); return ok(); }
+        if (method === 'POST' && sub === '/room/join') { social.joinRoom(body.code); return ok(); }
+        if (method === 'POST' && sub === '/room/leave') { social.leaveRoom(); return ok(); }
+        if (method === 'POST' && sub === '/room/invite') { social.invite(body.id); return ok(); }
+        if (method === 'POST' && sub === '/room/invite/dismiss') { social.dismissInvite(body.code); return ok(); }
+        if (method === 'POST' && sub === '/room/media') { social.roomMedia(body.media); return ok(); }
+        if (method === 'POST' && sub === '/room/ready') { social.roomReady(body.ready); return ok(); }
+        if (method === 'POST' && sub === '/room/control') { social.roomControl(body.action, body.pos, { scheduled: !!body.scheduled, rate: body.rate }); return ok(); }
+        if (method === 'POST' && sub === '/room/settings') { social.roomSettings(body); return ok(); }
+        if (method === 'POST' && sub === '/chat') { social.chat(body.text); return ok(); }
+        if (method === 'POST' && sub === '/react') { social.react(body.emoji); return ok(); }
+        if (method === 'POST' && sub === '/watching') { social.setWatching(body.watching || null); return ok(); }
+      } catch (err) { return errorResponse(res, err.message, 400); }
+      return errorResponse(res, 'Not found', 404);
+    }
 
     if (method === 'GET' && urlPath === '/api/health') {
       return jsonResponse(res, { ok: true, service: 'ironhide', pid: process.pid });
@@ -476,10 +507,12 @@ export function startWebServer() {
     server.once('error', reject);
 
     setBroadcast(broadcastToAll);
+    social.onSocial((event, data) => broadcastToAll({ type: 'social', event, data }));
 
     wss.on('connection', ws => {
       clients.add(ws);
       ws.send(JSON.stringify({ type: 'queue_state', data: getQueueState() }));
+    ws.send(JSON.stringify({ type: 'social', event: 'state', data: social.snapshot() }));
       ws.on('close', () => clients.delete(ws));
       ws.on('error', () => clients.delete(ws));
     });

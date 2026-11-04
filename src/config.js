@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 
-export const CONFIG_DIR = join(homedir(), '.config', 'ironhide');
+export const CONFIG_DIR = process.env.IRONHIDE_HOME || join(homedir(), '.config', 'ironhide');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 
 // Read fresh each call so edits from the web UI apply without a restart.
