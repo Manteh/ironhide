@@ -346,7 +346,7 @@ async function handleApi(req, res, urlPath) {
       const [, id, what, subIdx] = wpMatch;
       if (what === 'stream' && method === 'GET') {
         const q = new URL(req.url, 'http://localhost').searchParams;
-        return streamTo(res, id, Number(q.get('start')) || 0, Number(q.get('audio')) || 0, q.get('transcode') === '1');
+        return streamTo(res, id, Number(q.get('start')) || 0, Number(q.get('audio')) || 0, q.get('transcode') === '1', Number(q.get('sync')) || 0);
       }
       if (what === 'thumbs' && method === 'POST') { const sess = getSession(id); if (sess) startThumbs(sess); return jsonResponse(res, { ok: true }); }
       if (what === 'thumb' && method === 'GET') {
@@ -392,6 +392,7 @@ async function handleApi(req, res, urlPath) {
         if (method === 'POST' && sub === '/room/join') { social.joinRoom(body.code); return ok(); }
         if (method === 'POST' && sub === '/room/leave') { social.leaveRoom(); return ok(); }
         if (method === 'POST' && sub === '/room/state') { social.roomState(body.state, body.pos); return jsonResponse(res, { ok: true }); }
+        if (method === 'POST' && sub === '/room/transfer') { social.transfer(body.id); return ok(); }
         if (method === 'POST' && sub === '/room/kick') { social.kick(body.id); return ok(); }
         if (method === 'POST' && sub === '/room/invite') { social.invite(body.id); return ok(); }
         if (method === 'POST' && sub === '/room/invite/dismiss') { social.dismissInvite(body.code); return ok(); }

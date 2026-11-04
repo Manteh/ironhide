@@ -38,11 +38,11 @@ export function attachRoom(P) {
     const r = s.room; if (!r) { toast('The room closed'); P.close(); return; }
     $('#dwName', drawer).textContent = r.name;
     $('#wpRoomN', root).textContent = r.members.length;
-    $('#dwMem', drawer).innerHTML = r.members.map((u) => `<span class="dmb ${u.ready ? 'ready' : ''}" title="${esc(u.name)}${u.ready ? ' · ready' : ' · loading'}">${avatar({ avatar: u.avatar }, 30)}<i></i>${r.host === s.you?.id && u.id !== r.host ? `<button class="dmb-x" data-kick="${u.id}" data-kname="${esc(u.name)}" aria-label="Remove ${esc(u.name)}" title="Remove ${esc(u.name)}">${icon('x')}</button>` : ''}</span>`).join('');
+    $('#dwMem', drawer).innerHTML = r.members.map((u) => `<span class="dmb ${u.ready ? 'ready' : ''}" title="${esc(u.name)}${u.ready ? ' · ready' : ' · loading'}">${avatar({ avatar: u.avatar }, 30)}<i></i>${(r.host === s.you?.id || r.owner === s.you?.id) && u.id !== r.owner && u.id !== s.you?.id ? `<button class="dmb-x" data-kick="${u.id}" data-kname="${esc(u.name)}" aria-label="Remove ${esc(u.name)}" title="Remove ${esc(u.name)}">${icon('x')}</button>` : ''}</span>`).join('');
     $$('[data-kick]', drawer).forEach((b) => (b.onclick = () => { if (confirm(`Remove ${b.dataset.kname} from the room?`)) sapi('/room/kick', { id: b.dataset.kick }); }));
     root.classList.toggle('locked', !canControl());
     const key = r.media ? `${r.media.imdbId}:${r.media.season}:${r.media.episode}` : '';
-    if (lastMedia && key && key !== lastMedia) toast(`${r.host === s.you?.id ? 'You' : 'The host'} picked ${r.media.title}. Reopen the player from Together to switch.`);
+    if (lastMedia && key && key !== lastMedia) toast(`${r.host === s.you?.id || r.owner === s.you?.id ? 'You' : 'The host'} picked ${r.media.title}. Reopen the player from Together to switch.`);
     lastMedia = key;
   }));
   on(onEvent((ev, d) => { if (ev === 'react') floatEmoji(layer, d.emoji, d.from?.name, d.x); if (ev === 'pb') applyPb(d.pb); }));

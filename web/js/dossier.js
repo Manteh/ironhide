@@ -107,7 +107,7 @@ export async function openDossier({ type, id }) {
                 <button class="btn" id="dSave">${saveLabel()}</button>
                 ${meta.trailers?.length ? `<button class="btn ghost" id="dTrailer">${icon('trailer')} Trailer</button>` : `<a class="btn ghost" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${q}+trailer">Trailer ${icon('ext')}</a>`}
                 <a class="btn ghost" target="_blank" rel="noopener" href="https://www.imdb.com/title/${esc(id)}/">IMDb ${icon('ext')}</a>
-                ${social.state?.relay?.status === 'online' && (!social.state.room || social.state.room.host === social.state.you?.id) ? `<button class="btn ghost" id="dTogether">${icon('users')} Watch together</button>` : ''}</div></div></div>
+                ${social.state?.relay?.status === 'online' && (!social.state.room || (social.state.room.host === social.state.you?.id || social.state.room.owner === social.state.you?.id)) ? `<button class="btn ghost" id="dTogether">${icon('users')} Watch together</button>` : ''}</div></div></div>
         </div>
         <div class="dgrid">
           <div class="dleft" id="dLeft">

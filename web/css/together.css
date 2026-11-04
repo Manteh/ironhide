@@ -110,6 +110,10 @@
 .inst-new { display: flex; gap: 8px; } .inst-new .input { flex: 1; }
 .inst-keys { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13.5px; color: var(--text-2); cursor: pointer; } .inst-keys input { accent-color: var(--accent, #8f8cff); }
 
+/* room owner */
+.mb em.own { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #3b2300; }
+.mb-own:hover { background: #f59e0b !important; color: #3b2300 !important; }
+
 /* host: remove someone from the room */
 .mb { position: relative; } .mb-x { margin-left: 4px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(255,255,255,.08); color: var(--text-2); display: grid; place-items: center; cursor: pointer; font-size: 13px; opacity: .6; transition: opacity .15s, background .15s, color .15s; }
 .mb:hover .mb-x, .mb-x:focus-visible { opacity: 1; } .mb-x:hover { background: #ef4444; color: #fff; }

@@ -59,9 +59,10 @@ function presenceFor(u) {
 // ---------- rooms ----------
 const newCode = () => { let c; do { c = b32(randomBytes(4)).slice(0, 6); } while (rooms.has(c)); return c; };
 const snapshot = (r) => ({
-  code: r.code, name: r.name, host: r.host, control: r.control, open: r.open !== false, media: r.media, pb: r.pb, startAt: r.startAt,
+  code: r.code, name: r.name, owner: r.owner, host: r.host, control: r.control, open: r.open !== false, media: r.media, pb: r.pb, startAt: r.startAt,
   members: [...r.members].map((id) => { const u = users.get(id); return u ? { ...profile(u), ready: r.ready.has(id), st: r.ms?.get(id) || null } : null; }).filter(Boolean),
 });
+const runs = (r, u) => r.host === u.id || r.owner === u.id;
 const toRoom = (r, msg) => { for (const id of r.members) send(users.get(id)?.ws, msg); };
 const pushRoom = (r) => { toRoom(r, { t: 'room', room: snapshot(r) }); for (const id of r.members) { const m = users.get(id); if (m && !m.hide) announce(m); } };
 function say(r, text) { const m = { from: null, text, ts: Date.now() }; r.chat.push(m); if (r.chat.length > HISTORY) r.chat.shift(); toRoom(r, { t: 'chat', msg: m }); }
@@ -69,8 +70,8 @@ function leaveRoom(u) {
   const r = u.room && rooms.get(u.room); u.room = null; if (!u.hide) announce(u); if (!r) return;
   r.members.delete(u.id); r.ready.delete(u.id); r.ms?.delete(u.id);
   if (!r.members.size) { r.emptyTimer = setTimeout(() => rooms.delete(r.code), 5 * 60e3); return; }
-  if (r.host === u.id) r.host = [...r.members][0];
-  say(r, `${u.name} left`); pushRoom(r);
+  if (r.host === u.id) { r.host = [...r.members][0]; if (r.owner === u.id) say(r, `${u.name} (owner) left. ${users.get(r.host)?.name || 'Someone'} is hosting until they are back`); else say(r, `${u.name} left`); } else say(r, `${u.name} left`);
+  pushRoom(r);
 }
 
 // ---------- connection handling ----------
@@ -128,7 +129,7 @@ wss.on('connection', (ws) => {
 
       case 'room.create': {
         leaveRoom(u);
-        const code = newCode(), r = { code, name: clean(m.name, 40) || `${u.name}'s room`, host: u.id, members: new Set([u.id]), ready: new Set(), control: 'host', media: null, pb: { playing: false, pos: 0, at: now, rate: 1 }, startAt: 0, chat: [] };
+        const code = newCode(), r = { code, name: clean(m.name, 40) || `${u.name}'s room`, owner: u.id, host: u.id, members: new Set([u.id]), ready: new Set(), control: 'host', media: null, pb: { playing: false, pos: 0, at: now, rate: 1 }, startAt: 0, chat: [] };
         rooms.set(code, r); u.room = code; say(r, `${u.name} created the room`); pushRoom(r); send(ws, { t: 'chat.history', msgs: r.chat });
         break;
       }
@@ -137,21 +138,27 @@ wss.on('connection', (ws) => {
         if (r.banned?.has(u.id)) return send(ws, { t: 'room.error', msg: 'The host removed you from this room.' });
         if (r.members.size >= 12) return send(ws, { t: 'room.error', msg: 'This room is full.' });
         leaveRoom(u); clearTimeout(r.emptyTimer);
-        r.members.add(u.id); u.room = r.code; say(r, `${u.name} joined`); pushRoom(r); send(ws, { t: 'chat.history', msgs: r.chat });
+        r.members.add(u.id); u.room = r.code;
+        if (r.owner === u.id && r.host !== u.id) { r.host = u.id; say(r, `${u.name} is back as host`); } else say(r, `${u.name} joined`); pushRoom(r); send(ws, { t: 'chat.history', msgs: r.chat });
         break;
       }
       case 'room.leave': leaveRoom(u); send(ws, { t: 'room', room: null }); break;
       case 'room.kick': { // host only: remove someone, and keep them out of this room
         const r = rooms.get(u.room), id = clean(m.to, 12), t = users.get(id);
-        if (!r || r.host !== u.id || id === u.id || !r.members.has(id)) break;
+        if (!r || !runs(r, u) || id === u.id || id === r.owner || !r.members.has(id)) break;
         (r.banned ||= new Set()).add(id); r.members.delete(id); r.ready.delete(id);
         if (t) { t.room = null; send(t.ws, { t: 'room', room: null }); send(t.ws, { t: 'room.kicked', by: u.name, room: r.name }); if (!t.hide) announce(t); }
         say(r, `${t?.name || 'Someone'} was removed by ${u.name}`); pushRoom(r); break;
       }
+      case 'room.transfer': { // the owner can hand the room over for good
+        const r = rooms.get(u.room), t = users.get(clean(m.to, 12));
+        if (!r || r.owner !== u.id || !t || !r.members.has(t.id) || t.id === u.id) break;
+        r.owner = r.host = t.id; say(r, `${u.name} made ${t.name} the owner`); pushRoom(r); break;
+      }
       case 'room.invite': { const r = rooms.get(u.room), f = users.get(clean(m.to, 12)); if (r && f?.ws && mutual(u, f)) send(f.ws, { t: 'room.invite', from: profile(u), code: r.code, name: r.name, media: r.media }); break; }
-      case 'room.settings': { const r = rooms.get(u.room); if (!r || r.host !== u.id) break; if (['host', 'all'].includes(m.control)) r.control = m.control; if (typeof m.open === 'boolean') r.open = m.open; if (m.name) r.name = clean(m.name, 40); pushRoom(r); break; }
+      case 'room.settings': { const r = rooms.get(u.room); if (!r || !runs(r, u)) break; if (['host', 'all'].includes(m.control)) r.control = m.control; if (typeof m.open === 'boolean') r.open = m.open; if (m.name) r.name = clean(m.name, 40); pushRoom(r); break; }
       case 'room.media': {
-        const r = rooms.get(u.room); if (!r || r.host !== u.id) break;
+        const r = rooms.get(u.room); if (!r || !runs(r, u)) break;
         r.media = m.media ? { imdbId: clean(m.media.imdbId, 12), type: m.media.type === 'series' ? 'series' : 'movie', title: clean(m.media.title, 100), year: clean(m.media.year, 12), poster: clean(m.media.poster, 200), season: Number(m.media.season) || null, episode: Number(m.media.episode) || null } : null;
         r.pb = { playing: false, pos: 0, at: now, rate: 1 }; r.ready.clear(); r.startAt = 0;
         if (r.media) say(r, `${u.name} picked ${r.media.title}${r.media.season ? ` S${String(r.media.season).padStart(2, '0')}E${String(r.media.episode).padStart(2, '0')}` : ''}`);
@@ -164,7 +171,7 @@ wss.on('connection', (ws) => {
       }
       case 'room.ready': { const r = rooms.get(u.room); if (!r) break; m.ready ? r.ready.add(u.id) : r.ready.delete(u.id); pushRoom(r); break; }
       case 'room.control': {
-        const r = rooms.get(u.room); if (!r || (r.host !== u.id && r.control !== 'all')) break;
+        const r = rooms.get(u.room); if (!r || (!runs(r, u) && r.control !== 'all')) break;
         const pos = Math.max(0, Number(m.pos) || 0);
         if (m.action === 'play') {
           // everyone starts at the same server instant a moment from now, once they are ready

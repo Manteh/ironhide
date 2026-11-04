@@ -26,6 +26,7 @@ export function onEvent(fn) { social.events.add(fn); return () => social.events.
 export const sapi = (path, body = {}) => post('/api/social' + path, body);
 export const serverNow = () => Date.now() + (social.state?.offset || 0);
 export const inRoom = () => !!social.state?.room;
-export const isHost = () => !!(social.state?.room && social.state.room.host === social.state.you?.id);
-export const canControl = () => { const r = social.state?.room; return !!r && (r.host === social.state.you?.id || r.control === 'all'); };
+// the owner counts as host: they keep control (and sync) for the life of the room
+export const isHost = () => { const r = social.state?.room, id = social.state?.you?.id; return !!(r && (r.host === id || r.owner === id)); };
+export const canControl = () => { const r = social.state?.room, id = social.state?.you?.id; return !!r && (r.host === id || r.owner === id || r.control === 'all'); };
 export const fmtCode = (c = '') => (c.length === 10 ? c.slice(0, 5) + '-' + c.slice(5) : c);

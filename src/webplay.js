@@ -98,17 +98,29 @@ export function publicInfo(s) {
 
 export const getSession = (id) => sessions.get(id);
 
-function ffArgs(s, start, audioIdx, force = false) {
+function ffArgs(s, start, audioIdx, force = false, sync = 0) {
   const copyVideo = s.plan.copyVideo && !force;
   const maxH = copyVideo ? 0 : (s.plan.maxH || (force ? 1080 : 0));
   const a = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
-  if (!copyVideo) a.push('-hwaccel', 'videotoolbox');
-  // already probed once: keep re-analysis tiny so seeks restart quickly
-  a.push('-probesize', '1500000', '-analyzeduration', '800000', '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '3');
-  if (start > 0) a.push('-ss', String(start));
-  a.push('-i', s.url, '-map', '0:v:0');
+  // Audio sync (like mpv's audio delay): <0 plays the sound earlier, >0 later. Browsers cannot see Bluetooth latency,
+  // so this lets the user line the sound up with the picture. Done by opening the file twice and shifting one stream's timestamps.
+  const lag = Math.max(-1500, Math.min(1500, Math.round(Number(sync) || 0)));
+  const input = (offsetMs, forVideo) => {
+    const x = [];
+    if (forVideo && !copyVideo) x.push('-hwaccel', 'videotoolbox');
+    // already probed once: keep re-analysis tiny so seeks restart quickly
+    x.push('-probesize', '1500000', '-analyzeduration', '800000', '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '3');
+    if (start > 0) x.push('-ss', String(start));
+    if (offsetMs) x.push('-itsoffset', (offsetMs / 1000).toFixed(3));
+    x.push('-i', s.url);
+    return x;
+  };
+  a.push(...input(0, lag >= 0));                    // input 0
+  if (lag !== 0) a.push(...input(Math.abs(lag), lag < 0)); // input 1: the stream that has to arrive later
+  const vIn = lag < 0 ? 1 : 0, aIn = lag > 0 ? 1 : 0;
+  a.push('-map', `${vIn}:v:0`);
   const track = s.audio[audioIdx] || s.audio.find((x) => x.default) || s.audio[0];
-  if (track) a.push('-map', `0:a:${track.index}`);
+  if (track) a.push('-map', `${aIn}:a:${track.index}`);
   if (copyVideo) {
     a.push('-c:v', 'copy');
     if (s.plan.hevc) a.push('-tag:v', 'hvc1');
@@ -125,10 +137,10 @@ function ffArgs(s, start, audioIdx, force = false) {
   return a;
 }
 
-export function streamTo(res, id, start = 0, audio = 0, force = false) {
+export function streamTo(res, id, start = 0, audio = 0, force = false, sync = 0) {
   const s = sessions.get(id);
   if (!s) { res.writeHead(404); return res.end('Unknown session'); }
-  const proc = spawn(FFMPEG, ffArgs(s, Math.max(0, start), audio, force), { stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = spawn(FFMPEG, ffArgs(s, Math.max(0, start), audio, force, sync), { stdio: ['ignore', 'pipe', 'pipe'] });
   s.procs.add(proc);
   res.writeHead(200, { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-store', 'Accept-Ranges': 'none', 'X-Content-Type-Options': 'nosniff' });
   proc.stdout.pipe(res);

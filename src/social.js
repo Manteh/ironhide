@@ -132,6 +132,7 @@ export const joinRoom = (code) => { S.invites = S.invites.filter((i) => i.code !
 export const leaveRoom = () => { tx({ t: 'room.leave' }); S.room = null; S.chat = []; push(); };
 export const invite = (id) => tx({ t: 'room.invite', to: id });
 export const kick = (id) => tx({ t: 'room.kick', to: id });
+export const transfer = (id) => tx({ t: 'room.transfer', to: id });
 export const roomMedia = (media) => tx({ t: 'room.media', media });
 export const roomState = (state, pos) => tx({ t: 'room.state', state, pos });
 export const roomReady = (ready) => tx({ t: 'room.ready', ready: !!ready });
