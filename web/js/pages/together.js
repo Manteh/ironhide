@@ -42,7 +42,8 @@ export default async function together(el) {
       <div class="tg-card code"><div class="tg-k">Your friend code</div>
         <div class="tg-code">${s.you ? esc(fmtCode(s.you.id)) : '—'}</div>
         <button class="btn" id="cpCode" ${s.you ? '' : 'disabled'}>${icon('bookmark')} Copy code</button>
-        <p class="tg-note">Send this to a friend. They add it under “Add a friend”, and you accept.</p></div>
+        <p class="tg-note">Send this to a friend. They add it under “Add a friend”, and you accept.</p>
+        ${s.relayHost && live ? `<p class="tg-note tg-relay"><i class="fw-dot"></i>On ${esc(s.relayHost)}. Friends must be on the same relay.</p>` : ''}</div>
       <form class="tg-card add" id="addF"><div class="tg-k">Add a friend</div><div class="tg-row"><input class="input" id="fCode" placeholder="Friend code" maxlength="12" autocomplete="off" spellcheck="false" ${live ? '' : 'disabled'}><button class="btn primary" ${live ? '' : 'disabled'}>Add</button></div>
         ${s.outgoing.length ? `<p class="tg-note">Waiting for ${s.outgoing.length} to accept…</p>` : ''}</form>
       ${s.directory ? `<div class="tg-card"><div class="tg-k">People here <button class="btn ghost sm" id="rfP">Refresh</button></div>${s.people.length ? s.people.map((p) => `<div class="fr on"><span class="av live">${avatar({ avatar: p.avatar }, 38)}</span><div class="fi"><b>${esc(p.name)}</b><span>Online now</span></div>${s.outgoing.some((o) => o.id === p.id) ? '<span class="muted">Requested</span>' : `<button class="btn sm" data-add="${p.id}">Add</button>`}</div>`).join('') : '<p class="tg-note" style="padding:var(--s3) 0">No one else is online yet.</p>'}</div>` : ''}

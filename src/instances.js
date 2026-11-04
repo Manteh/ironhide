@@ -18,6 +18,12 @@ const writeReg = (r) => { mkdirSync(CONFIG_DIR, { recursive: true }); writeFileS
 const health = (port) => fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(700) }).then((r) => r.json()).then((j) => j.service === 'ironhide').catch(() => false);
 const portFree = (port) => new Promise((res) => { const s = net.createServer(); s.once('error', () => res(false)); s.listen(port, '127.0.0.1', () => s.close(() => res(true))); });
 
+// Point an instance at the same relay as its creator (a relay saved earlier would otherwise win, and the two could never find each other)
+async function syncRelay(port, relay) {
+  if (!relay) return;
+  await fetch(`http://127.0.0.1:${port}/api/social/settings`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ relayUrl: relay }) }).catch(() => {});
+}
+
 async function waitUp(port, ms = 9000) { const end = Date.now() + ms; while (Date.now() < end) { if (await health(port)) return true; await new Promise((r) => setTimeout(r, 250)); } return false; }
 
 function launch(inst, relay) {
@@ -39,7 +45,7 @@ export async function createInstance({ name = '', copyKeys = true, relay = '' } 
   let port = FIRST_PORT;
   while (reg.some((i) => i.port === port) || !(await portFree(port))) { port++; if (port > FIRST_PORT + 40) throw new Error('No free port found'); }
   const id = `p${port}`;
-  const home = join(BASE, id);
+  const home = join(BASE, `${id}-${Date.now().toString(36)}`); // unique, so a new person never inherits an old identity
   mkdirSync(home, { recursive: true });
   if (copyKeys) { // reuse this install's debrid keys so the new person can play right away
     const cfg = join(CONFIG_DIR, 'config.json');
@@ -49,6 +55,7 @@ export async function createInstance({ name = '', copyKeys = true, relay = '' } 
   inst.pid = launch(inst, relay);
   reg.push(inst); writeReg(reg);
   if (!(await waitUp(port))) throw new Error('The new instance did not start in time');
+  await syncRelay(port, relay);
   if (String(name).trim()) { // a name was given: start them already named, no name screen
     await fetch(`http://127.0.0.1:${port}/api/settings`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ profile: { name: inst.name } }) }).catch(() => {});
   }
@@ -59,6 +66,7 @@ export async function startInstance(id, relay = '') {
   const reg = readReg(), inst = reg.find((i) => i.id === id);
   if (!inst) throw new Error('Unknown instance');
   if (!(await health(inst.port))) { inst.pid = launch(inst, relay); writeReg(reg); await waitUp(inst.port); }
+  await syncRelay(inst.port, relay);
   return { id, url: `http://localhost:${inst.port}` };
 }
 

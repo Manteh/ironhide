@@ -33,6 +33,7 @@ function save() {
   writeFileSync(FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
 }
 
+const relayHost = () => { try { return new URL(data.relayUrl).host; } catch { return 'this relay'; } };
 const validRelay = (u) => { try { const x = new URL(u); return x.protocol === 'wss:' || (x.protocol === 'ws:' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(x.hostname)); } catch { return false; } };
 const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 
@@ -41,7 +42,7 @@ export function snapshot() {
   const friends = data.friends.map((f) => { const p = S.presence.get(f.id); return { ...f, name: p?.name || f.name, avatar: p?.avatar || f.avatar, online: !!p?.online, status: p?.status || null }; });
   friends.sort((a, b) => (b.online - a.online) || (!!b.status - !!a.status) || a.name.localeCompare(b.name)); // online first, then watchers
   return {
-    you: S.you, directory: S.directory, people: S.people.filter((p) => !data.friends.some((f) => f.id === p.id)), relay: { url: data.relayUrl, status: link }, friends, incoming: S.incoming, outgoing: S.outgoing, room: S.room, chat: S.chat, invites: S.invites,
+    you: S.you, relayHost: relayHost(), directory: S.directory, people: S.people.filter((p) => !data.friends.some((f) => f.id === p.id)), relay: { url: data.relayUrl, status: link }, friends, incoming: S.incoming, outgoing: S.outgoing, room: S.room, chat: S.chat, invites: S.invites,
     offset: median(S.offsets), shareStatus: data.shareStatus, appearOffline: data.appearOffline, reactions: REACTIONS,
   };
 }
@@ -93,7 +94,7 @@ async function handle(m) {
       emit('toast', { kind: 'info', text: `${m.from.name} sent you a friend request` }); push(); break;
     case 'friend.accepted': addFriendLocal(m.from); S.outgoing = S.outgoing.filter((o) => o.id !== m.from.id); emit('toast', { kind: 'ok', text: `${m.from.name} accepted your request` }); break;
     case 'friend.sent': emit('toast', { kind: 'ok', text: `Request sent to ${m.name}` }); break;
-    case 'friend.unknown': S.outgoing = S.outgoing.filter((o) => o.id !== m.to); emit('toast', { kind: 'err', text: 'No one has that code (they may not be online yet)' }); push(); break;
+    case 'friend.unknown': S.outgoing = S.outgoing.filter((o) => o.id !== m.to); emit('toast', { kind: 'err', text: `No one with that code is online on ${relayHost()}. They need to be connected to the same relay.` }); push(); break;
     case 'room': S.room = m.room; if (!m.room) { S.chat = []; } push(); break;
     case 'room.pb': if (S.room) S.room.pb = m.pb; emit('pb', m); break;
     case 'chat.history': S.chat = m.msgs; push(); break;
