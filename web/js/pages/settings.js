@@ -46,6 +46,7 @@ function profile(body) {
     fetch('/hub/health').then((r) => (r.ok ? r.json() : null)).catch(() => null).then((h) => {
       if (!body.isConnected) return;
       const hub = !!h?.ok;
+      if (!hub) mountInstances(body);
       body.insertAdjacentHTML('beforeend', card({ title: 'Sign out', desc: hub
         ? 'Leave this session. Your name is freed, and your settings, TorBox key and history on this server are erased. Anyone can then take the name.'
         : 'Start over as a new user. You get a new friend code and an empty friends list, and the name screen comes back in every open browser. Your TorBox key, appearance and playback settings stay.',
@@ -58,6 +59,32 @@ function profile(body) {
     });
   };
   draw();
+}
+
+// ---------- Another person on this Mac ----------
+function mountInstances(body) {
+  body.insertAdjacentHTML('beforeend', card({ title: 'Another person on this Mac',
+    desc: 'Start a second IronHide with its own profile, friend code and history, then open it in a new tab. Good for trying Together with yourself, or sharing this computer.',
+    body: `<div id="instList" class="inst-list"></div>
+      <div class="inst-new"><input id="instName" class="input" maxlength="40" placeholder="Name (optional)" aria-label="Name"><button class="btn primary" id="instGo">Start a new instance</button></div>
+      <label class="inst-keys"><input type="checkbox" id="instKeys" checked> Use my debrid keys so they can play right away</label>`,
+    foot: '<span>Each one runs on its own port and keeps its own folder.</span>' }));
+  const list = $('#instList', body);
+  const paint = async () => {
+    let items = []; try { items = await api('/api/instances'); } catch {}
+    if (!body.isConnected) return;
+    list.innerHTML = items.map((i) => `<div class="inst"><span class="dot ${i.running ? 'online' : 'offline'}"></span><div class="inst-i"><b>${esc(i.name)}</b><span>localhost:${i.port} · ${i.running ? 'running' : 'stopped'}</span></div>
+      ${i.running ? `<a class="btn sm" href="${i.url}" target="_blank" rel="noopener">Open</a><button class="btn ghost sm" data-stop="${i.id}">Stop</button>` : `<button class="btn sm" data-start="${i.id}">Start</button>`}</div>`).join('');
+    $$('[data-stop]', list).forEach((b) => (b.onclick = async () => { b.disabled = true; await post(`/api/instances/${b.dataset.stop}/stop`); setTimeout(paint, 800); }));
+    $$('[data-start]', list).forEach((b) => (b.onclick = async () => { b.disabled = true; b.textContent = 'Starting…'; try { const r = await post(`/api/instances/${b.dataset.start}/start`); window.open(r.url, '_blank'); } catch (e) { toast(e.message, 'err'); } paint(); }));
+  };
+  $('#instGo', body).onclick = async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'Starting…';
+    try { const r = await post('/api/instances', { name: $('#instName', body).value, copyKeys: $('#instKeys', body).checked }); window.open(r.url, '_blank'); $('#instName', body).value = ''; toast('New instance started', 'ok'); }
+    catch (err) { toast(err.message, 'err'); }
+    btn.disabled = false; btn.textContent = 'Start a new instance'; paint();
+  };
+  paint();
 }
 
 // ---------- Appearance (applies instantly) ----------

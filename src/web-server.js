@@ -8,6 +8,7 @@ import { FEEDS, getFeed, getGenres, search as catalogSearch, getTitle } from './
 import { getHistory } from './history.js';
 import { parseLangs } from './ui.js';
 import * as social from './social.js';
+import { listInstances, createInstance, startInstance, stopInstance } from './instances.js';
 import { addToHistory, updateEntryProgress } from './history.js';
 import { learnQuality } from './preferences.js';
 import { capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
@@ -219,6 +220,15 @@ async function handleApi(req, res, urlPath) {
     }
 
     if (method === 'GET' && urlPath === '/api/settings') return jsonResponse(res, await getSettings());
+    // extra IronHides on this Mac (another person, own friend code). Spawns processes, so only our own pages may call it.
+    if (urlPath === '/api/instances' || /^\/api\/instances\/[a-z0-9]+\/(start|stop)$/.test(urlPath)) {
+      if (req.headers.origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.origin)) return errorResponse(res, 'Not allowed from this site', 403);
+      const relay = social.snapshot().relay.url || '';
+      if (method === 'GET' && urlPath === '/api/instances') return jsonResponse(res, await listInstances());
+      if (method === 'POST' && urlPath === '/api/instances') { const b = await parseBody(req); return jsonResponse(res, await createInstance({ name: b.name, copyKeys: b.copyKeys !== false, relay })); }
+      const m = urlPath.match(/^\/api\/instances\/([a-z0-9]+)\/(start|stop)$/);
+      if (method === 'POST' && m) return jsonResponse(res, m[2] === 'start' ? await startInstance(m[1], relay) : await stopInstance(m[1]));
+    }
     if (method === 'POST' && urlPath === '/api/account/reset') { await resetProfile(); social.resetIdentity(); return jsonResponse(res, { ok: true }); }
     if (method === 'PUT' && urlPath === '/api/settings') { const out = await updateSettings(await parseBody(req)); social.sendProfile(); return jsonResponse(res, out); }
 
