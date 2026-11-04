@@ -6,7 +6,7 @@ import { createPublicKey, verify, createHash, randomBytes } from 'crypto';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT) || 8790;
-const VERSION = 6; // 2 = rooms visible to friends, 3 = owner + kick + saved rooms, 4 = live player states, 5 = scheduled seeks, 6 = unfriend + temporary profiles
+const VERSION = 7; // 2 = rooms visible to friends, 3 = owner + kick + saved rooms, 4 = live player states, 5 = scheduled seeks, 6 = unfriend + temporary profiles, 7 = ready gate, pinned release, stall hold, cursors
 const DIRECTORY = process.env.RELAY_DIRECTORY === '1'; // hosted mode: let members see who else is online
 const MAX_CHAT = 500, HISTORY = 60, REACTIONS = new Set(['👍', '😂', '😮', '❤️', '🔥', '👏', '😢', '🤯']);
 
@@ -61,7 +61,7 @@ function presenceFor(u) {
 // ---------- rooms ----------
 const newCode = () => { let c; do { c = b32(randomBytes(4)).slice(0, 6); } while (rooms.has(c)); return c; };
 const snapshot = (r) => ({
-  code: r.code, name: r.name, owner: r.owner, host: r.host, control: r.control, open: r.open !== false, media: r.media, pb: r.pb, startAt: r.startAt,
+  code: r.code, name: r.name, owner: r.owner, host: r.host, control: r.control, open: r.open !== false, wait: r.wait !== false, gate: r.gate || null, media: r.media, pb: r.pb, startAt: r.startAt,
   members: [...r.members].map((id) => { const u = users.get(id); return u ? { ...profile(u), ready: r.ready.has(id), st: r.ms?.get(id) || null } : null; }).filter(Boolean),
 });
 const runs = (r, u) => r.host === u.id || r.owner === u.id;
@@ -70,7 +70,7 @@ const pushRoom = (r) => { toRoom(r, { t: 'room', room: snapshot(r) }); for (cons
 function say(r, text) { const m = { from: null, text, ts: Date.now() }; r.chat.push(m); if (r.chat.length > HISTORY) r.chat.shift(); toRoom(r, { t: 'chat', msg: m }); }
 // Where the room's playback is right now, from its shared clock
 const posNow = (r, t = Date.now()) => (r.pb.playing ? r.pb.pos + Math.max(0, t - r.pb.at) / 1000 * (r.pb.rate || 1) : r.pb.pos);
-const ACTIVE = new Set(['playing', 'paused', 'buffering', 'away', 'loading']); // 'idle' = player closed
+const ACTIVE = new Set(['playing', 'paused', 'buffering', 'away', 'loading', 'lobby']); // 'idle' = player closed
 const hasPlayer = (r, exceptId) => [...r.members].some((id) => id !== exceptId && ACTIVE.has(r.ms?.get(id)?.state) && Date.now() - r.ms.get(id).at < 20000);
 // When the last open player goes away, stop the shared clock at the last known position so the room can resume from there later
 function freezeIfIdle(r, lastPos) {
@@ -79,12 +79,41 @@ function freezeIfIdle(r, lastPos) {
   toRoom(r, { t: 'room.pb', pb: r.pb, by: null, action: 'pause', now: Date.now() });
 }
 
+// --- ready gate: nobody's clock starts until everyone has buffered. The room waits, then all start the same frame together ---
+const GATE_MS = 25000, LEAD_MS = 1800, STALL_MS = 4000, HOLD_GAP_MS = 30000;
+let gateTok = 0;
+function startGate(r, pos, reason, who) {
+  const rate = r.pb.rate || 1;
+  r.pb = { playing: false, pos: Math.max(0, pos), at: Date.now(), rate }; r.startAt = 0; r.ready.clear();
+  r.gate = { token: ++gateTok, pos: r.pb.pos, until: Date.now() + GATE_MS, reason, who: who || null };
+  r.stall = null;
+  toRoom(r, { t: 'room.pb', pb: r.pb, by: null, action: 'gate', now: Date.now() }); pushRoom(r);
+}
+function releaseGate(r) {
+  if (!r.gate) return;
+  const at = Date.now() + LEAD_MS, pos = r.gate.pos;
+  r.pb = { playing: true, pos, at, rate: r.pb.rate || 1 }; r.startAt = at; r.gate = null;
+  toRoom(r, { t: 'room.pb', pb: r.pb, by: null, action: 'play', now: Date.now() }); pushRoom(r);
+}
+function checkGate(r) {
+  if (!r.gate) return;
+  if (!r.members.size) { r.gate = null; return; }
+  const now = Date.now();
+  const waiting = [...r.members].filter((id) => {
+    const u = users.get(id); if (!u?.ws || r.ready.has(id)) return false;
+    const st = r.ms?.get(id), active = st && ACTIVE.has(st.state) && now - st.at < 20000;
+    return !(u.away && !active); // nobody at the keyboard and no player open: don't hold the room for them
+  });
+  if (!waiting.length || now >= r.gate.until) releaseGate(r);
+}
+
 function leaveRoom(u) {
   const r = u.room && rooms.get(u.room); u.room = null; if (!u.hide) announce(u); if (!r) return;
   const last = r.ms?.get(u.id); r.members.delete(u.id); r.ready.delete(u.id); r.ms?.delete(u.id); r.lastActive = Date.now();
   // their player was the last one open: pause the room right where they were
   if (last && ACTIVE.has(last.state)) freezeIfIdle(r, last.pos + (last.state === 'playing' ? Math.max(0, Date.now() - last.at) / 1000 : 0));
   else freezeIfIdle(r);
+  checkGate(r);
   if (!r.members.size) return; // an empty room is kept (paused at its position) so people can come back to it
   if (r.host === u.id) { r.host = [...r.members][0]; if (r.owner === u.id) say(r, `${u.name} (owner) left. ${users.get(r.host)?.name || 'Someone'} is hosting until they are back`); else say(r, `${u.name} left`); } else say(r, `${u.name} left`);
   pushRoom(r);
@@ -95,6 +124,17 @@ const server = http.createServer((req, res) => {
   if (req.url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: true, service: 'ironhide-relay', v: VERSION, online: [...users.values()].filter((u) => u.ws).length, rooms: rooms.size })); }
   res.writeHead(404); res.end();
 });
+// Gate deadlines, and holding the room when someone has been stuck buffering for a while
+setInterval(() => {
+  const now = Date.now();
+  for (const r of rooms.values()) {
+    if (r.gate) { checkGate(r); continue; }
+    if (!r.pb.playing || r.wait === false || !r.stall || r.pb.at > now || now - (r.lastHold || 0) < HOLD_GAP_MS) continue;
+    const stuck = Object.entries(r.stall).find(([id, since]) => r.members.has(id) && now - since > STALL_MS);
+    if (stuck) { r.lastHold = now; startGate(r, posNow(r), 'stall', users.get(stuck[0])?.name); }
+  }
+}, 1000).unref?.();
+
 // A player that stopped reporting (browser closed, but the IronHide behind it is still connected) pauses the room where it last was
 setInterval(() => {
   for (const r of rooms.values()) {
@@ -186,7 +226,7 @@ wss.on('connection', (ws) => {
       case 'room.restore': {
         for (const x of (Array.isArray(m.rooms) ? m.rooms : []).slice(0, 20)) {
           const code = clean(x?.code, 8).toUpperCase(); if (!/^[A-Z0-9]{4,8}$/.test(code) || rooms.has(code)) continue;
-          const media = x.media && x.media.imdbId ? { imdbId: clean(x.media.imdbId, 12), type: x.media.type === 'series' ? 'series' : 'movie', title: clean(x.media.title, 100), year: clean(x.media.year, 12), poster: clean(x.media.poster, 200), season: Number(x.media.season) || null, episode: Number(x.media.episode) || null } : null;
+          const media = x.media && x.media.imdbId ? { imdbId: clean(x.media.imdbId, 12), type: x.media.type === 'series' ? 'series' : 'movie', title: clean(x.media.title, 100), year: clean(x.media.year, 12), poster: clean(x.media.poster, 200), season: Number(x.media.season) || null, episode: Number(x.media.episode) || null, pin: clean(x.media.pin, 140), pinLabel: clean(x.media.pinLabel, 120) } : null;
           const chat = (Array.isArray(x.chat) ? x.chat : []).slice(-HISTORY).map((c) => ({ from: c?.from ? { id: clean(c.from.id, 12), name: clean(c.from.name, 32), avatar: cleanAvatar(c.from.avatar) } : null, text: clean(c.text, MAX_CHAT), ts: Number(c.ts) || now }));
           const owner = clean(x.owner, 12) || u.id;
           rooms.set(code, { code, name: clean(x.name, 40) || 'Room', owner, host: owner, members: new Set(), ready: new Set(), control: x.control === 'all' ? 'all' : 'host', open: x.open !== false, media, pb: { playing: false, pos: Math.max(0, Math.min(1e6, Number(x.pos) || 0)), at: now, rate: 1 }, startAt: 0, chat, lastActive: Number(x.savedAt) || now });
@@ -202,8 +242,17 @@ wss.on('connection', (ws) => {
         offlineReq.delete(to); break;
       }
       case 'away': u.away = !!m.away; if (!u.hide) announce(u); break; // their window is hidden, or their browser is closed
+      case 'room.pin': { // the exact release the whole room plays
+        const r = rooms.get(u.room); if (!r || !runs(r, u) || !r.media) break;
+        r.media.pin = clean(m.key, 140); r.media.pinLabel = clean(m.label, 120); pushRoom(r); break;
+      }
+      case 'cursor': { // live pointers over the picture; not stored
+        const r = rooms.get(u.room); if (!r) break;
+        const x = Number(m.x), y = Number(m.y), off = !!m.off; if (!off && !(Number.isFinite(x) && Number.isFinite(y))) break;
+        for (const id of r.members) if (id !== u.id) send(users.get(id)?.ws, { t: 'cursor', id: u.id, x, y, off }); break;
+      }
       case 'room.invite': { const r = rooms.get(u.room), f = users.get(clean(m.to, 12)); if (r && f?.ws && mutual(u, f)) send(f.ws, { t: 'room.invite', from: profile(u), code: r.code, name: r.name, media: r.media }); break; }
-      case 'room.settings': { const r = rooms.get(u.room); if (!r || !runs(r, u)) break; if (['host', 'all'].includes(m.control)) r.control = m.control; if (typeof m.open === 'boolean') r.open = m.open; if (m.name) r.name = clean(m.name, 40); pushRoom(r); break; }
+      case 'room.settings': { const r = rooms.get(u.room); if (!r || !runs(r, u)) break; if (['host', 'all'].includes(m.control)) r.control = m.control; if (typeof m.open === 'boolean') r.open = m.open; if (typeof m.wait === 'boolean') r.wait = m.wait; if (m.name) r.name = clean(m.name, 40); pushRoom(r); break; }
       case 'room.media': {
         const r = rooms.get(u.room); if (!r || !runs(r, u)) break;
         r.media = m.media ? { imdbId: clean(m.media.imdbId, 12), type: m.media.type === 'series' ? 'series' : 'movie', title: clean(m.media.title, 100), year: clean(m.media.year, 12), poster: clean(m.media.poster, 200), season: Number(m.media.season) || null, episode: Number(m.media.episode) || null } : null;
@@ -212,23 +261,25 @@ wss.on('connection', (ws) => {
         pushRoom(r); break;
       }
       case 'room.state': { // a light, frequent update: what this person's player is doing and where it is
-        const r = rooms.get(u.room); if (!r || !['playing', 'paused', 'buffering', 'away', 'loading', 'idle'].includes(m.state)) break;
-        const st = { state: m.state, pos: Math.max(0, Math.min(1e6, Number(m.pos) || 0)), at: now };
+        const r = rooms.get(u.room); if (!r || !['playing', 'paused', 'buffering', 'away', 'loading', 'lobby', 'idle'].includes(m.state)) break;
+        const st = { state: m.state, pos: Math.max(0, Math.min(1e6, Number(m.pos) || 0)), buf: Math.max(0, Math.min(9999, Number(m.buf) || 0)), at: now, tc: Number(m.tc) || now };
+        r.stall ||= {}; if (m.state === 'buffering') r.stall[u.id] ||= now; else delete r.stall[u.id];
         (r.ms ||= new Map()).set(u.id, st); toRoom(r, { t: 'room.ms', id: u.id, st });
         if (m.state === 'idle') freezeIfIdle(r, st.pos); // the last player just closed
         break;
       }
-      case 'room.ready': { const r = rooms.get(u.room); if (!r) break; m.ready ? r.ready.add(u.id) : r.ready.delete(u.id); pushRoom(r); break; }
+      case 'room.ready': { const r = rooms.get(u.room); if (!r) break; if (r.gate && m.ready && m.token !== r.gate.token) break; m.ready ? r.ready.add(u.id) : r.ready.delete(u.id); pushRoom(r); checkGate(r); break; }
       case 'room.control': {
         const r = rooms.get(u.room); if (!r || (!runs(r, u) && r.control !== 'all')) break;
         const pos = Math.max(0, Number(m.pos) || 0);
         if (m.action === 'play') {
           // everyone starts at the same server instant a moment from now, once they are ready
-          const lead = m.scheduled ? 2500 : 0; r.startAt = now + lead; r.pb = { playing: true, pos, at: now + lead, rate: r.pb.rate };
-        } else if (m.action === 'pause') { r.pb = { playing: false, pos, at: now, rate: r.pb.rate }; r.startAt = 0; }
-        else if (m.action === 'seek') {
-          // while playing, a seek is a scheduled restart: everyone loads the new spot, then starts the same frame together
-          const lead = r.pb.playing ? 3500 : 0; r.pb = { playing: r.pb.playing, pos, at: now + lead, rate: r.pb.rate }; r.startAt = lead ? now + lead : 0;
+          startGate(r, pos, 'play'); break;
+        } else if (m.action === 'start') { releaseGate(r); break; // the owner chose not to wait any longer
+        } else if (m.action === 'pause') { r.gate = null; r.pb = { playing: false, pos, at: now, rate: r.pb.rate }; r.startAt = 0; }
+        else if (m.action === 'seek') { // while playing (or waiting) a seek goes back through the gate, so everyone lands together
+          if (r.pb.playing || r.gate) { startGate(r, pos, 'seek'); break; }
+          r.pb = { playing: false, pos, at: now, rate: r.pb.rate };
         }
         else if (m.action === 'rate') { const cur = r.pb.playing ? r.pb.pos + (now - r.pb.at) / 1000 * r.pb.rate : r.pb.pos; r.pb = { playing: r.pb.playing, pos: cur, at: now, rate: Math.min(2, Math.max(0.5, Number(m.rate) || 1)) }; }
         toRoom(r, { t: 'room.pb', pb: r.pb, by: u.id, action: m.action, now }); break;

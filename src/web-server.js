@@ -31,6 +31,13 @@ import { getNowPlaying, isMpvRunning } from './mpv-ipc.js';
 import { getPlayState, setPlayState, beginLaunch } from './playstate.js';
 
 const WEB_DIR = fileURLToPath(new URL('../web', import.meta.url));
+// A key that names one release without any debrid key in it: the torrent hash and file when we can see them, else the release name.
+export const streamPin = (st) => { const h = (st.url || '').match(/\b[a-f0-9]{40}\b/i)?.[0] || st.infoHash; return h ? `h:${h.toLowerCase()}:${st.fileIdx ?? ''}` : `q:${String(st.quality || '').slice(0, 120)}`; };
+const findPinned = (streams, pin) => {
+  let i = streams.findIndex((x) => streamPin(x) === pin);
+  if (i < 0 && pin.startsWith('h:')) { const hash = pin.split(':')[1]; i = streams.findIndex((x) => streamPin(x).split(':')[1] === hash); }
+  return i >= 0 ? i + 1 : 0;
+};
 export const WEB_PORT = Number(process.env.IRONHIDE_PORT) || 7676;
 // Hosted mode: video goes from the debrid CDN straight to each viewer's browser, never through this server.
 const CDN_DELIVERY = process.env.IRONHIDE_HOSTED === '1' || process.env.IRONHIDE_DELIVERY === 'cdn';
@@ -288,7 +295,7 @@ async function handleApi(req, res, urlPath) {
       if (body.imdbId === 'synctest') {
         await ensureSyncClip();
         const info = await createSession({ url: `http://127.0.0.1:${WEB_PORT}/api/synctest.mp4`, title: 'Sync test clip', meta: { title: 'Sync test clip', imdbId: 'synctest', type: 'movie', year: '' }, subs: [], caps: body.caps || {}, settings, delivery: 'proxy' });
-        return jsonResponse(res, { ...info, start: typeof body.roomStart === 'number' ? body.roomStart : 0, quality: 'Sync test clip', size: '' });
+        return jsonResponse(res, { ...info, start: typeof body.roomStart === 'number' ? body.roomStart : 0, quality: 'Sync test clip', size: '', pin: 'synctest', pinned: true });
       }
       const type = body.type === 'series' || body.type === 'tv' ? 'tv' : 'movie';
       let { season, episode } = body, resumeFrom = body.resumeFrom;
@@ -312,7 +319,9 @@ async function handleApi(req, res, urlPath) {
         beginLaunch({ title: body.title || '', imdbId: body.imdbId });
         await tools.ironhide_streams.handler({ imdbId: body.imdbId, title: body.title || '', type, season, episode });
         const loaded = getLoadedStreams();
-        const best = pickBest(loaded.streams, settings, { browserSafe: CDN_DELIVERY });
+        // In a room everyone plays the exact release the owner's copy chose. Without it, positions would not line up.
+        const pinned = body.pin ? findPinned(loaded.streams, body.pin) : 0;
+        const best = pinned || pickBest(loaded.streams, settings, { browserSafe: CDN_DELIVERY || !!body.room });
         if (!best) { setPlayState({ phase: 'error', detail: 'No streams found for this title' }); return errorResponse(res, 'No streams found for this title', 404); }
         stream = loaded.streams[best - 1];
       }
@@ -350,7 +359,7 @@ async function handleApi(req, res, urlPath) {
         setPlayState({ phase: 'playing', detail: 'Opening the player' });
         if (body.fromStart) resumeFrom = 0;
         if (typeof body.roomStart === 'number' && body.roomStart >= 0) resumeFrom = body.roomStart; // a room that was paused here
-        return jsonResponse(res, { ...info, start: resumeFrom || 0, quality: stream.quality, size: stream.size });
+        return jsonResponse(res, { ...info, start: resumeFrom || 0, pin: streamPin(stream), pinned: !body.pin || streamPin(stream) === body.pin, quality: stream.quality, size: stream.size });
       } catch (err) {
         setPlayState({ phase: 'error', detail: err.message });
         return errorResponse(res, err.message, 502);
@@ -409,14 +418,15 @@ async function handleApi(req, res, urlPath) {
         if (method === 'POST' && sub === '/room/join') { social.joinRoom(body.code); return ok(); }
         if (method === 'POST' && sub === '/room/leave') { social.leaveRoom(); return ok(); }
         if (method === 'POST' && sub === '/visible') { social.tabSeen(body.tab, !!body.visible); return jsonResponse(res, { ok: true }); }
-        if (method === 'POST' && sub === '/room/state') { social.roomState(body.state, body.pos); return jsonResponse(res, { ok: true }); }
+        if (method === 'POST' && sub === '/room/state') { social.roomState(body.state, body.pos, body.buf, body.tc); return jsonResponse(res, { ok: true }); }
         if (method === 'POST' && sub === '/room/forget') { social.forgetRoom(body.code); return ok(); }
         if (method === 'POST' && sub === '/room/transfer') { social.transfer(body.id); return ok(); }
         if (method === 'POST' && sub === '/room/kick') { social.kick(body.id); return ok(); }
         if (method === 'POST' && sub === '/room/invite') { social.invite(body.id); return ok(); }
         if (method === 'POST' && sub === '/room/invite/dismiss') { social.dismissInvite(body.code); return ok(); }
         if (method === 'POST' && sub === '/room/media') { social.roomMedia(body.media); return ok(); }
-        if (method === 'POST' && sub === '/room/ready') { social.roomReady(body.ready); return ok(); }
+        if (method === 'POST' && sub === '/room/ready') { social.roomReady(body.ready, body.token); return ok(); }
+        if (method === 'POST' && sub === '/room/pin') { social.roomPin(body.key, body.label); return ok(); }
         if (method === 'POST' && sub === '/room/control') { social.roomControl(body.action, body.pos, { scheduled: !!body.scheduled, rate: body.rate }); return ok(); }
         if (method === 'POST' && sub === '/room/settings') { social.roomSettings(body); return ok(); }
         if (method === 'POST' && sub === '/chat') { social.chat(body.text); return ok(); }
@@ -570,6 +580,7 @@ export function startWebServer() {
       clients.add(ws);
       ws.send(JSON.stringify({ type: 'queue_state', data: getQueueState() }));
     ws.send(JSON.stringify({ type: 'social', event: 'state', data: social.snapshot() }));
+      ws.on('message', (raw) => { try { const m = JSON.parse(raw); if (m.type === 'cursor') social.cursor(m.x, m.y, m.off); } catch {} });
       ws.on('close', () => clients.delete(ws));
       ws.on('error', () => clients.delete(ws));
     });

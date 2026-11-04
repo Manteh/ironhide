@@ -111,13 +111,14 @@ async function handle(m) {
     case 'friend.sent': emit('toast', { kind: 'ok', text: `Request sent to ${m.name}` }); break;
     case 'friend.unknown': S.outgoing = S.outgoing.filter((o) => o.id !== m.to); emit('toast', { kind: 'err', text: `No one with that code is online on ${relayHost()}. They need to be connected to the same relay.` }); push(); break;
     case 'room': if (!m.room && S.room) { saveRoom(true); S.prevRoom = S.room; } S.room = m.room; if (!m.room) { S.chat = []; } push(); break;
-    case 'room.pb': if (S.room) S.room.pb = m.pb; emit('pb', m); break;
+    case 'room.pb': if (S.room) S.room.pb = m.pb; emit('pb', m); push(); break;
     case 'chat.history': S.chat = m.msgs; push(); break;
     case 'chat': S.chat.push(m.msg); if (S.chat.length > 80) S.chat.shift(); emit('chat', m.msg); break;
     case 'react': emit('react', m); break;
     case 'room.invite': S.invites = [m, ...S.invites.filter((i) => i.code !== m.code)].slice(0, 5); emit('toast', { kind: 'info', text: `${m.from.name} invited you to ${m.name}` }); push(); break;
     case 'room.ms': { const mem = S.room?.members.find((x) => x.id === m.id); if (mem) { mem.st = m.st; push(); } break; }
     case 'friend.removed': { const f = data.friends.find((x) => x.id === m.id); dropFriend(m.id); if (f) emit('toast', { kind: 'info', text: `${f.name} removed you from their friends` }); break; }
+    case 'cursor': emit('cursor', m); break;
     case 'room.kicked': emit('kicked', { by: m.by, room: m.room }); if (S.prevRoom) { delete data.rooms?.[S.prevRoom.code]; save(); } emit('toast', { kind: 'err', text: `${m.by} removed you from ${m.room}` }); break;
     case 'room.error': emit('toast', { kind: 'err', text: m.msg }); break;
     case 'replaced': stopped = true; link = 'replaced'; push(); break;
@@ -156,8 +157,10 @@ export const invite = (id) => tx({ t: 'room.invite', to: id });
 export const kick = (id) => tx({ t: 'room.kick', to: id });
 export const transfer = (id) => tx({ t: 'room.transfer', to: id });
 export const roomMedia = (media) => tx({ t: 'room.media', media });
-export const roomState = (state, pos) => tx({ t: 'room.state', state, pos });
-export const roomReady = (ready) => tx({ t: 'room.ready', ready: !!ready });
+export const roomState = (state, pos, buf, tc) => tx({ t: 'room.state', state, pos, buf, tc });
+export const roomPin = (key, label) => tx({ t: 'room.pin', key, label });
+export const cursor = (x, y, off) => tx({ t: 'cursor', x, y, off: !!off });
+export const roomReady = (ready, token) => tx({ t: 'room.ready', ready: !!ready, token });
 export const roomControl = (action, pos, extra = {}) => tx({ t: 'room.control', action, pos, ...extra });
 export const roomSettings = (s) => tx({ t: 'room.settings', ...s });
 export const chat = (text) => tx({ t: 'chat', text });

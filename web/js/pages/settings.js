@@ -4,7 +4,7 @@ import { $, $$, esc, icon, avatar, toast, AVATAR_ICONS, AVATAR_COLORS } from '..
 
 const SECTIONS = [
   ['profile', 'Profile', 'user'], ['appearance', 'Appearance', 'palette'], ['playback', 'Playback', 'sliders'],
-  ['connectors', 'Connectors', 'plug'], ['together', 'Together', 'users'], ['nodes', 'Nodes', 'nodes'], ['about', 'About', 'info'],
+  ['connectors', 'Connectors', 'plug'], ['together', 'Together', 'users'], ['nodes', 'Nodes', 'nodes'], ['updates', 'Updates', 'bolt'], ['about', 'About', 'info'],
 ];
 const seg = (name, opts, cur) => `<div class="seg" data-seg="${name}">${opts.map(([v, l, ic]) => `<button data-v="${v}" class="${String(cur) === String(v) ? 'on' : ''}">${ic ? icon(ic) : ''}${l}</button>`).join('')}</div>`;
 const card = ({ title, desc, body, foot, danger }) => `<section class="scard ${danger ? 'danger' : ''}"><div class="body"><h3>${title}</h3>${desc ? `<p class="desc">${desc}</p>` : ''}${body}</div>${foot ? `<div class="foot">${foot}</div>` : ''}</section>`;
@@ -24,7 +24,7 @@ export default async function settings(el, { section = 'profile' }) {
     <div class="settings"><nav class="snav" aria-label="Settings">${SECTIONS.map(([k, l, ic]) => `<a href="#/settings/${k}" class="${k === section ? 'on' : ''}">${icon(ic)} ${l}</a>`).join('')}</nav>
     <div class="scol" id="sbody"></div></div></div>`;
   const body = $('#sbody');
-  await ({ profile, appearance, playback, connectors, together: togetherSettings, nodes, about }[section])(body);
+  await ({ profile, appearance, playback, connectors, together: togetherSettings, nodes, updates, about }[section])(body);
 }
 
 // ---------- Profile ----------
@@ -240,6 +240,19 @@ async function togetherSettings(body) {
   let sig = '';
   const off = onState((s) => { const k = JSON.stringify([s.relay, s.you?.id, s.shareStatus, s.appearOffline]); if (k === sig) return; sig = k; draw(s); });
   onLeave(off);
+}
+
+// ---------- Updates ----------
+async function updates(body) {
+  const { CHANGELOG } = await import('../changelog.js');
+  const when = (d) => new Date(d + 'T12:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  const KIND = { New: 'new', Improved: 'imp', Fixed: 'fix', 'Known limits': 'lim' };
+  body.innerHTML = `<div class="upd"><header class="upd-top"><h2>What's new</h2><p>Every update to IronHide, newest first.</p></header>
+    <ol class="upd-list">${CHANGELOG.map((u, i) => `<li class="upd-i">
+      <details ${i < 2 ? 'open' : ''}><summary><span class="upd-v">v${esc(u.version)}</span><span class="upd-h"><b>${esc(u.title)}</b>${u.status === 'dev' ? '<em>In testing</em>' : i === 0 ? '<em class="latest">Latest</em>' : ''}<small>${esc(when(u.date))}</small></span><span class="upd-c">${icon('chev')}</span></summary>
+        <p class="upd-s">${esc(u.summary)}</p>
+        <div class="upd-g">${Object.entries(u.groups).map(([k, items]) => `<section class="${KIND[k] || ''}"><h4>${esc(k)}</h4><ul>${items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></section>`).join('')}</div>
+      </details></li>`).join('')}</ol></div>`;
 }
 
 // ---------- About ----------

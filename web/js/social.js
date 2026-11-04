@@ -24,6 +24,8 @@ function setState(s) { social.state = s; social.states.forEach((f) => f(s)); }
 // subscribe to state; calls immediately with the current one
 export function onState(fn) { social.states.add(fn); if (social.state) fn(social.state); return () => social.states.delete(fn); }
 export function onEvent(fn) { social.events.add(fn); return () => social.events.delete(fn); }
+// live pointer: goes over the local socket because it is too frequent for HTTP
+export const sendCursor = (x, y, off) => { if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'cursor', x, y, off: !!off })); };
 export const sapi = (path, body = {}) => post('/api/social' + path, body);
 export const serverNow = () => Date.now() + (social.state?.offset || 0);
 export const inRoom = () => !!social.state?.room;

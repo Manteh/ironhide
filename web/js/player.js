@@ -28,6 +28,7 @@ export function openPlayer(info, opts = {}) {
   wp = document.createElement('div');
   wp.className = 'wp';
   wp.innerHTML = `
+    <div class="wp-mini"><span class="wp-mini-t">${esc(info.title)}</span><button class="wp-btn ic" id="wpMiniX" aria-label="Stop watching">${icon('x')}</button></div>
     <div class="wp-poster" style="background-image:url('${info.meta?.imdbId ? posterOf(info.meta.imdbId) : ''}')"></div>
     <video class="wp-video" playsinline preload="auto"></video>
     <div class="wp-cues" id="wpCues"></div>
@@ -67,15 +68,97 @@ export function openPlayer(info, opts = {}) {
 
   badges();
   bind();
-  // rooms start paused at the beginning; the room decides when everyone presses play
-  load(S.room ? (info.start > 1 ? info.start : 0) : (info.start > 20 ? info.start : 0), !S.room);
+  // in a room, the room decides where the stream starts (see roomplay.js)
+  if (!S.room) load(info.start > 20 ? info.start : 0, true);
   S.saver = setInterval(save, 10000);
   S.beat = setInterval(() => post('/api/social/watching', { watching: watchingNow(info) }).catch(() => {}), 45000); // keep the 'watching' status fresh while the player is open
   post('/api/social/watching', { watching: watchingNow(info) }).catch(() => {});
-  if (S.room) import('./roomplay.js').then((m) => { if (S && wp) roomOff = m.attachRoom({ root: () => wp, video: () => S?.video, cur: () => (S ? cur() : 0), seek: (t) => S && seekTo(t), close: () => closePlayer(), hooks }); });
+  if (S.room) attachToRoom();
   document.addEventListener('keydown', onKey, true);
   wake();
 }
+
+// ---------- rooms ----------
+const roomApi = () => ({ root: () => wp, video: () => S?.video, info: () => S?.info, cur: () => (S ? cur() : 0), dur: () => (S ? dur() : 0), hasStream: () => !!S?.video.getAttribute('src'),
+  load: (t, autoplay = false) => { if (S) load(t, autoplay); }, jump: (t) => jumpTo(t), keyframes: (t) => api(`/api/wp/${S.info.id}/keyframes?t=${Number(t).toFixed(3)}`), close: () => closePlayer(), hooks, park: () => parkPlayer(), unpark: () => unparkPlayer(), parked: () => !!wp?.classList.contains('parked'), wake: () => wake() });
+function attachToRoom() { return import('./roomplay.js').then((m) => { if (S && wp && !roomOff) roomOff = m.attachRoom(roomApi()); }); }
+export const isRoomAttached = () => !!roomOff;
+export const detachRoom = () => { roomOff?.(); roomOff = null; };
+export const reattachRoom = () => attachToRoom();
+export const playerKey = () => { const m = S?.info?.meta; return m ? `${m.imdbId}:${m.season || 0}:${m.episode || 0}` : ''; };
+export const isParked = () => !!wp?.classList.contains('parked');
+// Back in a room shrinks the player to a corner and keeps it running, so coming back is instant and still in sync.
+export function parkPlayer() { if (!wp) return; if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); wp.classList.add('parked'); }
+export function unparkPlayer() { if (!wp) return; wp.classList.remove('parked'); wake(); }
+
+// ---------- Media Source feed ----------
+// With a plain <video src>, browsers read only ~2.5 s ahead on a piped stream and cannot seek in it. Fetching it ourselves and appending to a
+// MediaSource buffers minutes ahead (also while paused), survives debrid hiccups, and makes jumps inside the buffer instant.
+const MAX_AHEAD = 300; // seconds to hold ahead before pausing the download
+let mse = null;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function findBox(u8, name) { const a = name.charCodeAt(0), b = name.charCodeAt(1), c = name.charCodeAt(2), d = name.charCodeAt(3); for (let i = 0; i + 3 < u8.length; i++) if (u8[i] === a && u8[i + 1] === b && u8[i + 2] === c && u8[i + 3] === d) return i; return -1; }
+const hex2 = (n) => n.toString(16).padStart(2, '0');
+function codecsOf(u8) {
+  let video = null, i;
+  if ((i = findBox(u8, 'avcC')) >= 0) video = `avc1.${hex2(u8[i + 5])}${hex2(u8[i + 6])}${hex2(u8[i + 7])}`;
+  else if ((i = findBox(u8, 'hvcC')) >= 0) {
+    const b = i + 4, pb = u8[b + 1], space = ['', 'A', 'B', 'C'][pb >> 6], tier = pb & 0x20 ? 'H' : 'L', prof = pb & 0x1f;
+    let compat = (u8[b + 2] << 24 | u8[b + 3] << 16 | u8[b + 4] << 8 | u8[b + 5]) >>> 0, rev = 0; for (let k = 0; k < 32; k++) { rev = (rev << 1 | compat & 1) >>> 0; compat >>>= 1; }
+    const cons = Array.from(u8.slice(b + 6, b + 12)); while (cons.length && cons[cons.length - 1] === 0) cons.pop();
+    video = `hvc1.${space}${prof}.${rev.toString(16)}.${tier}${u8[b + 12]}${cons.length ? '.' + cons.map((x) => x.toString(16).toUpperCase()).join('.') : ''}`;
+  }
+  return video ? `video/mp4; codecs="${video}, mp4a.40.2"` : null;
+}
+function mseStop() { if (!mse) return; mse.dead = true; try { mse.ctl.abort(); } catch {} mse = null; }
+const bufferedRange = (video, rel) => { for (let i = 0; i < video.buffered.length; i++) if (rel >= video.buffered.start(i) - 0.05 && rel <= video.buffered.end(i) - 0.5) return true; return false; };
+function mseStart(url, video) {
+  mseStop();
+  if (!window.MediaSource || S.noMse) return false;
+  const m = { dead: false, ctl: new AbortController() }, ms = new MediaSource(); mse = m;
+  video.src = URL.createObjectURL(ms);
+  const fallback = () => { if (m.dead) return; m.dead = true; if (S) { S.noMse = true; video.src = url; video.playbackRate = S.rate; if (S.wasPlaying) video.play().catch(() => {}); } };
+  ms.addEventListener('sourceopen', async () => {
+    let sb = null, head = new Uint8Array(0);
+    const idle = () => new Promise((r) => { if (!sb.updating) return r(); sb.addEventListener('updateend', r, { once: true }); });
+    const append = async (chunk) => {
+      for (;;) {
+        if (m.dead) return; await idle(); if (m.dead) return;
+        try { sb.appendBuffer(chunk); await idle(); return; }
+        catch (e) {
+          if (e.name !== 'QuotaExceededError') throw e;
+          const t = video.currentTime; // full: drop what is well behind us, or wait for playback to make room
+          if (video.buffered.length && t - video.buffered.start(0) > 20) { sb.remove(0, t - 15); await idle(); } else await sleep(1000);
+        }
+      }
+    };
+    try {
+      const res = await fetch(url, { signal: m.ctl.signal }); if (!res.ok || !res.body) return fallback();
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read(); if (m.dead) return;
+        if (done) break;
+        if (!sb) {
+          const joined = new Uint8Array(head.length + value.length); joined.set(head); joined.set(value, head.length); head = joined;
+          if (findBox(head, 'moof') < 0) continue;
+          const type = codecsOf(head); if (!type || !MediaSource.isTypeSupported(type)) { reader.cancel().catch(() => {}); return fallback(); }
+          sb = ms.addSourceBuffer(type); sb.mode = 'segments';
+          try { ms.duration = Math.max(1, (S?.info.duration || 0) - (S?.offset || 0)) || Infinity; } catch {}
+          await append(head);
+        } else await append(value);
+        if (m.dead) return;
+        // the very first frame can sit a hair after 0: start on it rather than waiting at a gap
+        if (video.buffered.length && video.currentTime < video.buffered.start(0)) video.currentTime = video.buffered.start(0);
+        while (!m.dead && video.buffered.length && video.buffered.end(video.buffered.length - 1) - video.currentTime > MAX_AHEAD) await sleep(1000);
+      }
+      if (sb) await idle();
+      if (!m.dead && ms.readyState === 'open') ms.endOfStream();
+    } catch (e) { if (m.dead || e.name === 'AbortError') return; if (!sb) fallback(); else toast('The stream stopped. Try again.', 'err'); }
+  }, { once: true });
+  return true;
+}
+// Jump to t without restarting the stream, if we already hold it. Instant.
+function jumpTo(t) { if (!S || !mse) return false; const rel = t - S.offset; if (rel < 0 || !bufferedRange(S.video, rel)) return false; S.video.currentTime = rel; return true; }
 
 // ---------- loading / seeking ----------
 function load(start, autoplay) {
@@ -88,7 +171,8 @@ function load(start, autoplay) {
   }
   S.offset = Math.max(0, start); S.wasPlaying = autoplay; spin(true);
   const url = `/api/wp/${info.id}/stream?start=${S.offset.toFixed(2)}&audio=${S.audio}${S.transcode ? '&transcode=1' : ''}${S.sync ? `&sync=${S.sync}` : ''}&t=${Date.now()}`;
-  video.src = url; video.playbackRate = S.rate;
+  if (!mseStart(url, video)) { mseStop(); video.src = url; }
+  video.playbackRate = S.rate;
   if (autoplay) video.play().catch(() => {});
 }
 const cur = () => S.offset + (S.video.currentTime || 0);
@@ -97,11 +181,9 @@ const dur = () => S.info.duration || (S.offset + (S.video.duration || 0));
 function seekTo(t) {
   const { video } = S; t = Math.min(Math.max(0, t), Math.max(0, dur() - 1)); const rel = t - S.offset;
   if (S.info.mode === 'cdn') { paintTime(t); video.currentTime = t; return; }
-  // Only jump inside video the browser says is SEEKABLE. These streams are piped, so 'buffered' can be large while 'seekable' is empty;
-  // setting currentTime there sends the video to 0:00. Anything else restarts the stream at the new spot.
-  let inBuf = false; for (let i = 0; i < video.seekable.length; i++) if (rel >= video.seekable.start(i) - 0.1 && rel <= video.seekable.end(i) - 0.8) inBuf = true;
+  // Inside what we hold: instant. Otherwise restart the stream at the new spot. (A plain piped <video src> cannot seek at all: setting currentTime sends it to 0:00.)
   paintTime(t);
-  if (inBuf) video.currentTime = rel; else load(t, !video.paused || S.wasPlaying);
+  if (mse && bufferedRange(video, rel)) video.currentTime = rel; else load(t, !video.paused || S.wasPlaying);
 }
 
 function userSeek(t) { if (S.room && hooks.onSeek) return hooks.onSeek(t); seekTo(t); }
@@ -155,7 +237,9 @@ function bind() {
   });
   video.addEventListener('click', toggle); video.addEventListener('dblclick', fs);
 
-  $('#wpBack', wp).onclick = closePlayer;
+  $('#wpBack', wp).onclick = () => { if (S.room) { parkPlayer(); if (!location.hash.startsWith('#/together')) location.hash = '#/together'; } else closePlayer(); };
+  wp.addEventListener('click', (e) => { if (wp.classList.contains('parked') && !e.target.closest('#wpMiniX')) { e.stopPropagation(); unparkPlayer(); } }, true);
+  $('#wpMiniX', wp).onclick = (e) => { e.stopPropagation(); hooks.onDismiss?.(); closePlayer(); };
   $('#wpPlay', wp).onclick = toggle;
   $('#wpBk', wp).onclick = () => { userSeek(cur() - 10); pulse('back'); }; $('#wpFw', wp).onclick = () => { userSeek(cur() + 10); pulse('fwd'); };
   $('#wpMute', wp).onclick = () => { video.muted = !video.muted; };
@@ -258,7 +342,7 @@ export const debugState = () => (S ? { pos: cur(), paused: S.video.paused, offse
 
 export function closePlayer() {
   if (!wp) return;
-  save(); clearInterval(S.saver); clearInterval(S.beat); clearTimeout(S.idle);
+  save(); clearInterval(S.saver); clearInterval(S.beat); clearTimeout(S.idle); mseStop();
   roomOff?.(); roomOff = null;
   post('/api/social/watching', { watching: null }).catch(() => {});
   document.removeEventListener('keydown', onKey, true);

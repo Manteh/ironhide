@@ -328,7 +328,7 @@ body.is-browse { background: var(--bg); }
 
 /* lock the page behind any open overlay; keep inner scrolling inside the overlay */
 html { scrollbar-gutter: stable; }
-html:has(.dossier.open, .wp, .pal, .nowv, .launch), html:has(.dossier.open, .wp, .pal, .nowv, .launch) body { overflow: hidden; }
+html:has(.dossier.open, .wp:not(.parked), .pal, .nowv, .launch), html:has(.dossier.open, .wp:not(.parked), .pal, .nowv, .launch) body { overflow: hidden; }
 .dleft, .dright, .dgrid, .pal-r, .wp-menu { overscroll-behavior: contain; }
 
 /* phones: the bottom bar must fit the screen (it used to run past the right edge) */

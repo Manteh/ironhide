@@ -244,6 +244,7 @@ document.addEventListener('keydown', (e) => {
   splash(); renderNav(); setupNowPlaying();
   window.pollRemote = pollRemote; setInterval(pollRemote, 2000); pollRemote();
   connectSocial();
+  import('./roomplay.js').then((m) => m.watchRoom());
   // Tell the daemon whether anyone is looking, so friends see "tabbed out" instead of a stale "active".
   const tab = crypto.randomUUID?.() || String(Math.random());
   const seen = () => post('/api/social/visible', { tab, visible: document.visibilityState === 'visible' }).catch(() => {});
