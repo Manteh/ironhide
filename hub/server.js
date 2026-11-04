@@ -6,7 +6,7 @@ import http from 'http';
 import net from 'net';
 import { spawn } from 'child_process';
 import { randomBytes } from 'crypto';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -110,7 +110,11 @@ const server = http.createServer(async (req, res) => {
   const path = req.url.split('?')[0];
   if (path === '/hub/health') return res.end(JSON.stringify({ ok: true, active: procs.size }));
   if (path === '/hub/enter' && req.method === 'POST') return enter(req, res);
-  if (path === '/hub/leave') { res.writeHead(303, { location: '/', 'set-cookie': 'ih_hub=; Path=/; Max-Age=0' }); return res.end(); }
+  if (path === '/hub/leave' && req.method === 'POST') { // sign out: erase this user (settings, keys, history) and free the name
+    const u = byToken(cookieOf(req));
+    if (u) { stop(u.id); delete users[u.name.toLowerCase()]; save(); try { rmSync(join(DATA, 'users', u.id), { recursive: true, force: true }); } catch {} }
+    res.writeHead(200, { 'set-cookie': 'ih_hub=; Path=/; Max-Age=0', 'content-type': 'application/json' }); return res.end('{"ok":true}');
+  }
   const u = byToken(cookieOf(req));
   if (!u) return /^\/(api|js|css)\//.test(path) ? (res.writeHead(401), res.end()) : html(res, 200, page());
   proxy(req, res, u);

@@ -46,6 +46,16 @@ function profile(body) {
     const saveAv = () => saveSettings({ profile: { avatar: p.avatar } }).then(() => flash(body, 's2')).catch((e) => toast(e.message, 'err'));
     $$('[data-i]', body).forEach((b) => (b.onclick = () => { p.avatar.icon = b.dataset.i; const n = $('#pname', body).value; draw(); $('#pname', body).value = n; saveAv(); }));
     $$('[data-c]', body).forEach((b) => (b.onclick = () => { p.avatar.color = b.dataset.c; const n = $('#pname', body).value; draw(); $('#pname', body).value = n; saveAv(); }));
+    // hosted mode only: sign out
+    fetch('/hub/health').then((r) => r.ok && r.json()).then((h) => {
+      if (!h?.ok || !body.isConnected) return;
+      body.insertAdjacentHTML('beforeend', card({ title: 'Sign out', desc: 'Leave this session. Your name is freed, and your settings, TorBox key and history on this server are erased. Anyone can then take the name.',
+        body: '', foot: `<span></span><button class="btn danger" id="signout">Sign out</button>` }));
+      $('#signout', body).onclick = async () => {
+        if (!confirm('Sign out and erase your data on this server? This cannot be undone.')) return;
+        await fetch('/hub/leave', { method: 'POST' }); location.href = '/';
+      };
+    }).catch(() => {});
   };
   draw();
 }
