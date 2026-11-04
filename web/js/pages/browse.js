@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { store, quickPlay, toggleSave } from '../main.js';
 import { esc, pad, posterOf, wl, icon, $, $$ } from '../ui.js';
 import { openDossier, closeDossier } from '../dossier.js';
+import { paletteOf, prefetch } from '../tint.js';
 
 const TABS = [
   ['home', 'For You', '#/'], ['trending_movies', 'Movies'], ['trending_shows', 'Series'], ['popular_movies', 'Popular'], ['popular_shows', 'TV Hits'],
@@ -45,12 +46,21 @@ function card(it, i = 0) {
 const skeleton = (n = 8) => Array.from({ length: n }, () => '<div class="bc sk"></div>').join('');
 
 // ---------- Ambient backdrop follows what you point at ----------
-let ambA, ambB, ambFront = 0;
-function ambient(url) {
-  const [show, hide] = ambFront ? [ambA, ambB] : [ambB, ambA]; ambFront ^= 1;
-  if (!url) { ambA.style.opacity = ambB.style.opacity = 0; return; }
-  show.style.backgroundImage = `url('${url}')`; show.style.opacity = 1; hide.style.opacity = 0;
+let tintLock = false, hoverToken = 0, baseTint = null, leaveTimer = 0;
+const DEFAULT_TINT = ['hsl(228 38% 36%)', 'hsl(262 34% 32%)', 'hsl(200 30% 30%)'];
+
+// Drive the ambient light: three colours plus where the glow sits (toward the card you point at).
+function applyTint(pal, at) {
+  const p = pal || DEFAULT_TINT, x = at ? at.x : 30, y = at ? at.y : 32, st = document.documentElement.style;
+  st.setProperty('--c1', p[0]); st.setProperty('--c2', p[1]); st.setProperty('--c3', p[2]);
+  st.setProperty('--x1', x + '%'); st.setProperty('--y1', y + '%');
+  st.setProperty('--x2', Math.round(100 - x * 0.7) + '%'); st.setProperty('--y2', Math.round(100 - y * 0.6) + '%');
+  st.setProperty('--x3', (x > 50 ? x - 40 : x + 40) + '%'); st.setProperty('--y3', (y > 50 ? y - 42 : y + 42) + '%');
 }
+async function tintFor(url, at) { const my = ++hoverToken; const pal = await paletteOf(url); if (my === hoverToken && !tintLock) applyTint(pal, at); }
+function resetTint() { if (tintLock) return; hoverToken++; applyTint(baseTint, { x: 32, y: 30 }); }
+function heroTint() { const h = $('.hero2', root); if (!h) { baseTint = null; return resetTint(); } paletteOf(h.dataset.poster || h.dataset.bg).then((p) => { baseTint = p; resetTint(); }); }
+window.setTitleTint = (url, lock) => { tintLock = false; if (lock) { hoverToken++; paletteOf(url).then((p) => { applyTint(p, { x: 22, y: 46 }); tintLock = true; }); } else resetTint(); };
 
 // ---------- Views ----------
 async function renderHero(items) {
@@ -113,6 +123,7 @@ async function loadTab(reset = true) {
   if (my !== st.token) return;
   st.items = items; st.busy = false;
   grid.innerHTML = items.length ? items.map(card).join('') : `<div class="empty">${st.tab === 'shelf' ? 'Your shelf is empty. Open a title and tap Save.' : st.tab === 'continue' ? 'Nothing in progress yet.' : 'Nothing here right now.'}</div>`;
+  prefetch(items.map((i) => i.poster || posterOf(i.imdbId)));
   more.innerHTML = st.more ? '<button class="btn" id="loadMore">Load more</button>' : '';
   $('#loadMore', root)?.addEventListener('click', () => loadTab(false));
 }
@@ -140,12 +151,12 @@ function paintChrome() {
 // ---------- Public API ----------
 export async function mount(el) {
   root = el;
-  el.innerHTML = `<div class="amb"><i id="ambA"></i><i id="ambB"></i></div>
+  el.innerHTML = `<div class="amb"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="spot"></i></div>
     <div class="bwrap"><div id="hero"></div>
       <div class="tabrow"><nav id="tabs" class="tabs2" aria-label="Categories"></nav><div id="tools" class="tools"></div></div>
       <div id="grid" class="bgrid"></div><div id="more" class="more"></div></div>
     <aside id="rail" class="rail2" aria-label="Recently watched"></aside>`;
-  ambA = $('#ambA'); ambB = $('#ambB');
+  applyTint(null);
   const meta = await api('/api/catalog/feeds').catch(() => ({ feeds: [], genres: [] }));
   feeds = meta.feeds; genres = meta.genres;
 
@@ -161,18 +172,43 @@ export async function mount(el) {
     location.hash = `#/title/${c.dataset.type}/${c.dataset.id}`;
   });
   el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const c = e.target.closest?.('.bc[data-id]'); if (c) location.hash = `#/title/${c.dataset.type}/${c.dataset.id}`; } });
-  el.addEventListener('pointerover', (e) => { const c = e.target.closest('.bc[data-poster]'); if (c) ambient(c.dataset.poster); else if (e.target.closest('.hero2')) ambient($('.hero2', el)?.dataset.bg); });
-  el.addEventListener('pointerleave', () => ambient($('.hero2', el)?.dataset.bg || ''));
+  // hover a card: the light glides toward it and takes on its colours
+  el.addEventListener('pointerover', (e) => {
+    if (e.pointerType === 'touch') return;
+    const c = e.target.closest('.bc[data-poster]');
+    clearTimeout(leaveTimer);
+    if (c) { const r = c.getBoundingClientRect(); tintFor(c.dataset.poster, { x: Math.round(((r.left + r.width / 2) / innerWidth) * 100), y: Math.round(((r.top + r.height / 2) / innerHeight) * 100) }); }
+    else if (e.target.closest('.hero2')) { const h = $('.hero2', el); tintFor(h.dataset.poster || h.dataset.bg, { x: 62, y: 30 }); }
+    else leaveTimer = setTimeout(resetTint, 140);
+  });
+  el.addEventListener('pointerleave', () => { leaveTimer = setTimeout(resetTint, 140); });
+
+  // cursor spotlight (smoothed) + card tilt + hero parallax
+  let tx = innerWidth * 0.5, ty = innerHeight * 0.4, cx = tx, cy = ty, raf = 0;
+  const loop = () => { cx += (tx - cx) * 0.12; cy += (ty - cy) * 0.12; document.documentElement.style.setProperty('--mx', cx.toFixed(1) + 'px'); document.documentElement.style.setProperty('--my', cy.toFixed(1) + 'px'); raf = Math.abs(tx - cx) + Math.abs(ty - cy) > 0.5 ? requestAnimationFrame(loop) : 0; };
+  let tiltCard = null;
+  document.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'touch' || el.classList.contains('hidden')) return;
+    tx = e.clientX; ty = e.clientY; if (!raf) raf = requestAnimationFrame(loop);
+    const c = e.target.closest?.('.bc[data-id]');
+    if (tiltCard && tiltCard !== c) { const p = tiltCard.querySelector('.bposter'); p?.style.setProperty('--rx', '0deg'); p?.style.setProperty('--ry', '0deg'); p?.style.setProperty('--ty', '0px'); tiltCard = null; }
+    if (c && !c.classList.contains('sk')) {
+      const r = c.getBoundingClientRect(), px = (e.clientX - r.left) / r.width - 0.5, py = (e.clientY - r.top) / r.height - 0.5, p = c.querySelector('.bposter');
+      p.style.setProperty('--rx', (-py * 7).toFixed(2) + 'deg'); p.style.setProperty('--ry', (px * 9).toFixed(2) + 'deg'); p.style.setProperty('--ty', '-5px'); tiltCard = c;
+    }
+    const h = e.target.closest?.('.hero2');
+    if (h) { const r = h.getBoundingClientRect(); h.style.setProperty('--px', (((e.clientX - r.left) / r.width) - 0.5).toFixed(3)); h.style.setProperty('--py', (((e.clientY - r.top) / r.height) - 0.5).toFixed(3)); }
+  }, { passive: true });
   window.addEventListener('resize', moveInd);
   window.browseRefresh = () => { paintChrome(); if (['continue', 'shelf'].includes(st.tab)) loadTab(true); };
 }
 
 export function handle(kind, params = {}) {
   if (kind === 'away') return;
-  if (kind === 'title') { if (!st.items.length && !st.busy) { st.tab = 'home'; paintChrome(); loadTab(true).then(() => ambient($('.hero2', root)?.dataset.bg || '')); } openDossier({ type: params.type, id: params.id }); return; }
+  if (kind === 'title') { if (!st.items.length && !st.busy) { st.tab = 'home'; paintChrome(); loadTab(true).then(() => heroTint()); } openDossier({ type: params.type, id: params.id }); return; }
   closeDossier();
   const tab = kind === 'feed' ? params.feed : kind === 'continue' ? 'continue' : kind === 'shelf' ? 'shelf' : 'home';
   if (kind === 'search') { import('../palette.js').then((m) => m.openPalette(params.q || '')); }
-  if (tab !== st.tab || !st.items.length || kind === 'home' && !$('.hero2', root)) { st.tab = tab; st.genre = ''; window.scrollTo({ top: 0, behavior: 'instant' }); paintChrome(); loadTab(true).then(() => ambient($('.hero2', root)?.dataset.bg || '')); }
+  if (tab !== st.tab || !st.items.length || kind === 'home' && !$('.hero2', root)) { st.tab = tab; st.genre = ''; window.scrollTo({ top: 0, behavior: 'instant' }); paintChrome(); loadTab(true).then(() => heroTint()); }
   else paintChrome();
 }

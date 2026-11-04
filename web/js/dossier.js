@@ -17,7 +17,7 @@ function root() {
   return el;
 }
 
-export function closeDossier() { token++; el?.classList.remove('open'); }
+export function closeDossier() { token++; if (el?.classList.contains('open')) window.setTitleTint?.(null, false); el?.classList.remove('open'); }
 
 export async function openDossier({ type, id }) {
   const my = ++token, box = root();
@@ -41,6 +41,7 @@ export async function openDossier({ type, id }) {
     if (!st.episode) st.episode = (meta.seasons[st.season] || [])[0]?.episode || 1;
   }
   const item = { imdbId: id, type, title: meta.title, year: meta.year, poster: meta.poster, rating: meta.rating };
+  window.setTitleTint?.(meta.poster || posterOf(id), true);
 
   // ----- episodes -----
   const epsHTML = () => (meta.seasons?.[st.season] || []).map((e) => {

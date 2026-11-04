@@ -99,15 +99,25 @@ export function renderNav() {
   const online = store.nodes.filter((n) => n.status === 'online').length;
   const on = (re) => (re.test(hash) ? 'on' : '');
   $('#nav').innerHTML = `
-    <a class="rlogo" href="#/" aria-label="IronHide home" data-tip="IronHide">${LOGO}</a>
+    <a class="rlogo" href="#/" aria-label="IronHide home" data-tip="IronHide"><span class="tile">${LOGO}</span></a>
     <i class="rsep"></i>
-    <a href="#/" class="ri ${on(/^#\/?$|^#\/feed|^#\/title/)}" aria-label="Home" data-tip="Home">${icon('home')}</a>
-    <button id="nSearch" class="ri" aria-label="Search" data-tip="Search  /">${icon('search')}</button>
-    <a href="#/continue" class="ri ${on(/^#\/continue/)}" aria-label="Continue watching" data-tip="Continue watching">${icon('play')}</a>
-    <a href="#/shelf" class="ri ${on(/^#\/shelf/)}" aria-label="Shelf" data-tip="Shelf">${icon('bookmark')}</a>
+    <a href="#/" class="ri ${on(/^#\/?$|^#\/feed|^#\/title/)}" aria-label="Home" data-tip="Home">${icon('home')}<span>Home</span></a>
+    <button id="nSearch" class="ri" aria-label="Search" data-tip="Search  /">${icon('search')}<span>Search</span></button>
+    <a href="#/continue" class="ri ${on(/^#\/continue/)}" aria-label="Continue watching" data-tip="Continue watching">${icon('play')}<span>Resume</span></a>
+    <a href="#/shelf" class="ri ${on(/^#\/shelf/)}" aria-label="Shelf" data-tip="Shelf">${icon('bookmark')}<span>Shelf</span></a>
     <i class="rsep"></i>
     <a class="rnode" href="#/settings/nodes" data-tip="${online} node${online === 1 ? '' : 's'} online"><span class="dot ${online ? 'online' : 'offline'}"></span><b>${online}</b></a>
-    <a class="rme" href="#/settings/profile" aria-label="Settings" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 38)}</a>`;
+    <a class="rme" href="#/settings/profile" aria-label="Settings" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 40)}</a>`;
+  const railEl = $('#nav');
+  if (!railEl.dataset.mag) {
+    railEl.dataset.mag = '1';
+    // dock-style magnify: items swell toward the cursor
+    railEl.addEventListener('pointermove', (e) => {
+      if (innerWidth <= 720 || e.pointerType === 'touch') return;
+      railEl.querySelectorAll('.ri, .rnode, .rme, .rlogo').forEach((it) => { const r = it.getBoundingClientRect(), d = e.clientY - (r.top + r.height / 2); it.style.setProperty('--mag', (1 + 0.2 * Math.exp(-(d * d) / (2 * 52 * 52))).toFixed(3)); });
+    });
+    railEl.addEventListener('pointerleave', () => railEl.querySelectorAll('.ri, .rnode, .rme, .rlogo').forEach((it) => it.style.removeProperty('--mag')));
+  }
   $('#nSearch').onclick = () => import('./palette.js').then((m) => m.openPalette());
 }
 

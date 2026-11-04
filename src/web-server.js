@@ -52,6 +52,7 @@ function describeStream(q) {
 }
 const streamTags = (q) => TAG_PATTERNS.filter(([, re]) => re.test(q)).map(([t]) => t);
 
+const IMG_HOSTS = /(^|\.)(metahub\.space|trakt\.tv|media-amazon\.com|tmdb\.org|fanart\.tv|strem\.io|stremio\.com|imdb\.com)$/;
 const clients = new Set();
 
 function broadcastToAll(msg) {
@@ -236,6 +237,18 @@ async function handleApi(req, res, urlPath) {
 
     if (method === 'GET' && urlPath === '/api/watchlist') return jsonResponse(res, await getWatchlist());
     if (method === 'POST' && urlPath === '/api/watchlist/toggle') return jsonResponse(res, await toggleWatchlist(await parseBody(req)));
+
+    if (method === 'GET' && urlPath === '/api/img') {
+      const u = new URL(req.url, 'http://localhost').searchParams.get('u') || '';
+      let t; try { t = new URL(u); } catch { return errorResponse(res, 'Bad url', 400); }
+      if (t.protocol !== 'https:' || !IMG_HOSTS.test(t.hostname)) return errorResponse(res, 'Host not allowed', 403);
+      const r = await fetch(t, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) return errorResponse(res, 'Upstream ' + r.status, 502);
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 6e6) return errorResponse(res, 'Too large', 413);
+      res.writeHead(200, { 'Content-Type': r.headers.get('content-type') || 'image/jpeg', 'Cache-Control': 'public, max-age=604800', 'Access-Control-Allow-Origin': '*' });
+      return res.end(buf);
+    }
 
     if (method === 'GET' && urlPath === '/api/health') {
       return jsonResponse(res, { ok: true, service: 'ironhide', pid: process.pid });
