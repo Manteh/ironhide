@@ -2,7 +2,9 @@
 // fragmented MP4. Video is copied (zero CPU) when the browser can decode it, otherwise encoded on the GPU
 // (VideoToolbox). Audio goes to AAC. Seeking restarts the stream at the requested time.
 import { spawn } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { readFile } from 'fs/promises';
 import { randomUUID } from 'crypto';
 
@@ -54,6 +56,7 @@ export async function createSession({ url, title, meta, subs = [], caps = {}, se
     log: [],
   };
   sessions.set(id, sess);
+  setTimeout(() => startThumbs(sess), 4000); // let playback start first
   return publicInfo(sess);
 }
 
@@ -116,8 +119,47 @@ export async function subtitleVtt(id, index) {
 export function closeSession(id) {
   const s = sessions.get(id); if (!s) return;
   for (const p of s.procs) { try { p.kill('SIGKILL'); } catch {} }
+  if (s.thumbs) { s.thumbs.stopped = true; for (const p of s.thumbs.procs) { try { p.kill('SIGKILL'); } catch {} } try { rmSync(s.thumbs.dir, { recursive: true, force: true }); } catch {} }
   sessions.delete(id);
 }
 
 // drop sessions nobody has touched for a while
 setInterval(() => { for (const [id, s] of sessions) if (!s.procs.size && Date.now() - s.createdAt > 6 * 3600e3) closeSession(id); }, 600e3).unref();
+
+
+// ---------- preview frames for the scrubber ----------
+// A few ffmpeg jobs (low priority) grab one small frame at evenly spaced points, coarse first,
+// so hovering the scrubber shows a picture almost immediately and sharpens as more arrive.
+function coarseToFine(n) {
+  const bits = Math.ceil(Math.log2(Math.max(2, n))), out = [];
+  for (let i = 0; i < (1 << bits); i++) { let r = 0; for (let b = 0; b < bits; b++) if (i & (1 << b)) r |= 1 << (bits - 1 - b); if (r < n) out.push(r); }
+  return out;
+}
+export function startThumbs(s) {
+  if (!sessions.has(s.id) || !s.duration || s.duration < 30 || s.thumbs) return;
+  const step = Math.max(8, Math.ceil(s.duration / 120)), count = Math.max(1, Math.floor(s.duration / step));
+  const dir = join(tmpdir(), 'ironhide-thumbs', s.id); mkdirSync(dir, { recursive: true });
+  s.thumbs = { dir, step, count, ready: new Set(), queue: coarseToFine(count), running: 0, stopped: false, procs: new Set() };
+  pumpThumbs(s);
+}
+function pumpThumbs(s) {
+  const T = s.thumbs;
+  while (!T.stopped && T.running < 4 && T.queue.length) { T.running++; genThumb(s, T.queue.shift()).finally(() => { T.running--; pumpThumbs(s); }); }
+}
+function genThumb(s, i) {
+  const T = s.thumbs, out = join(T.dir, `${i}.jpg`), t = Math.min(s.duration - 2, i * T.step + Math.min(3, T.step / 2));
+  return new Promise((resolve) => {
+    const p = spawn('nice', ['-n', '12', FFMPEG, '-hide_banner', '-loglevel', 'error', '-nostdin', '-probesize', '1000000', '-analyzeduration', '500000', '-ss', String(t), '-i', s.url, '-frames:v', '1', '-an', '-sn', '-vf', 'scale=360:-2', '-q:v', '6', '-y', out], { stdio: 'ignore' });
+    T.procs.add(p);
+    const kill = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} }, 25000);
+    p.on('close', (code) => { clearTimeout(kill); T.procs.delete(p); if (code === 0 && existsSync(out)) T.ready.add(i); resolve(); });
+    p.on('error', () => { clearTimeout(kill); T.procs.delete(p); resolve(); });
+  });
+}
+// nearest frame we already have for time t (seconds)
+export function thumbFor(id, t) {
+  const s = sessions.get(id), T = s?.thumbs; if (!T || !T.ready.size) return null;
+  const i0 = Math.min(T.count - 1, Math.max(0, Math.round(t / T.step)));
+  for (let r = 0; r <= T.count; r++) for (const i of [i0 - r, i0 + r]) if (T.ready.has(i)) return { path: join(T.dir, `${i}.jpg`), t: i * T.step };
+  return null;
+}

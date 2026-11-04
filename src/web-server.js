@@ -9,7 +9,8 @@ import { getHistory } from './history.js';
 import { parseLangs } from './ui.js';
 import { addToHistory, updateEntryProgress } from './history.js';
 import { learnQuality } from './preferences.js';
-import { capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession } from './webplay.js';
+import { capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor } from './webplay.js';
+import { readFile as readFileAsync } from 'fs/promises';
 import {
   getSettings, updateSettings, connectorsView, setConnectorKey, setDebridProvider, testConnector,
   getNodes, pickBest, getWatchlist, toggleWatchlist,
@@ -304,12 +305,20 @@ async function handleApi(req, res, urlPath) {
       }
     }
 
-    const wpMatch = urlPath.match(/^\/api\/wp\/([a-z0-9-]+)\/(stream|progress|sub\/(\d+)\.vtt)$/);
+    const wpMatch = urlPath.match(/^\/api\/wp\/([a-z0-9-]+)\/(stream|progress|thumb|sub\/(\d+)\.vtt)$/);
     if (wpMatch) {
       const [, id, what, subIdx] = wpMatch;
       if (what === 'stream' && method === 'GET') {
         const q = new URL(req.url, 'http://localhost').searchParams;
         return streamTo(res, id, Number(q.get('start')) || 0, Number(q.get('audio')) || 0, q.get('transcode') === '1');
+      }
+      if (what === 'thumb' && method === 'GET') {
+        const t = Number(new URL(req.url, 'http://localhost').searchParams.get('t')) || 0;
+        const f = thumbFor(id, t);
+        if (!f) { res.writeHead(204); return res.end(); }
+        const buf = await readFileAsync(f.path);
+        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=600', 'X-Thumb-Time': String(f.t) });
+        return res.end(buf);
       }
       if (what.startsWith('sub/') && method === 'GET') {
         const vtt = await subtitleVtt(id, Number(subIdx));

@@ -30,7 +30,7 @@ export function openPlayer(info) {
       <div class="wp-title"><b>${esc(info.title)}</b><span>${esc([ep, info.meta?.year].filter(Boolean).join(' · '))}</span></div>
       <div class="wp-badges" id="wpBadges"></div></div>
     <div class="wp-bottom">
-      <div class="wp-scrub" id="wpScrub" role="slider" aria-label="Seek" tabindex="0"><div class="wp-track"><i class="wp-buf" id="wpBuf"></i><i class="wp-fill" id="wpFill"></i><b class="wp-knob" id="wpKnob"></b></div><span class="wp-tip" id="wpTip">0:00</span></div>
+      <div class="wp-scrub" id="wpScrub" role="slider" aria-label="Seek" tabindex="0"><div class="wp-track"><i class="wp-buf" id="wpBuf"></i><i class="wp-fill" id="wpFill"></i><b class="wp-knob" id="wpKnob"></b></div><div class="wp-tip" id="wpTip"><div class="wp-thumb"><img alt=""></div><span>0:00</span></div></div>
       <div class="wp-row">
         <div class="wp-l">
           <button class="wp-btn ic big" id="wpPlay" aria-label="Play or pause"></button>
@@ -141,8 +141,21 @@ function bind() {
   // scrubber
   const scrub = $('#wpScrub', wp), tip = $('#wpTip', wp);
   const at = (e) => { const r = $('.wp-track', wp).getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); };
-  scrub.addEventListener('pointerdown', (e) => { S.dragging = true; try { scrub.setPointerCapture(e.pointerId); } catch {} paintTime(at(e) * dur()); });
-  scrub.addEventListener('pointermove', (e) => { const f = at(e); tip.textContent = fmtTime(f * dur()); tip.style.left = f * 100 + '%'; if (S.dragging) paintTime(f * dur()); });
+  scrub.addEventListener('pointerdown', (e) => { S.dragging = true; try { scrub.setPointerCapture(e.pointerId); } catch {} paintTime(at(e) * dur()); place(e); });
+  let thumbTimer = 0, thumbReq = 0;
+  const showThumb = (t) => {
+    const my = ++thumbReq; clearTimeout(thumbTimer);
+    thumbTimer = setTimeout(() => {
+      const pre = new Image();
+      pre.onload = () => { if (my !== thumbReq || !S) return; const img = $('img', tip); img.src = pre.src; tip.classList.add('has'); };
+      pre.src = `/api/wp/${S.info.id}/thumb?t=${t.toFixed(1)}`;
+    }, 60);
+  };
+  const place = (e) => {
+    const r = scrub.getBoundingClientRect(), f = at(e), w = tip.offsetWidth || 200, x = Math.min(r.width - w / 2 - 4, Math.max(w / 2 + 4, f * r.width));
+    tip.querySelector('span').textContent = fmtTime(f * dur()); tip.style.left = x + 'px'; showThumb(f * dur());
+  };
+  scrub.addEventListener('pointermove', (e) => { place(e); if (S.dragging) paintTime(at(e) * dur()); });
   scrub.addEventListener('pointerup', (e) => { if (!S.dragging) return; S.dragging = false; seekTo(at(e) * dur()); });
   scrub.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') seekTo(cur() - 10); if (e.key === 'ArrowRight') seekTo(cur() + 10); });
 

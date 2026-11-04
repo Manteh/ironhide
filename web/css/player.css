@@ -41,8 +41,12 @@
 .wp-fill { background: color-mix(in srgb, var(--c1, #6d6af6) 55%, #fff); }
 .wp-knob { position: absolute; top: 50%; left: 0; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.5); transform: scale(0); transition: transform .2s var(--spring); }
 .wp-scrub:hover .wp-knob, .wp-scrub:focus-visible .wp-knob { transform: scale(1); }
-.wp-tip { position: absolute; bottom: 30px; left: 0; transform: translateX(-50%); padding: 5px 10px; border-radius: 8px; background: rgba(0,0,0,.75); font-size: 12.5px; font-variant-numeric: tabular-nums; opacity: 0; pointer-events: none; transition: opacity .15s; }
-.wp-scrub:hover .wp-tip { opacity: 1; }
+.wp-tip { position: absolute; bottom: 34px; left: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity .18s var(--ease); }
+.wp-scrub:hover .wp-tip, .wp-scrub:focus-visible .wp-tip { opacity: 1; }
+.wp-thumb { display: none; width: 220px; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #111; box-shadow: 0 0 0 1px rgba(255,255,255,.22), 0 24px 48px -12px #000; }
+.wp-tip.has .wp-thumb { display: block; animation: blurin .25s var(--ease); }
+.wp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wp-tip span { padding: 5px 11px; border-radius: 9px; background: rgba(0,0,0,.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .wp-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 8px; }
 .wp-l, .wp-r { display: flex; align-items: center; gap: 8px; }
 .wp-time { margin-left: 10px; font-size: 14px; color: rgba(255,255,255,.85); font-variant-numeric: tabular-nums; white-space: nowrap; }
