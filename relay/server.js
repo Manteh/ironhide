@@ -17,7 +17,7 @@ const send = (ws, msg) => { if (ws?.readyState === 1) ws.send(JSON.stringify(msg
 const b32 = (buf) => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let out = '', bits = 0, v = 0; for (const b of buf) { v = (v << 8) | b; bits += 8; while (bits >= 5) { out += A[(v >>> (bits - 5)) & 31]; bits -= 5; } } return out; };
 const idOf = (pubDer) => b32(createHash('sha256').update(pubDer).digest()).slice(0, 10);
 // Same rules as src/avatar.js (this file deploys on its own)
-const SHAPES = ['circle', 'squircle', 'rounded', 'hex', 'octagon', 'diamond', 'shield'], FRAMES = ['none', 'ring', 'gradient', 'double', 'glow', 'pulse', 'spin'];
+const SHAPES = ['circle', 'squircle', 'rounded', 'hex', 'octagon', 'diamond', 'shield', 'seal', 'flower', 'clover', 'starburst', 'star', 'blob', 'heart', 'gem', 'crystal', 'crest', 'cat', 'bolt', 'badge'], FRAMES = ['none', 'ring', 'gradient', 'double', 'glow', 'pulse', 'spin', 'bevel'];
 const HEX = /^#[0-9a-fA-F]{6}$/, IMG = /^data:image\/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$/;
 function cleanAvatar(a = {}) {
   const o = { icon: String(a.icon || 'film').replace(/[^a-z-]/g, '').slice(0, 20) || 'film', color: String(a.color || 'indigo').replace(/[^a-z]/g, '').slice(0, 12) || 'indigo' };
@@ -25,7 +25,7 @@ function cleanAvatar(a = {}) {
   if (['halo', 'wings', 'flame', 'orbit', 'crown', 'horns', 'blossom', 'cyber', 'ice', 'laurel', 'thorn', 'stars', 'royal', 'storm', 'aurora', 'prism'].includes(a.deco)) o.deco = a.deco;
   if (SHAPES.includes(a.shape)) o.shape = a.shape; if (FRAMES.includes(a.frame)) o.frame = a.frame;
   for (const k of ['ga', 'gb', 'fa', 'fb']) if (HEX.test(a[k] || '')) o[k] = a[k].toLowerCase();
-  if (a.custom) o.custom = true; if (Number.isFinite(+a.angle)) o.angle = Math.max(0, Math.min(360, Math.round(+a.angle)));
+  if (a.facet) o.facet = true; if (a.custom) o.custom = true; if (Number.isFinite(+a.angle)) o.angle = Math.max(0, Math.min(360, Math.round(+a.angle)));
   return o;
 }
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);

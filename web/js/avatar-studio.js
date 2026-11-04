@@ -13,10 +13,12 @@ const LOOKS = [
   { n: 'Tempest', deco: 'storm', shape: 'circle', frame: 'none', custom: true, ga: '#1e3a8a', gb: '#0f172a', angle: 160, fa: '#60a5fa', fb: '#fef08a' },
   { n: 'Borealis', deco: 'aurora', shape: 'circle', frame: 'none', custom: true, ga: '#064e3b', gb: '#1e1b4b', angle: 150, fa: '#34d399', fb: '#a78bfa' },
   // Shape looks: no decoration, a shaped face with a frame
-  { n: 'Neon', deco: null, shape: 'hex', custom: true, ga: '#111827', gb: '#312e81', angle: 135, frame: 'glow', fa: '#22d3ee', fb: '#e879f9' },
-  { n: 'Candy', deco: null, shape: 'rounded', custom: true, ga: '#f9a8d4', gb: '#a78bfa', angle: 120, frame: 'double', fa: '#ffffff', fb: '#f472b6' },
-  { n: 'Gold', deco: null, shape: 'shield', custom: true, ga: '#78350f', gb: '#1c1917', angle: 180, frame: 'gradient', fa: '#fde68a', fb: '#d97706' },
-  { n: 'Mono', deco: null, shape: 'octagon', custom: true, ga: '#3f3f46', gb: '#09090b', angle: 135, frame: 'ring', fa: '#e4e4e7', fb: '#a1a1aa' },
+  { n: 'Gem', deco: null, shape: 'gem', facet: true, custom: true, ga: '#38bdf8', gb: '#4f46e5', angle: 150, frame: 'bevel', fa: '#e0f2fe', fb: '#0ea5e9' },
+  { n: 'Crystal', deco: null, shape: 'crystal', facet: true, custom: true, ga: '#a78bfa', gb: '#581c87', angle: 140, frame: 'bevel', fa: '#f5d0fe', fb: '#a855f7' },
+  { n: 'Crest', deco: null, shape: 'crest', facet: false, custom: true, ga: '#78350f', gb: '#1c1917', angle: 180, frame: 'bevel', fa: '#fde68a', fb: '#b45309' },
+  { n: 'Burst', deco: null, shape: 'starburst', facet: false, custom: true, ga: '#f97316', gb: '#be123c', angle: 150, frame: 'bevel', fa: '#fde047', fb: '#f97316' },
+  { n: 'Seal', deco: null, shape: 'seal', facet: false, custom: true, ga: '#34d399', gb: '#065f46', angle: 150, frame: 'bevel', fa: '#d1fae5', fb: '#10b981' },
+  { n: 'Bloom', deco: null, shape: 'flower', facet: false, custom: true, ga: '#f9a8d4', gb: '#be185d', angle: 150, frame: 'bevel', fa: '#ffe4f1', fb: '#ec4899' },
 ];
 
 // center-crop to a square, shrink, and keep lowering quality until it fits the relay's size cap
@@ -29,7 +31,8 @@ async function toDataUrl(file) {
   return small.toDataURL('image/jpeg', 0.6);
 }
 
-const shapeMini = (s) => avatar({ avatar: { shape: s, icon: 'user', color: 'slate' } }, 26);
+// preview each shape in the user's own colours, with the bevel, so the choice is easy to judge
+const shapeMini = (s, av = {}) => avatar({ avatar: { shape: s, icon: av.icon || 'user', custom: true, ga: av.ga || '#6366f1', gb: av.gb || '#312e81', angle: 150, frame: 'bevel', fa: av.fa && !av.deco ? av.fa : '#e0e7ff', fb: av.fb && !av.deco ? av.fb : '#818cf8', facet: !!av.facet } }, 40);
 
 export function mountStudio(el, av, onChange, name = '') {
   let saveT = 0;
@@ -48,7 +51,8 @@ export function mountStudio(el, av, onChange, name = '') {
           <button class="deco-card ${av.deco ? '' : 'on'}" data-deco="">${avatar({ avatar: { ...av, deco: '' } }, 52)}None</button>
           ${Object.entries(DECOS).map(([k, d]) => `<button class="deco-card ${av.deco === k ? 'on' : ''}" data-deco="${k}">${avatar({ avatar: { ...av, deco: k, fa: d.fa, fb: d.fb } }, 52)}${d.name}</button>`).join('')}</div>
           ${av.deco && !DECOS[av.deco]?.fixed ? `<div class="av-colors"><label><input type="color" id="fa" value="${av.fa || '#8f8cff'}">Main</label><label><input type="color" id="fb" value="${av.fb || '#ff7ad9'}">Accent</label><button class="btn ghost sm" id="decoReset">Reset colours</button></div>` : ''}</div>
-        <div class="av-sec"><b>Shape <span class="av-hint">replaces the decoration</span></b><div class="av-chips">${AV_SHAPES.map((s) => `<button class="av-chip sq ${av.shape === s || (!av.shape && s === 'circle') ? 'on' : ''}" data-shape="${s}" aria-label="${s}" title="${s}">${shapeMini(s)}</button>`).join('')}</div></div>
+        <div class="av-sec"><b>Shape <span class="av-hint">replaces the decoration</span></b><div class="av-chips">${AV_SHAPES.map((s) => `<button class="av-chip sq ${av.shape === s || (!av.shape && s === 'circle') ? 'on' : ''}" data-shape="${s}" aria-label="${s}" title="${s}">${shapeMini(s, av)}</button>`).join('')}</div>
+          <div class="av-chips"><button class="av-chip ${av.facet ? 'on' : ''}" data-facet="1" title="Low-poly shading across the face">Faceted shading</button></div></div>
         <div class="av-sec"><b>Simple frame <span class="av-hint">replaces the decoration</span></b><div class="av-chips">${AV_FRAMES.map(([k, l]) => `<button class="av-chip ${((av.frame || 'none') === k) ? 'on' : ''}" data-frame="${k}">${avatar({ avatar: { frame: k, icon: 'user', color: 'slate', fa: av.fa, fb: av.fb }, }, 26)}${l}</button>`).join('')}</div>
           ${(av.frame && av.frame !== 'none' && !av.deco) ? `<div class="av-colors"><label><input type="color" id="fa" value="${av.fa || '#8f8cff'}">Border</label>${av.frame !== 'ring' ? `<label><input type="color" id="fb" value="${av.fb || '#ff7ad9'}">Second</label>` : ''}</div>` : ''}</div>
         ${av.image ? '' : `<div class="av-sec"><b>Icon</b><div class="avatar-picker">${AVATAR_ICONS.map((i) => `<button class="av-opt ${av.icon === i ? 'on' : ''}" data-i="${i}" aria-label="${i}">${icon(i)}</button>`).join('')}</div></div>
@@ -71,6 +75,7 @@ export function mountStudio(el, av, onChange, name = '') {
     $$('[data-look]', el).forEach((b) => (b.onclick = () => { Object.assign(av, LOOKS[+b.dataset.look]); delete av.n; changed(); }));
     $$('[data-deco]', el).forEach((b) => (b.onclick = () => { const k = b.dataset.deco; av.deco = k || null; if (k) { av.fa = DECOS[k].fa; av.fb = DECOS[k].fb; av.shape = 'circle'; av.frame = 'none'; } changed(); }));
     $('#decoReset', el)?.addEventListener('click', () => { const d = DECOS[av.deco]; if (d) { av.fa = d.fa; av.fb = d.fb; changed(); } });
+    $('[data-facet]', el)?.addEventListener('click', () => { av.facet = !av.facet; if (av.facet) av.deco = null; changed(); });
     $$('[data-shape]', el).forEach((b) => (b.onclick = () => { av.shape = b.dataset.shape; av.deco = null; changed(); }));
     $$('[data-frame]', el).forEach((b) => (b.onclick = () => { av.frame = b.dataset.frame; av.deco = null; if (av.frame !== 'none') { av.fa ||= '#8f8cff'; av.fb ||= '#ff7ad9'; } changed(); }));
     $$('[data-i]', el).forEach((b) => (b.onclick = () => { av.icon = b.dataset.i; changed(); }));

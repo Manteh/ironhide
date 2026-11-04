@@ -71,7 +71,13 @@ Upload a photo, or build one. Every avatar gets an animated **decoration** that 
 
 <img src="docs/screens/avatar-studio.png" alt="Avatar studio" width="100%">
 
-<sub>Decorations always sit on a circle so they fit. Prefer a shaped face? Pick a shape and frame instead, and the decoration steps aside.</sub>
+### Real shapes, lit like cut gems
+
+Prefer a shaped face over a decoration? There are **20 silhouettes**: hexagon, octagon, diamond, shield, seal, flower, clover, starburst, star, blob, heart, gem, crystal, crest, cat, bolt, badge and more. They are true polygons, not rounded rectangles. The **Bevel** frame draws every edge as its own lit facet (light from the top left), and **Faceted shading** adds low-poly triangles across the face.
+
+<img src="docs/screens/avatar-shapes.png" alt="Avatar shapes with bevel and facets" width="100%">
+
+<sub>Decorations always sit on a circle so they fit. Pick a shape or frame and the decoration steps aside.</sub>
 
 <br>
 
@@ -130,7 +136,7 @@ The rail becomes a bottom bar, shelves stack and scroll.
 
 **Make it yours**
 - Themes: Dark, Midnight, Light, System. Accents, density, radius, motion
-- Avatars: photo upload, 16 decorations, 7 shapes, gradients, 7 simple frames, one-click Looks
+- Avatars: photo upload, 16 animated decorations, 20 polygon shapes, a faceted bevel frame, low-poly shading, gradients, one-click Looks
 - First-run name screen
 
 **Talk to it**
