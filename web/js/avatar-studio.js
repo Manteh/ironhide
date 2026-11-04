@@ -1,4 +1,5 @@
 // Avatar studio: photo upload, shapes, gradient faces, frames, one-click looks. Edits `av` in place and calls onChange().
+import { DECOS } from './decorations.js';
 import { $, $$, esc, icon, avatar, AVATAR_ICONS, AVATAR_COLORS, AV_SHAPES, AV_FRAMES, toast } from './ui.js';
 
 const LOOKS = [
@@ -36,9 +37,13 @@ export function mountStudio(el, av, onChange, name = '') {
         <input type="file" id="avFile" accept="image/*" hidden></div>
       <div class="av-ctl">
         <div class="av-sec"><b>Looks</b><div class="av-presets">${LOOKS.map((l, i) => `<button class="av-pre" data-look="${i}">${avatar({ avatar: { ...l, icon: av.icon, image: av.image } }, 48)}<span>${l.n}</span></button>`).join('')}</div></div>
+        <div class="av-sec"><b>Decoration</b><div class="deco-grid">
+          <button class="deco-card ${av.deco ? '' : 'on'}" data-deco="">${avatar({ avatar: { ...av, deco: '' } }, 52)}None</button>
+          ${Object.entries(DECOS).map(([k, d]) => `<button class="deco-card ${av.deco === k ? 'on' : ''}" data-deco="${k}">${avatar({ avatar: { ...av, deco: k, fa: d.fa, fb: d.fb } }, 52)}${d.name}</button>`).join('')}</div>
+          ${av.deco ? `<div class="av-colors"><label><input type="color" id="fa" value="${av.fa || '#8f8cff'}">Main</label><label><input type="color" id="fb" value="${av.fb || '#ff7ad9'}">Accent</label><button class="btn ghost sm" id="decoReset">Reset colours</button></div>` : ''}</div>
         <div class="av-sec"><b>Shape</b><div class="av-chips">${AV_SHAPES.map((s) => `<button class="av-chip sq ${av.shape === s || (!av.shape && s === 'circle') ? 'on' : ''}" data-shape="${s}" aria-label="${s}" title="${s}">${shapeMini(s)}</button>`).join('')}</div></div>
         <div class="av-sec"><b>Frame</b><div class="av-chips">${AV_FRAMES.map(([k, l]) => `<button class="av-chip ${((av.frame || 'none') === k) ? 'on' : ''}" data-frame="${k}">${avatar({ avatar: { frame: k, icon: 'user', color: 'slate', fa: av.fa, fb: av.fb }, }, 26)}${l}</button>`).join('')}</div>
-          ${(av.frame && av.frame !== 'none') ? `<div class="av-colors"><label><input type="color" id="fa" value="${av.fa || '#8f8cff'}">Border</label>${av.frame !== 'ring' ? `<label><input type="color" id="fb" value="${av.fb || '#ff7ad9'}">Second</label>` : ''}</div>` : ''}</div>
+          ${(av.frame && av.frame !== 'none' && !av.deco) ? `<div class="av-colors"><label><input type="color" id="fa" value="${av.fa || '#8f8cff'}">Border</label>${av.frame !== 'ring' ? `<label><input type="color" id="fb" value="${av.fb || '#ff7ad9'}">Second</label>` : ''}</div>` : ''}</div>
         ${av.image ? '' : `<div class="av-sec"><b>Icon</b><div class="avatar-picker">${AVATAR_ICONS.map((i) => `<button class="av-opt ${av.icon === i ? 'on' : ''}" data-i="${i}" aria-label="${i}">${icon(i)}</button>`).join('')}</div></div>
         <div class="av-sec"><b>Background</b>
           <div class="swatches">${AVATAR_COLORS.map((c) => `<button class="color-opt av-${c} ${!cust() && av.color === c ? 'on' : ''}" data-c="${c}" aria-label="${c}"></button>`).join('')}</div>
@@ -57,6 +62,8 @@ export function mountStudio(el, av, onChange, name = '') {
     };
     $('#avRm', el)?.addEventListener('click', () => { av.image = null; changed(); });
     $$('[data-look]', el).forEach((b) => (b.onclick = () => { Object.assign(av, LOOKS[+b.dataset.look]); delete av.n; changed(); }));
+    $$('[data-deco]', el).forEach((b) => (b.onclick = () => { const k = b.dataset.deco; av.deco = k || null; if (k) { av.fa = DECOS[k].fa; av.fb = DECOS[k].fb; } changed(); }));
+    $('#decoReset', el)?.addEventListener('click', () => { const d = DECOS[av.deco]; if (d) { av.fa = d.fa; av.fb = d.fb; changed(); } });
     $$('[data-shape]', el).forEach((b) => (b.onclick = () => { av.shape = b.dataset.shape; changed(); }));
     $$('[data-frame]', el).forEach((b) => (b.onclick = () => { av.frame = b.dataset.frame; if (av.frame !== 'none') { av.fa ||= '#8f8cff'; av.fb ||= '#ff7ad9'; } changed(); }));
     $$('[data-i]', el).forEach((b) => (b.onclick = () => { av.icon = b.dataset.i; changed(); }));

@@ -22,6 +22,7 @@ const HEX = /^#[0-9a-fA-F]{6}$/, IMG = /^data:image\/(jpeg|webp|png);base64,[A-Z
 function cleanAvatar(a = {}) {
   const o = { icon: String(a.icon || 'film').replace(/[^a-z-]/g, '').slice(0, 20) || 'film', color: String(a.color || 'indigo').replace(/[^a-z]/g, '').slice(0, 12) || 'indigo' };
   if (typeof a.image === 'string' && a.image.length <= 48000 && IMG.test(a.image)) o.image = a.image;
+  if (['halo', 'wings', 'flame', 'orbit', 'crown', 'horns', 'blossom', 'cyber', 'ice', 'laurel', 'thorn', 'stars', 'royal'].includes(a.deco)) o.deco = a.deco;
   if (SHAPES.includes(a.shape)) o.shape = a.shape; if (FRAMES.includes(a.frame)) o.frame = a.frame;
   for (const k of ['ga', 'gb', 'fa', 'fb']) if (HEX.test(a[k] || '')) o[k] = a[k].toLowerCase();
   if (a.custom) o.custom = true; if (Number.isFinite(+a.angle)) o.angle = Math.max(0, Math.min(360, Math.round(+a.angle)));

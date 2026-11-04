@@ -1,4 +1,5 @@
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+import { DECOS, decoSvg } from './decorations.js';
 export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 export const posterOf = (id) => `https://images.metahub.space/poster/large/${id}/img`;
@@ -61,7 +62,8 @@ export const avatar = (profile, size = 34) => {
   const bw = frame === 'none' ? 0 : Math.max(2, Math.round(size * (frame === 'double' ? 0.11 : 0.065)));
   const bg = a.custom && HEXC.test(a.ga) && HEXC.test(a.gb) ? `linear-gradient(${a.angle ?? 135}deg, ${a.ga}, ${a.gb})` : null;
   const face = a.image ? `<img src="${esc(a.image)}" alt="" draggable="false">` : icon(a.icon || 'film');
-  return `<span class="avw fr-${frame}" style="--s:${size}px;--bw:${bw}px;--fa:${fa};--fb:${fb}"><span class="avx sh-${shape}"><span class="avi av-${esc(a.color || 'indigo')}" ${bg && !a.image ? `style="background:${bg}"` : ''}>${face}</span></span></span>`;
+  const deco = a.deco && DECOS[a.deco] ? `<span class="avd">${decoSvg(a.deco)}</span>` : '';
+  return `<span class="avw fr-${frame}${deco ? ' has-deco' : ''}" style="--s:${size}px;--bw:${bw}px;--fa:${fa};--fb:${fb}"><span class="avx sh-${shape}"><span class="avi av-${esc(a.color || 'indigo')}" ${bg && !a.image ? `style="background:${bg}"` : ''}>${face}</span></span>${deco}</span>`;
 };
 
 export const LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8f8cff"/><stop offset="1" stop-color="#4b48d6"/></linearGradient></defs><path d="M16 2l11 4v9c0 7.2-4.6 12.4-11 15C9.6 27.4 5 22.2 5 15V6z" fill="url(#lg)"/><path d="M16 9l2.2 4.8L23 16l-4.8 2.2L16 23l-2.2-4.8L9 16l4.8-2.2z" fill="#fff" fill-opacity=".92"/></svg>';
