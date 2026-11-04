@@ -12,8 +12,10 @@ reactions and **playback sync**. It never carries video: every viewer plays thei
 1. Push this repo, then in Render create a **Web Service** with root directory `relay`.
 2. Build command `npm install`, start command `npm start`, plan Free is fine (it sleeps when idle, the first
    connection after a nap takes a moment).
-3. Copy the service URL, change `https://` to `wss://`, and paste it in IronHide under
-   **Settings → Together → Relay URL**.
+3. Set env var `RELAY_DIRECTORY=1` so members see a "People here" list and can add each other by name
+   (names stay unique among people online). `render.yaml` at the repo root does steps 1-3 as a Blueprint.
+4. Copy the service URL, change `https://` to `wss://`, and paste it in IronHide under
+   **Settings → Together → Relay URL**, or put it in `src/relay-default.js` so everyone who pulls the repo connects automatically.
 
 Health check: `GET /health`.
 

@@ -28,6 +28,13 @@ function cleanAvatar(a = {}) {
   return o;
 }
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);
+// Names stay unique among people online (the "People here" list is by name): "Sam" -> "Sam 2" if taken
+function uniqueName(name, selfId) {
+  if (!DIRECTORY) return name;
+  const taken = (n) => [...users.values()].some((x) => x.ws && x.id !== selfId && String(x.name).toLowerCase() === n.toLowerCase());
+  let n = name, i = 2; while (taken(n)) n = `${name.slice(0, 28)} ${i++}`;
+  return n;
+}
 const profile = (u) => ({ id: u.id, name: u.name, avatar: u.avatar });
 
 // ---------- presence (only between mutual friends) ----------
@@ -85,7 +92,7 @@ wss.on('connection', (ws) => {
         const id = idOf(der); let u = users.get(id);
         if (u?.ws && u.ws !== ws) { send(u.ws, { t: 'replaced' }); u.ws.close(); }
         if (!u) { u = { id, friends: new Set(), status: null, room: null, hide: false }; users.set(id, u); }
-        Object.assign(u, { name: clean(m.name, 32) || 'Guest', avatar: cleanAvatar(m.avatar), ws, hide: !!m.hide });
+        Object.assign(u, { name: uniqueName(clean(m.name, 32) || 'Guest', id), avatar: cleanAvatar(m.avatar), ws, hide: !!m.hide });
         me = u; clearTimeout(authTimer);
         send(ws, { t: 'welcome', you: profile(u), now: Date.now(), directory: DIRECTORY });
         for (const req of offlineReq.get(id) || []) send(ws, { t: 'friend.req', from: req });
@@ -97,7 +104,7 @@ wss.on('connection', (ws) => {
 
     const u = me;
     switch (m.t) {
-      case 'profile': u.name = clean(m.name, 32) || u.name; if (m.avatar) u.avatar = cleanAvatar(m.avatar); u.hide = !!m.hide; announce(u); break;
+      case 'profile': u.name = uniqueName(clean(m.name, 32) || u.name, u.id); if (m.avatar) u.avatar = cleanAvatar(m.avatar); u.hide = !!m.hide; send(ws, { t: 'you', you: profile(u) }); announce(u); break;
       case 'directory': if (DIRECTORY) send(ws, { t: 'directory', list: [...users.values()].filter((x) => x.ws && !x.hide && x.id !== u.id).map(profile).slice(0, 200) }); break;
       case 'friends': u.friends = new Set((m.ids || []).slice(0, 500).map((x) => clean(x, 12))); send(ws, { t: 'presence.all', list: presenceFor(u) }); announce(u); break;
       case 'friend.req': {

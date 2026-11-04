@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
+import { DEFAULT_RELAY } from './relay-default.js';
 
 export const CONFIG_DIR = process.env.IRONHIDE_HOME || join(homedir(), '.config', 'ironhide');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
@@ -15,6 +16,7 @@ export function getConfig() {
     torbox_api_key: env.TORBOX_API_KEY || file.torbox_api_key || '',
     rd_api_key: env.RD_API_KEY || file.rd_api_key || '',
     ad_api_key: env.AD_API_KEY || file.ad_api_key || '',
+    relay_url: env.IRONHIDE_RELAY || file.relay_url || DEFAULT_RELAY,
     harvester_url: (env.HARVESTER_URL || file.harvester_url || 'https://stremio-trakt-stealth-harvester.onrender.com').replace(/\/+$/, ''),
   };
   // Which debrid service to use. Explicit choice wins; otherwise first key found.

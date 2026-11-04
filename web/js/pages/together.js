@@ -29,7 +29,11 @@ export default async function together(el) {
   function setup(s) {
     const box = $('#tgSetup', el);
     if (s.relay.status === 'online') { box.innerHTML = ''; return; }
-    box.innerHTML = `<div class="banner" style="margin-bottom:var(--s5)">${icon('info')}<span>${s.relay.url ? `Waiting for the relay at <b>${esc(s.relay.url)}</b>. If it is on Render's free plan it can take about a minute to wake up.` : 'Rooms need a small relay server that passes messages between friends (no video goes through it). Add its address in'} <a href="#/settings/together" style="text-decoration:underline">Settings → Together</a>.</span></div>`;
+    box.innerHTML = s.relay.url
+      ? `<div class="banner" style="margin-bottom:var(--s5)">${icon('info')}<span>Waiting for the relay at <b>${esc(s.relay.url)}</b>. On Render's free plan it can take about a minute to wake up. <a href="#/settings/together" style="text-decoration:underline">Change it</a></span></div>`
+      : `<form class="tg-card" id="relayF" style="margin-bottom:var(--s5)"><div class="tg-k">Connect</div><p class="tg-note" style="margin:0 0 12px">Together uses a small relay that passes friend, room and chat messages. No video goes through it. Paste the address you were given.</p>
+          <div class="tg-row"><input class="input" id="relayIn" placeholder="wss://your-relay.onrender.com" spellcheck="false" autocomplete="off"><button class="btn primary">Connect</button></div></form>`;
+    $('#relayF', box)?.addEventListener('submit', (e) => { e.preventDefault(); const v = $('#relayIn', box).value.trim(); if (v) fetch('/api/social/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ relayUrl: v }) }).catch((err) => toast(err.message, 'err')); });
   }
 
   function friends(s) {

@@ -1,15 +1,14 @@
+# Hosts only the relay: friends, rooms, chat and sync messages. No video, no accounts, no ffmpeg.
+# Everyone runs IronHide on their own Mac with their own TorBox key.
 services:
   - type: web
-    name: ironhide
-    runtime: docker
-    plan: starter            # a persistent disk needs a paid plan; free works but forgets users on restart
-    healthCheckPath: /hub/health
-    disk:
-      name: ironhide-data
-      mountPath: /data
-      sizeGB: 1
+    name: ironhide-relay
+    runtime: node
+    rootDir: relay
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
     envVars:
-      - key: HUB_CODE        # optional access code visitors must type. Leave empty to be open.
-        sync: false
-      - key: HUB_MAX_ACTIVE
-        value: "6"
+      - key: RELAY_DIRECTORY   # "People here" list so members add each other by name
+        value: "1"

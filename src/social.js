@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { CONFIG_DIR } from './config.js';
 import { getSettings } from './settings.js';
+import { getConfig } from './config.js';
 
 const FILE = join(CONFIG_DIR, 'social.json');
 const REACTIONS = ['👍', '😂', '😮', '❤️', '🔥', '👏', '😢', '🤯'];
@@ -81,6 +82,7 @@ async function handle(m) {
       if (S.watching && data.shareStatus) tx({ t: 'status', watching: S.watching });
       push(); break;
     case 'pong': { const rtt = Date.now() - m.c; S.offsets.push(m.s + rtt / 2 - Date.now()); if (S.offsets.length > 7) S.offsets.shift(); break; } // server clock - local clock
+    case 'you': S.you = m.you; push(); break; // the relay may have adjusted our name to keep it unique
     case 'directory': S.people = m.list; push(); break;
     case 'presence.all': S.presence = new Map(m.list.map((p) => [p.id, p])); push(); break;
     case 'presence': { if (!data.friends.some((f) => f.id === m.id)) break; S.presence.set(m.id, m); const f = data.friends.find((x) => x.id === m.id); if (m.name) { f.name = m.name; f.avatar = m.avatar; save(); } push(); break; }
@@ -152,7 +154,7 @@ export function setWatching(w) { S.watching = w; if (link === 'online') tx({ t: 
 
 export function startSocial() {
   load(); S.you = null;
-  if (!data.relayUrl && process.env.IRONHIDE_RELAY) { data.relayUrl = process.env.IRONHIDE_RELAY; save(); } // hosted mode preset
+  if (!data.relayUrl && getConfig().relay_url) { data.relayUrl = getConfig().relay_url; save(); } // shared default relay
   if (data.relayUrl) connect();
 }
 export const myCode = () => S.you?.id || '';
