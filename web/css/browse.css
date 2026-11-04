@@ -26,23 +26,22 @@ body.is-browse { background: var(--bg); }
   backdrop-filter: blur(28px) saturate(1.5); -webkit-backdrop-filter: blur(28px) saturate(1.5);
   border: 1px solid rgba(255,255,255,.14); box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 40px 90px -24px rgba(0,0,0,.85), 0 0 0 1px rgba(0,0,0,.4);
   animation: railin .8s var(--ease) backwards; }
-.rail::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(180deg, color-mix(in srgb, var(--c1) 16%, transparent), transparent 45%, color-mix(in srgb, var(--c2) 14%, transparent)); }
 @keyframes railin { from { opacity: 0; filter: blur(12px); transform: translate(-20px, -50%) scale(.95); } to { opacity: 1; filter: blur(0); transform: translateY(-50%); } }
 .rail > * { position: relative; }
 .rlogo { display: grid; place-items: center; width: 64px; height: 56px; transform: scale(var(--mag, 1)); transition: transform .18s var(--ease); }
-.rlogo .tile { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 17px; background: linear-gradient(160deg, color-mix(in srgb, var(--c1) 40%, var(--surface-2)), var(--surface)); box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 0 0 1px rgba(255,255,255,.1); }
+.rlogo .tile { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 17px; background: linear-gradient(160deg, var(--surface-2), var(--surface)); box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 0 0 1px rgba(255,255,255,.1); }
 .rlogo svg { width: 30px; height: 30px; transition: transform .5s var(--spring); } .rlogo:hover svg { transform: rotate(-10deg) scale(1.12); }
 .rsep { width: 34px; height: 1px; background: rgba(255,255,255,.14); margin: 8px 0; flex-shrink: 0; }
 .ri { position: relative; width: 66px; height: 62px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border: 0; background: none; color: var(--text-2); font-size: 22px;
   transform: scale(var(--mag, 1)); transition: transform .18s var(--ease), background .3s var(--ease), color .3s var(--ease), box-shadow .3s var(--ease); }
 .ri span { font-size: 11px; font-weight: 600; letter-spacing: .01em; line-height: 1; }
 .ri:hover { color: var(--text); background: rgba(255,255,255,.08); } .ri:active { transform: scale(calc(var(--mag, 1) * .94)); }
-.ri.on { color: #fff; background: linear-gradient(160deg, color-mix(in srgb, var(--c1) 72%, #fff 4%), color-mix(in srgb, var(--c2) 78%, #000 8%)); box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 10px 24px -10px color-mix(in srgb, var(--c1) 80%, #000); transition: transform .18s var(--ease), background 1.6s var(--ease), color .3s; }
-.ri.on svg { fill: none; }
+.ri.on { color: #0d0d0e; background: #f3f3f6; box-shadow: 0 8px 20px -10px rgba(0,0,0,.7), inset 0 -1px 0 rgba(0,0,0,.08); }
+.ri.on span { font-weight: 650; }
 .rnode { width: 66px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; border-radius: 18px; font-size: 13px; font-weight: 700; color: var(--text-2); font-variant-numeric: tabular-nums; transform: scale(var(--mag, 1)); transition: transform .18s var(--ease), background .25s; }
 .rnode:hover { background: rgba(255,255,255,.08); color: var(--text); }
 .rnode .dot { width: 9px; height: 9px; }
-.rme { display: block; border-radius: 50%; margin-top: 4px; padding: 3px; background: linear-gradient(160deg, color-mix(in srgb, var(--c1) 70%, #fff), color-mix(in srgb, var(--c2) 70%, #000)); transform: scale(var(--mag, 1)); transition: transform .18s var(--ease); }
+.rme { display: block; border-radius: 50%; margin-top: 4px; padding: 3px; background: rgba(255,255,255,.16); transform: scale(var(--mag, 1)); transition: transform .18s var(--ease); }
 .rme .avatar { box-shadow: 0 0 0 2px var(--bg-elev); }
 .rail [data-tip]::after { content: attr(data-tip); position: absolute; left: calc(100% + 18px); top: 50%; transform: translateY(-50%) translateX(-8px); padding: 8px 13px; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--text);
   font-size: 13px; font-weight: 580; white-space: nowrap; opacity: 0; filter: blur(6px); pointer-events: none; transition: opacity .25s var(--ease), transform .35s var(--ease), filter .25s var(--ease); box-shadow: var(--shadow); }
