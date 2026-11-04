@@ -115,3 +115,10 @@
 .mb:hover .mb-x, .mb-x:focus-visible { opacity: 1; } .mb-x:hover { background: #ef4444; color: #fff; }
 .dmb-x { position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 0; background: #ef4444; color: #fff; display: none; place-items: center; font-size: 9px; cursor: pointer; }
 .dmb:hover .dmb-x { display: grid; }
+
+/* watching line: the dot gets room to glow, and the title may wrap to two lines instead of being cut off */
+.fr .fi span.fr-watch { display: flex; align-items: center; gap: 8px; overflow: visible; text-overflow: clip; white-space: nowrap; padding-left: 2px; }
+.fr .fi span.fr-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; overflow: hidden; color: var(--text); font-weight: 600; font-size: 13.5px; line-height: 1.3; margin-top: 2px; overflow-wrap: anywhere; }
+.fw-dot { margin-right: 0 !important; flex: none; animation: fwpulse 1.8s ease-out infinite; }
+.fr .fi { min-width: 0; }
+.fr.watching { align-items: center; }
