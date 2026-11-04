@@ -38,8 +38,8 @@ function card(it, i = 0) {
   const type = it.type === 'tv' ? 'series' : it.type;
   const sub = [it.year, (it.genres || []).slice(0, 1).join('')].filter(Boolean).join(' · ');
   const right = it.left || (it.rating ? '★ ' + it.rating : it.tag || '');
-  return `<article class="bc" tabindex="0" style="--i:${Math.min(i, 24)}" data-id="${esc(it.imdbId)}" data-type="${esc(type)}" data-title="${esc(it.title)}" data-poster="${esc(it.poster || posterOf(it.imdbId))}" ${it.season ? `data-season="${it.season}" data-episode="${it.episode}"` : ''}>
-    <div class="bposter"><div class="bimg" style="background-image:url('${esc(it.poster || posterOf(it.imdbId))}')"></div>
+  return `<article class="bc" tabindex="0" style="--i:${Math.min(i, 24)}" data-id="${esc(it.imdbId)}" data-type="${esc(type)}" data-title="${esc(it.title)}" data-poster="${esc(posterOf(it.imdbId) || it.poster || posterOf(it.imdbId))}" ${it.season ? `data-season="${it.season}" data-episode="${it.episode}"` : ''}>
+    <div class="bposter"><div class="bimg" style="background-image:url('${esc(posterOf(it.imdbId))}')${it.poster ? `,url('${esc(it.poster)}')` : ''}"></div>
       ${it.pct ? `<div class="bprog"><i style="width:${Math.min(100, Math.max(4, Math.round(it.pct)))}%"></i></div>` : ''}</div>
     <div class="binfo"><h3>${esc(it.title)}</h3><div class="bmeta"><span>${esc(it.tag && it.rating ? it.tag : sub)}</span>${right ? `<em>${esc(right)}</em>` : ''}</div>${it.overview ? `<p class="bdesc">${esc(it.overview)}</p>` : ''}</div></article>`;
 }
@@ -123,7 +123,7 @@ async function loadTab(reset = true) {
   if (my !== st.token) return;
   st.items = items; st.busy = false;
   grid.innerHTML = items.length ? items.map(card).join('') : `<div class="empty">${st.tab === 'shelf' ? 'Your shelf is empty. Open a title and tap Save.' : st.tab === 'continue' ? 'Nothing in progress yet.' : 'Nothing here right now.'}</div>`;
-  prefetch(items.map((i) => i.poster || posterOf(i.imdbId)));
+  prefetch(items.map((i) => posterOf(i.imdbId)));
   more.innerHTML = st.more ? '<button class="btn" id="loadMore">Load more</button>' : '';
   $('#loadMore', root)?.addEventListener('click', () => loadTab(false));
 }

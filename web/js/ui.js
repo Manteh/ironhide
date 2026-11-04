@@ -57,7 +57,8 @@ export const AV_FRAMES = [['none', 'None'], ['ring', 'Ring'], ['gradient', 'Grad
 const HEXC = /^#[0-9a-f]{6}$/i;
 // Avatar = wrapper (glow) > frame (clipped, painted with the border colours) > face (photo or gradient + icon)
 export const avatar = (profile, size = 34) => {
-  const a = profile.avatar || {}, shape = AV_SHAPES.includes(a.shape) ? a.shape : 'circle', frame = a.frame || 'none';
+  const a = profile.avatar || {}, hasDeco = !!(a.deco && DECOS[a.deco]); // a decoration always sits on a circle, with no extra frame
+  const shape = !hasDeco && AV_SHAPES.includes(a.shape) ? a.shape : 'circle', frame = hasDeco ? 'none' : (a.frame || 'none');
   const fa = HEXC.test(a.fa) ? a.fa : '#8f8cff', fb = HEXC.test(a.fb) ? a.fb : '#ff7ad9';
   const bw = frame === 'none' ? 0 : Math.max(2, Math.round(size * (frame === 'double' ? 0.11 : 0.065)));
   const bg = a.custom && HEXC.test(a.ga) && HEXC.test(a.gb) ? `linear-gradient(${a.angle ?? 135}deg, ${a.ga}, ${a.gb})` : null;

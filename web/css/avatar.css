@@ -54,7 +54,7 @@ html[data-motion="off"] .fr-pulse, html[data-motion="off"] .fr-spin .avx { anima
 .av-pre:hover { background: var(--hover); color: var(--text); }
 
 /* decorations: big ornate pieces that extend past the avatar */
-.avd { position: absolute; inset: -22%; pointer-events: none; z-index: 3; }
+.avd { position: absolute; inset: -28%; pointer-events: none; z-index: 3; }
 .avd-svg { width: 100%; height: 100%; overflow: visible; display: block; }
 .has-deco.fr-glow, .has-deco.fr-pulse { filter: none; animation: none; }
 .fl { transform-box: fill-box; transform-origin: 50% 100%; animation: avfl 1.15s ease-in-out infinite; }
@@ -69,3 +69,6 @@ html[data-motion="off"] .fl, html[data-motion="off"] .tw { animation: none; }
 .deco-card { display: grid; place-items: center; gap: 14px; padding: 26px 8px 12px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); font-size: 12.5px; font-weight: 560; cursor: pointer; transition: transform .2s, border-color .2s, background .2s; }
 .deco-card:hover { transform: translateY(-2px); background: var(--hover); color: var(--text); }
 .deco-card.on { border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--text) 9%, var(--surface-2)); }
+.av-hint { text-transform: none; letter-spacing: 0; font-weight: 450; color: var(--muted); opacity: .8; margin-left: 6px; }
+/* a plain circle must stay a true circle (the inner .88 radius is only for rounded shapes) */
+.sh-circle > .avi { border-radius: 50%; }

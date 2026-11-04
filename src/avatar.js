@@ -1,7 +1,7 @@
 // Avatar model shared by settings (own profile) and the relay copy of this logic.
 // {icon,color} preset, optional uploaded image, shape, custom gradient and a frame.
 export const SHAPES = ['circle', 'squircle', 'rounded', 'hex', 'octagon', 'diamond', 'shield'];
-export const DECOS = ['halo', 'wings', 'flame', 'orbit', 'crown', 'horns', 'blossom', 'cyber', 'ice', 'laurel', 'thorn', 'stars', 'royal'];
+export const DECOS = ['halo', 'wings', 'flame', 'orbit', 'crown', 'horns', 'blossom', 'cyber', 'ice', 'laurel', 'thorn', 'stars', 'royal', 'storm', 'aurora', 'prism'];
 export const FRAMES = ['none', 'ring', 'gradient', 'double', 'glow', 'pulse', 'spin'];
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const IMG = /^data:image\/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$/;

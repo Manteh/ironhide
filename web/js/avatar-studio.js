@@ -3,13 +3,20 @@ import { DECOS } from './decorations.js';
 import { $, $$, esc, icon, avatar, AVATAR_ICONS, AVATAR_COLORS, AV_SHAPES, AV_FRAMES, toast } from './ui.js';
 
 const LOOKS = [
-  { n: 'Aurora', shape: 'squircle', custom: true, ga: '#5eead4', gb: '#6366f1', angle: 150, frame: 'spin', fa: '#5eead4', fb: '#a78bfa' },
-  { n: 'Sunset', shape: 'circle', custom: true, ga: '#fb923c', gb: '#e11d48', angle: 160, frame: 'gradient', fa: '#fde047', fb: '#fb7185' },
-  { n: 'Neon', shape: 'hex', custom: true, ga: '#111827', gb: '#312e81', angle: 135, frame: 'glow', fa: '#22d3ee', fb: '#e879f9' },
-  { n: 'Candy', shape: 'rounded', custom: true, ga: '#f9a8d4', gb: '#a78bfa', angle: 120, frame: 'double', fa: '#ffffff', fb: '#f472b6' },
-  { n: 'Gold', shape: 'shield', custom: true, ga: '#78350f', gb: '#1c1917', angle: 180, frame: 'gradient', fa: '#fde68a', fb: '#d97706' },
-  { n: 'Mono', shape: 'octagon', custom: true, ga: '#3f3f46', gb: '#09090b', angle: 135, frame: 'ring', fa: '#e4e4e7', fb: '#a1a1aa' },
-  { n: 'Pulse', shape: 'diamond', custom: true, ga: '#f43f5e', gb: '#7c3aed', angle: 135, frame: 'pulse', fa: '#fb7185', fb: '#c4b5fd' },
+  // Decoration looks: a circle face with a matching gradient, so the whole thing reads as one piece
+  { n: 'Heaven', deco: 'halo', shape: 'circle', frame: 'none', custom: true, ga: '#c7d2fe', gb: '#818cf8', angle: 160, fa: '#fde68a', fb: '#f59e0b' },
+  { n: 'Inferno', deco: 'flame', shape: 'circle', frame: 'none', custom: true, ga: '#7f1d1d', gb: '#1c0a0a', angle: 160, fa: '#ef4444', fb: '#fde047' },
+  { n: 'Glacier', deco: 'ice', shape: 'circle', frame: 'none', custom: true, ga: '#0c4a6e', gb: '#082f49', angle: 150, fa: '#7dd3fc', fb: '#e0f2fe' },
+  { n: 'Sakura', deco: 'blossom', shape: 'circle', frame: 'none', custom: true, ga: '#fbcfe8', gb: '#f472b6', angle: 140, fa: '#f9a8d4', fb: '#f472b6' },
+  { n: 'Grid', deco: 'cyber', shape: 'circle', frame: 'none', custom: true, ga: '#0f172a', gb: '#312e81', angle: 135, fa: '#22d3ee', fb: '#e879f9' },
+  { n: 'Majesty', deco: 'royal', shape: 'circle', frame: 'none', custom: true, ga: '#451a03', gb: '#1c1917', angle: 170, fa: '#fde68a', fb: '#b45309' },
+  { n: 'Tempest', deco: 'storm', shape: 'circle', frame: 'none', custom: true, ga: '#1e3a8a', gb: '#0f172a', angle: 160, fa: '#60a5fa', fb: '#fef08a' },
+  { n: 'Borealis', deco: 'aurora', shape: 'circle', frame: 'none', custom: true, ga: '#064e3b', gb: '#1e1b4b', angle: 150, fa: '#34d399', fb: '#a78bfa' },
+  // Shape looks: no decoration, a shaped face with a frame
+  { n: 'Neon', deco: null, shape: 'hex', custom: true, ga: '#111827', gb: '#312e81', angle: 135, frame: 'glow', fa: '#22d3ee', fb: '#e879f9' },
+  { n: 'Candy', deco: null, shape: 'rounded', custom: true, ga: '#f9a8d4', gb: '#a78bfa', angle: 120, frame: 'double', fa: '#ffffff', fb: '#f472b6' },
+  { n: 'Gold', deco: null, shape: 'shield', custom: true, ga: '#78350f', gb: '#1c1917', angle: 180, frame: 'gradient', fa: '#fde68a', fb: '#d97706' },
+  { n: 'Mono', deco: null, shape: 'octagon', custom: true, ga: '#3f3f46', gb: '#09090b', angle: 135, frame: 'ring', fa: '#e4e4e7', fb: '#a1a1aa' },
 ];
 
 // center-crop to a square, shrink, and keep lowering quality until it fits the relay's size cap
@@ -40,9 +47,9 @@ export function mountStudio(el, av, onChange, name = '') {
         <div class="av-sec"><b>Decoration</b><div class="deco-grid">
           <button class="deco-card ${av.deco ? '' : 'on'}" data-deco="">${avatar({ avatar: { ...av, deco: '' } }, 52)}None</button>
           ${Object.entries(DECOS).map(([k, d]) => `<button class="deco-card ${av.deco === k ? 'on' : ''}" data-deco="${k}">${avatar({ avatar: { ...av, deco: k, fa: d.fa, fb: d.fb } }, 52)}${d.name}</button>`).join('')}</div>
-          ${av.deco ? `<div class="av-colors"><label><input type="color" id="fa" value="${av.fa || '#8f8cff'}">Main</label><label><input type="color" id="fb" value="${av.fb || '#ff7ad9'}">Accent</label><button class="btn ghost sm" id="decoReset">Reset colours</button></div>` : ''}</div>
-        <div class="av-sec"><b>Shape</b><div class="av-chips">${AV_SHAPES.map((s) => `<button class="av-chip sq ${av.shape === s || (!av.shape && s === 'circle') ? 'on' : ''}" data-shape="${s}" aria-label="${s}" title="${s}">${shapeMini(s)}</button>`).join('')}</div></div>
-        <div class="av-sec"><b>Frame</b><div class="av-chips">${AV_FRAMES.map(([k, l]) => `<button class="av-chip ${((av.frame || 'none') === k) ? 'on' : ''}" data-frame="${k}">${avatar({ avatar: { frame: k, icon: 'user', color: 'slate', fa: av.fa, fb: av.fb }, }, 26)}${l}</button>`).join('')}</div>
+          ${av.deco && !DECOS[av.deco]?.fixed ? `<div class="av-colors"><label><input type="color" id="fa" value="${av.fa || '#8f8cff'}">Main</label><label><input type="color" id="fb" value="${av.fb || '#ff7ad9'}">Accent</label><button class="btn ghost sm" id="decoReset">Reset colours</button></div>` : ''}</div>
+        <div class="av-sec"><b>Shape <span class="av-hint">replaces the decoration</span></b><div class="av-chips">${AV_SHAPES.map((s) => `<button class="av-chip sq ${av.shape === s || (!av.shape && s === 'circle') ? 'on' : ''}" data-shape="${s}" aria-label="${s}" title="${s}">${shapeMini(s)}</button>`).join('')}</div></div>
+        <div class="av-sec"><b>Simple frame <span class="av-hint">replaces the decoration</span></b><div class="av-chips">${AV_FRAMES.map(([k, l]) => `<button class="av-chip ${((av.frame || 'none') === k) ? 'on' : ''}" data-frame="${k}">${avatar({ avatar: { frame: k, icon: 'user', color: 'slate', fa: av.fa, fb: av.fb }, }, 26)}${l}</button>`).join('')}</div>
           ${(av.frame && av.frame !== 'none' && !av.deco) ? `<div class="av-colors"><label><input type="color" id="fa" value="${av.fa || '#8f8cff'}">Border</label>${av.frame !== 'ring' ? `<label><input type="color" id="fb" value="${av.fb || '#ff7ad9'}">Second</label>` : ''}</div>` : ''}</div>
         ${av.image ? '' : `<div class="av-sec"><b>Icon</b><div class="avatar-picker">${AVATAR_ICONS.map((i) => `<button class="av-opt ${av.icon === i ? 'on' : ''}" data-i="${i}" aria-label="${i}">${icon(i)}</button>`).join('')}</div></div>
         <div class="av-sec"><b>Background</b>
@@ -62,10 +69,10 @@ export function mountStudio(el, av, onChange, name = '') {
     };
     $('#avRm', el)?.addEventListener('click', () => { av.image = null; changed(); });
     $$('[data-look]', el).forEach((b) => (b.onclick = () => { Object.assign(av, LOOKS[+b.dataset.look]); delete av.n; changed(); }));
-    $$('[data-deco]', el).forEach((b) => (b.onclick = () => { const k = b.dataset.deco; av.deco = k || null; if (k) { av.fa = DECOS[k].fa; av.fb = DECOS[k].fb; } changed(); }));
+    $$('[data-deco]', el).forEach((b) => (b.onclick = () => { const k = b.dataset.deco; av.deco = k || null; if (k) { av.fa = DECOS[k].fa; av.fb = DECOS[k].fb; av.shape = 'circle'; av.frame = 'none'; } changed(); }));
     $('#decoReset', el)?.addEventListener('click', () => { const d = DECOS[av.deco]; if (d) { av.fa = d.fa; av.fb = d.fb; changed(); } });
-    $$('[data-shape]', el).forEach((b) => (b.onclick = () => { av.shape = b.dataset.shape; changed(); }));
-    $$('[data-frame]', el).forEach((b) => (b.onclick = () => { av.frame = b.dataset.frame; if (av.frame !== 'none') { av.fa ||= '#8f8cff'; av.fb ||= '#ff7ad9'; } changed(); }));
+    $$('[data-shape]', el).forEach((b) => (b.onclick = () => { av.shape = b.dataset.shape; av.deco = null; changed(); }));
+    $$('[data-frame]', el).forEach((b) => (b.onclick = () => { av.frame = b.dataset.frame; av.deco = null; if (av.frame !== 'none') { av.fa ||= '#8f8cff'; av.fb ||= '#ff7ad9'; } changed(); }));
     $$('[data-i]', el).forEach((b) => (b.onclick = () => { av.icon = b.dataset.i; changed(); }));
     $$('[data-c]', el).forEach((b) => (b.onclick = () => { av.color = b.dataset.c; av.custom = false; changed(); }));
     // colour pickers update the live preview without rebuilding (rebuilding would close the picker)
