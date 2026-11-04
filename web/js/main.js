@@ -133,14 +133,14 @@ export function renderNav() {
     <a href="#/shelf" class="ri ${on(/^#\/shelf/)}" aria-label="Shelf" data-tip="Shelf">${icon('bookmark')}<span>Shelf</span></a>
     <i class="rsep"></i>
     <a class="rnode" href="#/settings/nodes" data-tip="${online} node${online === 1 ? '' : 's'} online"><span class="dot ${online ? 'online' : 'offline'}"></span><b>${online}</b></a>
-    <a class="rme" href="#/settings/profile" aria-label="Settings" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 40)}</a>`;
+    <a class="rme" href="#/settings/profile" aria-label="Settings" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 32)}</a>`;
   const railEl = $('#nav');
   if (!railEl.dataset.mag) {
     railEl.dataset.mag = '1';
     // dock-style magnify: items swell toward the cursor
     railEl.addEventListener('pointermove', (e) => {
       if (innerWidth <= 720 || e.pointerType === 'touch') return;
-      railEl.querySelectorAll('.ri, .rnode, .rme, .rlogo').forEach((it) => { const r = it.getBoundingClientRect(), d = e.clientY - (r.top + r.height / 2); it.style.setProperty('--mag', (1 + 0.2 * Math.exp(-(d * d) / (2 * 52 * 52))).toFixed(3)); });
+      railEl.querySelectorAll('.ri, .rnode, .rme, .rlogo').forEach((it) => { const r = it.getBoundingClientRect(), d = e.clientY - (r.top + r.height / 2); it.style.setProperty('--mag', (1 + 0.14 * Math.exp(-(d * d) / (2 * 44 * 44))).toFixed(3)); });
     });
     railEl.addEventListener('pointerleave', () => railEl.querySelectorAll('.ri, .rnode, .rme, .rlogo').forEach((it) => it.style.removeProperty('--mag')));
   }
