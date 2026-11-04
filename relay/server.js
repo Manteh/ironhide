@@ -16,6 +16,17 @@ const rooms = new Map();      // code -> room
 const send = (ws, msg) => { if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); };
 const b32 = (buf) => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let out = '', bits = 0, v = 0; for (const b of buf) { v = (v << 8) | b; bits += 8; while (bits >= 5) { out += A[(v >>> (bits - 5)) & 31]; bits -= 5; } } return out; };
 const idOf = (pubDer) => b32(createHash('sha256').update(pubDer).digest()).slice(0, 10);
+// Same rules as src/avatar.js (this file deploys on its own)
+const SHAPES = ['circle', 'squircle', 'rounded', 'hex', 'octagon', 'diamond', 'shield'], FRAMES = ['none', 'ring', 'gradient', 'double', 'glow', 'pulse', 'spin'];
+const HEX = /^#[0-9a-fA-F]{6}$/, IMG = /^data:image\/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$/;
+function cleanAvatar(a = {}) {
+  const o = { icon: String(a.icon || 'film').replace(/[^a-z-]/g, '').slice(0, 20) || 'film', color: String(a.color || 'indigo').replace(/[^a-z]/g, '').slice(0, 12) || 'indigo' };
+  if (typeof a.image === 'string' && a.image.length <= 48000 && IMG.test(a.image)) o.image = a.image;
+  if (SHAPES.includes(a.shape)) o.shape = a.shape; if (FRAMES.includes(a.frame)) o.frame = a.frame;
+  for (const k of ['ga', 'gb', 'fa', 'fb']) if (HEX.test(a[k] || '')) o[k] = a[k].toLowerCase();
+  if (a.custom) o.custom = true; if (Number.isFinite(+a.angle)) o.angle = Math.max(0, Math.min(360, Math.round(+a.angle)));
+  return o;
+}
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);
 const profile = (u) => ({ id: u.id, name: u.name, avatar: u.avatar });
 
@@ -52,7 +63,7 @@ const server = http.createServer((req, res) => {
   if (req.url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: true, service: 'ironhide-relay', online: [...users.values()].filter((u) => u.ws).length, rooms: rooms.size })); }
   res.writeHead(404); res.end();
 });
-const wss = new WebSocketServer({ server, maxPayload: 16 * 1024 });
+const wss = new WebSocketServer({ server, maxPayload: 80 * 1024 });
 
 wss.on('connection', (ws) => {
   let me = null, hits = [];
@@ -74,7 +85,7 @@ wss.on('connection', (ws) => {
         const id = idOf(der); let u = users.get(id);
         if (u?.ws && u.ws !== ws) { send(u.ws, { t: 'replaced' }); u.ws.close(); }
         if (!u) { u = { id, friends: new Set(), status: null, room: null, hide: false }; users.set(id, u); }
-        Object.assign(u, { name: clean(m.name, 32) || 'Guest', avatar: { icon: clean(m.avatar?.icon, 20) || 'film', color: clean(m.avatar?.color, 12) || 'indigo' }, ws, hide: !!m.hide });
+        Object.assign(u, { name: clean(m.name, 32) || 'Guest', avatar: cleanAvatar(m.avatar), ws, hide: !!m.hide });
         me = u; clearTimeout(authTimer);
         send(ws, { t: 'welcome', you: profile(u), now: Date.now(), directory: DIRECTORY });
         for (const req of offlineReq.get(id) || []) send(ws, { t: 'friend.req', from: req });
@@ -86,7 +97,7 @@ wss.on('connection', (ws) => {
 
     const u = me;
     switch (m.t) {
-      case 'profile': u.name = clean(m.name, 32) || u.name; if (m.avatar) u.avatar = { icon: clean(m.avatar.icon, 20) || 'film', color: clean(m.avatar.color, 12) || 'indigo' }; u.hide = !!m.hide; announce(u); break;
+      case 'profile': u.name = clean(m.name, 32) || u.name; if (m.avatar) u.avatar = cleanAvatar(m.avatar); u.hide = !!m.hide; announce(u); break;
       case 'directory': if (DIRECTORY) send(ws, { t: 'directory', list: [...users.values()].filter((x) => x.ws && !x.hide && x.id !== u.id).map(profile).slice(0, 200) }); break;
       case 'friends': u.friends = new Set((m.ids || []).slice(0, 500).map((x) => clean(x, 12))); send(ws, { t: 'presence.all', list: presenceFor(u) }); announce(u); break;
       case 'friend.req': {

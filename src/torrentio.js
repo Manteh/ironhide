@@ -6,7 +6,9 @@ function torrentioBase() {
   const cfg = getConfig();
   const key = debridKey(cfg);
   const slug = SERVICE_SLUG[cfg.debrid_provider];
-  return slug && key ? `https://torrentio.strem.fun/${slug}=${key}` : 'https://torrentio.strem.fun';
+  // Hosted mode plays in the browser, so skip releases no browser can decode (4K/HDR/DV/remux)
+  const opts = process.env.IRONHIDE_HOSTED === '1' ? 'qualityfilter=brremux,hdrall,dolbyvision,4k,scr,cam|sort=qualitysize|' : '';
+  return slug && key ? `https://torrentio.strem.fun/${opts}${slug}=${key}` : 'https://torrentio.strem.fun';
 }
 
 // Comet (debrid-aware indexer), same source nitrate merges with Torrentio.

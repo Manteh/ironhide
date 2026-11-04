@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { userInfo } from 'os';
 import { CONFIG_DIR, getConfig, saveConfig } from './config.js';
+import { cleanAvatar } from './avatar.js';
 import { isMpvRunning, getNowPlaying } from './mpv-ipc.js';
 
 const FILE = join(CONFIG_DIR, 'settings.json');
@@ -56,11 +57,7 @@ export function updateSettings(patch) {
       const n = String(patch.profile.name ?? cur.profile.name).trim().slice(0, 40);
       cur.profile.name = n || cur.profile.name;
       if (patch.profile.name != null) cur.profile.named = true;
-      if (patch.profile.avatar) {
-        const { icon, color } = patch.profile.avatar;
-        if (typeof icon === 'string' && /^[a-z-]{1,20}$/.test(icon)) cur.profile.avatar.icon = icon;
-        if (typeof color === 'string' && /^[a-z]{1,12}$/.test(color)) cur.profile.avatar.color = color;
-      }
+      if (patch.profile.avatar) cur.profile.avatar = cleanAvatar(patch.profile.avatar, cur.profile.avatar);
     }
     for (const section of ['appearance', 'playback']) {
       for (const [k, v] of Object.entries(patch[section] || {})) {

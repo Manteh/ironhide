@@ -35,17 +35,13 @@ function profile(body) {
       card({ title: 'Display name', desc: 'Shown in the menu and the welcome screen.',
         body: `<div class="field"><label for="pname">Name</label><input id="pname" class="input" maxlength="40" value="${esc(p.name)}" style="max-width:340px"></div>`,
         foot: `<span>Up to 40 characters. Saves automatically.</span>${savestat('s1')}` }) +
-      card({ title: 'Avatar', desc: 'Pick an icon and a colour.',
-        body: `<div style="display:flex;gap:var(--s6);align-items:flex-start;flex-wrap:wrap">${avatar(p, 88)}
-          <div style="display:flex;flex-direction:column;gap:var(--s4);flex:1;min-width:240px">
-            <div class="avatar-picker" role="radiogroup" aria-label="Icon">${AVATAR_ICONS.map((i) => `<button class="av-opt ${p.avatar.icon === i ? 'on' : ''}" data-i="${i}" aria-label="${i}">${icon(i)}</button>`).join('')}</div>
-            <div class="swatches" role="radiogroup" aria-label="Colour">${AVATAR_COLORS.map((c) => `<button class="color-opt av-${c} ${p.avatar.color === c ? 'on' : ''}" data-c="${c}" aria-label="${c}"></button>`).join('')}</div></div></div>`,
+      card({ title: 'Avatar', desc: 'Upload a photo or build one: shape, gradient, frame. Friends see it in Together.',
+        body: '<div id="avStudio"></div>',
         foot: `<span>Saves automatically.</span>${savestat('s2')}` });
     const saveName = debounce(() => saveSettings({ profile: { name: p.name } }).then(() => flash(body, 's1')).catch((e) => toast(e.message, 'err')));
     $('#pname', body).oninput = (e) => { p.name = e.target.value; if (p.name.trim()) saveName(); };
     const saveAv = () => saveSettings({ profile: { avatar: p.avatar } }).then(() => flash(body, 's2')).catch((e) => toast(e.message, 'err'));
-    $$('[data-i]', body).forEach((b) => (b.onclick = () => { p.avatar.icon = b.dataset.i; const n = $('#pname', body).value; draw(); $('#pname', body).value = n; saveAv(); }));
-    $$('[data-c]', body).forEach((b) => (b.onclick = () => { p.avatar.color = b.dataset.c; const n = $('#pname', body).value; draw(); $('#pname', body).value = n; saveAv(); }));
+    import('../avatar-studio.js').then((m) => m.mountStudio($('#avStudio', body), p.avatar, saveAv, p.name));
     // hosted mode only: sign out
     fetch('/hub/health').then((r) => r.ok && r.json()).then((h) => {
       if (!h?.ok || !body.isConnected) return;

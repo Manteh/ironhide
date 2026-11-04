@@ -1,0 +1,54 @@
+/* Avatars: shape, frame, gradient face, optional photo */
+@property --avrot { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.avw { --s: 34px; --bw: 0px; --fa: #8f8cff; --fb: #ff7ad9; position: relative; display: inline-block; width: var(--s); height: var(--s); flex: none; vertical-align: middle; font-size: var(--s); line-height: 0; }
+.avx { position: absolute; inset: 0; display: block; padding: var(--bw); box-sizing: border-box; background: transparent; }
+.avi { position: relative; display: grid; place-items: center; width: 100%; height: 100%; overflow: hidden; color: #fff; background: linear-gradient(135deg, var(--av1, #8f8cff), var(--av2, #4b48d6)); }
+.avi svg { width: 55%; height: 55%; } .avi img { width: 100%; height: 100%; object-fit: cover; display: block; user-select: none; }
+.avx, .avi { clip-path: var(--clip, none); border-radius: var(--rad, 50%); }
+
+/* shapes: border-radius for round ones, clip-path polygons for angular ones (frame + face share the same shape) */
+.sh-circle { --rad: 50%; } .sh-squircle { --rad: 34%; } .sh-rounded { --rad: 18%; }
+.sh-hex { --rad: 0; --clip: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%); }
+.sh-octagon { --rad: 0; --clip: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%); }
+.sh-diamond { --rad: 0; --clip: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.sh-shield { --rad: 0; --clip: polygon(0 4%, 50% 0, 100% 4%, 100% 58%, 50% 100%, 0 58%); }
+.avx > .avi { --clip: inherit; border-radius: calc(var(--rad, 50%) * .88); }
+.sh-hex > .avi, .sh-octagon > .avi, .sh-diamond > .avi, .sh-shield > .avi { border-radius: 0; }
+
+/* frames */
+.fr-ring .avx { background: var(--fa); }
+.fr-gradient .avx { background: linear-gradient(135deg, var(--fa), var(--fb)); }
+.fr-double .avx { background: conic-gradient(var(--fa) 0 100%); }
+.fr-double .avi { box-shadow: inset 0 0 0 calc(var(--bw) * .35) var(--bg, #0d0d0f); }
+.fr-double .avx { background: linear-gradient(135deg, var(--fa), var(--fb)); }
+.fr-glow { filter: drop-shadow(0 0 calc(var(--s) * .18) color-mix(in srgb, var(--fa) 80%, transparent)); }
+.fr-glow .avx { background: linear-gradient(135deg, var(--fa), var(--fb)); }
+.fr-pulse .avx { background: linear-gradient(135deg, var(--fa), var(--fb)); }
+.fr-pulse { animation: avpulse 2.4s ease-in-out infinite; }
+@keyframes avpulse { 0%, 100% { filter: drop-shadow(0 0 0 transparent); } 50% { filter: drop-shadow(0 0 calc(var(--s) * .22) color-mix(in srgb, var(--fa) 85%, transparent)); } }
+.fr-spin .avx { background: conic-gradient(from var(--avrot), var(--fa), var(--fb), var(--fa)); animation: avspin 4s linear infinite; }
+@keyframes avspin { to { --avrot: 360deg; } }
+@media (prefers-reduced-motion: reduce), (html[data-motion="off"]) { .fr-pulse, .fr-spin .avx { animation: none; } }
+html[data-motion="off"] .fr-pulse, html[data-motion="off"] .fr-spin .avx { animation: none; }
+
+/* avatar studio (settings) */
+.av-studio { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: var(--s6); align-items: start; }
+@media (max-width: 720px) { .av-studio { grid-template-columns: 1fr; } }
+.av-prev { display: grid; place-items: center; gap: 14px; padding: 22px 12px; border-radius: 18px; background: var(--surface-2); border: 1px solid var(--border); position: sticky; top: 12px; }
+.av-prev .row { display: flex; gap: 12px; align-items: center; }
+.av-ctl { display: flex; flex-direction: column; gap: var(--s5); min-width: 0; }
+.av-sec { display: flex; flex-direction: column; gap: 10px; } .av-sec > b { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 650; }
+.av-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.av-chip { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px 0 8px; border-radius: 12px; border: 1px solid var(--border); background: transparent; color: var(--text-2); font-size: 13.5px; font-weight: 520; cursor: pointer; }
+.av-chip:hover { background: var(--hover); color: var(--text); } .av-chip.on { border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+.av-chip.sq { padding: 0; width: 46px; justify-content: center; }
+.av-chip .mini { width: 24px; height: 24px; background: linear-gradient(135deg, #8f8cff, #4b48d6); }
+.av-chip .sw { width: 22px; height: 22px; border-radius: 6px; }
+.av-colors { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.av-colors label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); }
+.av-colors input[type=color] { width: 38px; height: 38px; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: none; cursor: pointer; overflow: hidden; }
+.av-colors input[type=color]::-webkit-color-swatch-wrapper { padding: 0; } .av-colors input[type=color]::-webkit-color-swatch { border: 0; border-radius: 9px; }
+.av-colors input[type=range] { width: 130px; accent-color: var(--accent, #8f8cff); }
+.av-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 10px; }
+.av-pre { display: grid; place-items: center; gap: 8px; padding: 12px 6px 10px; border-radius: 14px; border: 1px solid var(--border); background: transparent; color: var(--text-2); font-size: 12px; cursor: pointer; }
+.av-pre:hover { background: var(--hover); color: var(--text); }

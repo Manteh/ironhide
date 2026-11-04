@@ -88,7 +88,8 @@ function jsonResponse(res, data, status = 200) {
 }
 
 function errorResponse(res, message, status = 500) {
-  jsonResponse(res, { error: message }, status);
+  // never let an API key leave in an error message (debrid links carry it in the query string)
+  jsonResponse(res, { error: String(message).replace(/([?&](?:token|apikey|api_key|key)=)[^&\s"']+/gi, '$1***') }, status);
 }
 
 async function serveStatic(req, res) {
@@ -293,26 +294,30 @@ async function handleApi(req, res, urlPath) {
         // CDN delivery (hosted mode): the browser plays straight from the debrid CDN, so only files it can
         // decode as-is qualify. Auto-pick moves on to the next best candidate when one doesn't.
         const tried = new Set(); let info, direct;
-        for (let attempt = 0; attempt < (CDN_DELIVERY && !body.index ? 5 : 1); attempt++) {
-          if (!stream.isRD || !stream.url) throw new Error('The web player needs a debrid stream (this one is a torrent)');
-          setPlayState({ phase: 'resolving', detail: `Resolving ${stream.size || 'stream'}` });
-          const r = await fetch(stream.url, { redirect: 'manual' });
-          direct = r.headers.get('location') || (r.status < 300 ? stream.url : null);
-          if (!direct || /failed_|error|denied/i.test(direct)) throw new Error('That stream is not available right now');
-          setPlayState({ phase: 'probing', detail: 'Checking codecs and tracks' });
+        // Auto-pick also moves on when a stream's download node can't be reached or the link is dead.
+        let lastErr;
+        for (let attempt = 0; attempt < (body.index ? 1 : 6); attempt++) {
           const loaded = getLoadedStreams(), meta = { ...loaded.meta, season, episode };
           try {
+            if (!stream.isRD || !stream.url) throw new Error('The web player needs a debrid stream (this one is a torrent)');
+            setPlayState({ phase: 'resolving', detail: `Resolving ${stream.size || 'stream'}` });
+            const r = await fetch(stream.url, { redirect: 'manual' });
+            direct = r.headers.get('location') || (r.status < 300 ? stream.url : null);
+            if (!direct || /failed_|error|denied/i.test(direct)) throw new Error('That stream is not available right now');
+            setPlayState({ phase: 'probing', detail: 'Checking codecs and tracks' });
             info = await createSession({ url: direct, title: meta.title || body.title || 'Playing', meta, subs: loaded.subs || [], caps: body.caps || {}, settings, delivery: CDN_DELIVERY ? 'cdn' : 'proxy' });
             break;
           } catch (e) {
-            if (!e.incompatible || body.index) throw e;
+            lastErr = e;
+            if (body.index) throw e;
             tried.add(loaded.streams.indexOf(stream) + 1);
-            const next = pickBest(loaded.streams, settings, { exclude: tried, browserSafe: true });
-            if (!next) throw new Error('No stream for this title plays directly in a browser. Try another title or quality.');
+            const next = pickBest(loaded.streams, settings, { exclude: tried, browserSafe: CDN_DELIVERY });
+            if (!next) break;
+            setPlayState({ phase: 'resolving', detail: 'Trying another source' });
             stream = loaded.streams[next - 1];
           }
         }
-        if (!info) throw new Error('No stream for this title plays directly in a browser.');
+        if (!info) throw lastErr || new Error('No stream for this title could be opened.');
         const loaded = getLoadedStreams(), meta = { ...loaded.meta, season, episode };
         await addToHistory({ title: meta.title || stream.quality.slice(0, 40), imdbId: meta.imdbId || '', type: meta.type || type, season, episode, quality: stream.quality.slice(0, 80), streamUrl: stream.url, streamIsRD: true }).catch(() => {});
         if (meta.imdbId) await learnQuality(meta.imdbId, stream).catch(() => {});
