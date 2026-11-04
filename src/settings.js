@@ -76,6 +76,18 @@ export function updateSettings(patch) {
   });
 }
 
+// Sign out: back to a blank profile so the first-run name screen shows again. Keys, appearance and playback stay.
+export function resetProfile() {
+  return serialize(async () => {
+    const cur = await getSettings();
+    cur.profile = { ...defaults().profile }; // no `named` flag, default name and avatar
+    await mkdir(CONFIG_DIR, { recursive: true });
+    await writeFile(FILE + '.tmp', JSON.stringify(cur, null, 2));
+    await rename(FILE + '.tmp', FILE);
+    return cur;
+  });
+}
+
 // ---------- Connectors ----------
 const mask = (k) => (k ? '••••••••' + k.slice(-4) : '');
 

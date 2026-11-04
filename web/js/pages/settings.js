@@ -42,16 +42,20 @@ function profile(body) {
     $('#pname', body).oninput = (e) => { p.name = e.target.value; if (p.name.trim()) saveName(); };
     const saveAv = () => saveSettings({ profile: { avatar: p.avatar } }).then(() => flash(body, 's2')).catch((e) => toast(e.message, 'err'));
     import('../avatar-studio.js').then((m) => m.mountStudio($('#avStudio', body), p.avatar, saveAv, p.name));
-    // hosted mode only: sign out
-    fetch('/hub/health').then((r) => r.ok && r.json()).then((h) => {
-      if (!h?.ok || !body.isConnected) return;
-      body.insertAdjacentHTML('beforeend', card({ title: 'Sign out', desc: 'Leave this session. Your name is freed, and your settings, TorBox key and history on this server are erased. Anyone can then take the name.',
-        body: '', foot: `<span></span><button class="btn danger" id="signout">Sign out</button>` }));
+    // sign out: on a hosted hub this erases the account; locally it starts over as a new user on this install
+    fetch('/hub/health').then((r) => (r.ok ? r.json() : null)).catch(() => null).then((h) => {
+      if (!body.isConnected) return;
+      const hub = !!h?.ok;
+      body.insertAdjacentHTML('beforeend', card({ title: 'Sign out', desc: hub
+        ? 'Leave this session. Your name is freed, and your settings, TorBox key and history on this server are erased. Anyone can then take the name.'
+        : 'Start over as a new user. You get a new friend code and an empty friends list, and the name screen comes back in every open browser. Your TorBox key, appearance and playback settings stay.',
+        body: '', foot: `<span></span><button class="btn danger" id="signout">Sign out and start fresh</button>` }));
       $('#signout', body).onclick = async () => {
-        if (!confirm('Sign out and erase your data on this server? This cannot be undone.')) return;
-        await fetch('/hub/leave', { method: 'POST' }); location.href = '/';
+        if (!confirm(hub ? 'Sign out and erase your data on this server? This cannot be undone.' : 'Sign out? You will lose your friends list and friend code. This cannot be undone.')) return;
+        if (hub) { await fetch('/hub/leave', { method: 'POST' }); location.href = '/'; return; }
+        await fetch('/api/account/reset', { method: 'POST' }); location.href = '/';
       };
-    }).catch(() => {});
+    });
   };
   draw();
 }

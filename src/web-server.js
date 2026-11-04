@@ -13,7 +13,7 @@ import { learnQuality } from './preferences.js';
 import { capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
 import { readFile as readFileAsync } from 'fs/promises';
 import {
-  getSettings, updateSettings, connectorsView, setConnectorKey, setDebridProvider, testConnector,
+  getSettings, updateSettings, resetProfile, connectorsView, setConnectorKey, setDebridProvider, testConnector,
   getNodes, pickBest, getWatchlist, toggleWatchlist,
 } from './settings.js';
 import { WebSocketServer } from 'ws';
@@ -219,6 +219,7 @@ async function handleApi(req, res, urlPath) {
     }
 
     if (method === 'GET' && urlPath === '/api/settings') return jsonResponse(res, await getSettings());
+    if (method === 'POST' && urlPath === '/api/account/reset') { await resetProfile(); social.resetIdentity(); return jsonResponse(res, { ok: true }); }
     if (method === 'PUT' && urlPath === '/api/settings') { const out = await updateSettings(await parseBody(req)); social.sendProfile(); return jsonResponse(res, out); }
 
     if (method === 'GET' && urlPath === '/api/connectors') return jsonResponse(res, connectorsView());

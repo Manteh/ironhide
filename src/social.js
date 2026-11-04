@@ -20,12 +20,13 @@ export const onSocial = (fn) => { emit = fn; };
 // ---------- identity + persistence ----------
 function load() {
   try { data = { ...data, ...JSON.parse(readFileSync(FILE, 'utf-8')) }; } catch {}
-  if (!data.priv) {
-    const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-    data.pub = publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
-    data.priv = privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64');
-    save();
-  }
+  if (!data.priv) genKeys();
+}
+function genKeys() {
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  data.pub = publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+  data.priv = privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64');
+  save();
 }
 function save() {
   mkdirSync(CONFIG_DIR, { recursive: true });
@@ -158,3 +159,13 @@ export function startSocial() {
   if (data.relayUrl) connect();
 }
 export const myCode = () => S.you?.id || '';
+
+// Sign out: forget this identity (new keys, so a new friend code), drop friends and rooms, and reconnect as a fresh user.
+// The relay address and privacy switches stay.
+export function resetIdentity() {
+  disconnect();
+  data.friends = []; data.priv = ''; data.pub = ''; genKeys();
+  Object.assign(S, { you: null, presence: new Map(), incoming: [], outgoing: [], room: null, chat: [], invites: [], people: [], offsets: [], watching: null });
+  emit('reset', {});
+  if (data.relayUrl) connect(); else push();
+}
