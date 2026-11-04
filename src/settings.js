@@ -205,11 +205,12 @@ export async function getNodes(force = false) {
 }
 
 // ---------- Preferred-quality pick ----------
-export function pickBest(streams, p) {
+export function pickBest(streams, p, { exclude = new Set(), browserSafe = false } = {}) {
   const res = (s) => (s.quality.match(/2160p|4k|1080p|720p|480p/i) || [''])[0].toLowerCase().replace('4k', '2160p');
   const rank = { '2160p': 4, '1080p': 3, '720p': 2, '480p': 1, '': 0 };
-  let pool = streams.filter((s) => (p.cachedOnly ? s.cached : true));
-  if (!pool.length) pool = streams;
+  let pool = streams.filter((s) => (p.cachedOnly ? s.cached : true) && !exclude.has(streams.indexOf(s) + 1));
+  if (!pool.length) pool = streams.filter((s) => !exclude.has(streams.indexOf(s) + 1));
+  if (!pool.length) return null;
   const score = (s) => {
     let v = 0;
     const r = res(s), q = s.quality;
@@ -222,6 +223,13 @@ export function pickBest(streams, p) {
     if (p.maxSizeGb > 0 && s.sizeBytes > p.maxSizeGb * 1e9) v -= 200;
     if (/\bDUAL\b|DUBBED|\bDUB\b/i.test(q)) v -= 30;
     if (/CAM|TELESYNC|\bTS\b|HDCAM/i.test(q)) v -= 300;
+    if (browserSafe) { // files a browser can play untouched: mp4 with h264 + AAC
+      if (/h\.?264|x264|avc/i.test(q)) v += 60;
+      if (/hevc|x265|h\.?265|10.?bit|remux|av1/i.test(q)) v -= 80;
+      if (/dts|truehd|atmos|dd\+|ddp|eac3|ac3/i.test(q)) v -= 50;
+      if (/\.mkv\b/i.test(q)) v -= 20;
+      if (r === '2160p') v -= 60;
+    }
     v += Math.min(s.seeds, 500) / 100;
     return v;
   };

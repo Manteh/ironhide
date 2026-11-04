@@ -8,8 +8,8 @@ import { join } from 'path';
 import { readFile } from 'fs/promises';
 import { randomUUID } from 'crypto';
 
-const FFMPEG = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'].find(existsSync);
-const FFPROBE = ['/opt/homebrew/bin/ffprobe', '/usr/local/bin/ffprobe'].find(existsSync);
+const FFMPEG = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'].find(existsSync);
+const FFPROBE = ['/opt/homebrew/bin/ffprobe', '/usr/local/bin/ffprobe', '/usr/bin/ffprobe'].find(existsSync);
 const sessions = new Map();
 
 export function capabilities() {
@@ -43,12 +43,29 @@ async function probe(url) {
   return JSON.parse(out);
 }
 
-export async function createSession({ url, title, meta, subs = [], caps = {}, settings = {} }) {
+// "cdn" delivery: the viewer's browser plays the debrid file straight from the CDN, so none of the
+// video passes through this process. Only files a browser can decode as-is qualify.
+const CDN_AUDIO = new Set(['aac', 'mp3', 'opus', 'vorbis', 'flac']);
+function cdnCompatible(info, video, audioStreams) {
+  const container = String(info.format?.format_name || '');
+  if (!/mp4|webm/.test(container)) return 'container ' + container.split(',')[0];
+  const okVideo = (video.codec_name === 'h264' && !/10/.test(video.pix_fmt || '')) || video.codec_name === 'vp9' || video.codec_name === 'av1';
+  if (!okVideo) return 'video ' + video.codec_name;
+  const a = audioStreams.find((s) => s.disposition?.default) || audioStreams[0];
+  if (a && !CDN_AUDIO.has(a.codec_name)) return 'audio ' + a.codec_name;
+  return '';
+}
+
+export async function createSession({ url, title, meta, subs = [], caps = {}, settings = {}, delivery = 'proxy' }) {
   if (!FFMPEG || !FFPROBE) throw new Error('ffmpeg is not installed (brew install ffmpeg)');
   url = await resolveFinal(url);
   const info = await probe(url);
   const video = info.streams.find((s) => s.codec_type === 'video' && !s.disposition?.attached_pic);
   if (!video) throw new Error('No video stream found in this file');
+  if (delivery === 'cdn') {
+    const why = cdnCompatible(info, video, info.streams.filter((s) => s.codec_type === 'audio'));
+    if (why) { const e = new Error(`Not playable straight in a browser (${why})`); e.incompatible = true; throw e; }
+  }
   const audio = info.streams.filter((s) => s.codec_type === 'audio').map((s, i) => ({
     index: i, codec: s.codec_name, channels: s.channels || 2, lang: s.tags?.language || 'und', title: s.tags?.title || '', default: !!s.disposition?.default,
   }));
@@ -64,7 +81,7 @@ export async function createSession({ url, title, meta, subs = [], caps = {}, se
   const sess = {
     id, url, title, meta, duration, subs, audio, procs: new Set(), createdAt: Date.now(),
     video: { codec: video.codec_name, width: video.width, height: video.height, hdr, dv, fps: video.avg_frame_rate },
-    plan: { copyVideo, maxH: copyVideo ? 0 : (maxH || 0), hevc: video.codec_name === 'hevc' },
+    plan: { copyVideo, maxH: copyVideo ? 0 : (maxH || 0), hevc: video.codec_name === 'hevc', cdn: delivery === 'cdn' },
     log: [],
   };
   sessions.set(id, sess);
@@ -74,7 +91,8 @@ export async function createSession({ url, title, meta, subs = [], caps = {}, se
 export function publicInfo(s) {
   return {
     id: s.id, title: s.title, meta: s.meta, duration: s.duration, video: s.video, audio: s.audio,
-    subs: s.subs.map((x, i) => ({ index: i, lang: x.lang })), mode: s.plan.copyVideo ? 'direct' : 'transcode',
+    subs: s.subs.map((x, i) => ({ index: i, lang: x.lang })), mode: s.plan.cdn ? 'cdn' : s.plan.copyVideo ? 'direct' : 'transcode',
+    ...(s.plan.cdn ? { src: s.url } : {}),
   };
 }
 

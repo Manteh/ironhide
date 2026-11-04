@@ -31,6 +31,8 @@ import { getPlayState, setPlayState, beginLaunch } from './playstate.js';
 
 const WEB_DIR = fileURLToPath(new URL('../web', import.meta.url));
 export const WEB_PORT = Number(process.env.IRONHIDE_PORT) || 7676;
+// Hosted mode: video goes from the debrid CDN straight to each viewer's browser, never through this server.
+const CDN_DELIVERY = process.env.IRONHIDE_HOSTED === '1' || process.env.IRONHIDE_DELIVERY === 'cdn';
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -283,19 +285,35 @@ async function handleApi(req, res, urlPath) {
         beginLaunch({ title: body.title || '', imdbId: body.imdbId });
         await tools.ironhide_streams.handler({ imdbId: body.imdbId, title: body.title || '', type, season, episode });
         const loaded = getLoadedStreams();
-        const best = pickBest(loaded.streams, settings);
+        const best = pickBest(loaded.streams, settings, { browserSafe: CDN_DELIVERY });
         if (!best) { setPlayState({ phase: 'error', detail: 'No streams found for this title' }); return errorResponse(res, 'No streams found for this title', 404); }
         stream = loaded.streams[best - 1];
       }
       try {
-        if (!stream.isRD || !stream.url) throw new Error('The web player needs a debrid stream (this one is a torrent)');
-        setPlayState({ phase: 'resolving', detail: `Resolving ${stream.size || 'stream'}` });
-        const r = await fetch(stream.url, { redirect: 'manual' });
-        const direct = r.headers.get('location') || (r.status < 300 ? stream.url : null);
-        if (!direct || /failed_|error|denied/i.test(direct)) throw new Error('That stream is not available right now');
-        setPlayState({ phase: 'probing', detail: 'Checking codecs and tracks' });
+        // CDN delivery (hosted mode): the browser plays straight from the debrid CDN, so only files it can
+        // decode as-is qualify. Auto-pick moves on to the next best candidate when one doesn't.
+        const tried = new Set(); let info, direct;
+        for (let attempt = 0; attempt < (CDN_DELIVERY && !body.index ? 5 : 1); attempt++) {
+          if (!stream.isRD || !stream.url) throw new Error('The web player needs a debrid stream (this one is a torrent)');
+          setPlayState({ phase: 'resolving', detail: `Resolving ${stream.size || 'stream'}` });
+          const r = await fetch(stream.url, { redirect: 'manual' });
+          direct = r.headers.get('location') || (r.status < 300 ? stream.url : null);
+          if (!direct || /failed_|error|denied/i.test(direct)) throw new Error('That stream is not available right now');
+          setPlayState({ phase: 'probing', detail: 'Checking codecs and tracks' });
+          const loaded = getLoadedStreams(), meta = { ...loaded.meta, season, episode };
+          try {
+            info = await createSession({ url: direct, title: meta.title || body.title || 'Playing', meta, subs: loaded.subs || [], caps: body.caps || {}, settings, delivery: CDN_DELIVERY ? 'cdn' : 'proxy' });
+            break;
+          } catch (e) {
+            if (!e.incompatible || body.index) throw e;
+            tried.add(loaded.streams.indexOf(stream) + 1);
+            const next = pickBest(loaded.streams, settings, { exclude: tried, browserSafe: true });
+            if (!next) throw new Error('No stream for this title plays directly in a browser. Try another title or quality.');
+            stream = loaded.streams[next - 1];
+          }
+        }
+        if (!info) throw new Error('No stream for this title plays directly in a browser.');
         const loaded = getLoadedStreams(), meta = { ...loaded.meta, season, episode };
-        const info = await createSession({ url: direct, title: meta.title || body.title || 'Playing', meta, subs: loaded.subs || [], caps: body.caps || {}, settings });
         await addToHistory({ title: meta.title || stream.quality.slice(0, 40), imdbId: meta.imdbId || '', type: meta.type || type, season, episode, quality: stream.quality.slice(0, 80), streamUrl: stream.url, streamIsRD: true }).catch(() => {});
         if (meta.imdbId) await learnQuality(meta.imdbId, stream).catch(() => {});
         setPlayState({ phase: 'playing', detail: 'Opening the player' });

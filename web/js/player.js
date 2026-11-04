@@ -72,6 +72,12 @@ export function openPlayer(info, opts = {}) {
 // ---------- loading / seeking ----------
 function load(start, autoplay) {
   const { video, info } = S;
+  if (info.mode === 'cdn') { // played straight from the CDN: native seeking, no restarts, offset stays 0
+    S.offset = 0; S.wasPlaying = autoplay; spin(true);
+    if (!video.src) { video.src = info.src; video.addEventListener('loadedmetadata', () => { if (start > 0) video.currentTime = start; }, { once: true }); }
+    video.playbackRate = S.rate; if (autoplay) video.play().catch(() => {});
+    return;
+  }
   S.offset = Math.max(0, start); S.wasPlaying = autoplay; spin(true);
   const url = `/api/wp/${info.id}/stream?start=${S.offset.toFixed(2)}&audio=${S.audio}${S.transcode ? '&transcode=1' : ''}&t=${Date.now()}`;
   video.src = url; video.playbackRate = S.rate;
@@ -82,6 +88,7 @@ const dur = () => S.info.duration || (S.offset + (S.video.duration || 0));
 
 function seekTo(t) {
   const { video } = S; t = Math.min(Math.max(0, t), Math.max(0, dur() - 1)); const rel = t - S.offset;
+  if (S.info.mode === 'cdn') { paintTime(t); video.currentTime = t; return; }
   let inBuf = false; for (let i = 0; i < video.buffered.length; i++) if (rel >= video.buffered.start(i) - 0.1 && rel <= video.buffered.end(i) - 0.8) inBuf = true;
   paintTime(t);
   if (inBuf) video.currentTime = rel; else load(t, !video.paused || S.wasPlaying);
@@ -107,8 +114,8 @@ function paintBuffer() {
 }
 const spin = (on) => $('#wpSpin', wp)?.classList.toggle('on', on);
 function badges() {
-  const v = S.info.video, mode = S.info.mode === 'direct' && !S.transcode;
-  const parts = [mode ? 'Direct play' : 'GPU transcode', (v.codec || '').toUpperCase(), v.height ? `${v.height}p` : '', v.dv ? 'Dolby Vision' : v.hdr].filter(Boolean);
+  const v = S.info.video, mode = S.info.mode !== 'transcode' && !S.transcode;
+  const parts = [S.info.mode === 'cdn' ? 'Direct from CDN' : mode ? 'Direct play' : 'GPU transcode', (v.codec || '').toUpperCase(), v.height ? `${v.height}p` : '', v.dv ? 'Dolby Vision' : v.hdr].filter(Boolean);
   $('#wpBadges', wp).innerHTML = parts.map((p, i) => `<span class="${i === 0 ? 'hl' : ''}">${esc(p)}</span>`).join('');
 }
 function playIcon() { $('#wpPlay', wp).innerHTML = icon(S.video.paused ? 'play' : 'pause'); $('#wpMute', wp).innerHTML = S.video.muted || S.video.volume === 0 ? '<svg class="i" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l4 6M21 9l-4 6"/></svg>' : '<svg class="i" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/></svg>'; }
@@ -123,7 +130,7 @@ function bind() {
   video.addEventListener('timeupdate', () => { const now = performance.now(); if (!S.dragging && now - S.lastUI > 200) { S.lastUI = now; paintTime(); } paintBuffer(); });
   video.addEventListener('progress', paintBuffer);
   video.addEventListener('waiting', () => spin(true)); video.addEventListener('stalled', () => spin(true));
-  video.addEventListener('playing', () => { spin(false); wp.classList.add('started'); playIcon(); if (!S.thumbsOn) { S.thumbsOn = true; setTimeout(() => S && post(`/api/wp/${S.info.id}/thumbs`).catch(() => {}), 3000); } });
+  video.addEventListener('playing', () => { spin(false); wp.classList.add('started'); playIcon(); if (!S.thumbsOn && S.info.mode !== 'cdn') { S.thumbsOn = true; setTimeout(() => S && post(`/api/wp/${S.info.id}/thumbs`).catch(() => {}), 3000); } });
   video.addEventListener('canplay', () => spin(false));
   video.addEventListener('loadeddata', () => wp.classList.add('started'));
   video.addEventListener('pause', () => { playIcon(); wake(); }); video.addEventListener('play', () => { playIcon(); wake(); });
@@ -161,6 +168,7 @@ function bind() {
     } catch {}
   };
   const showThumb = (t) => {
+    if (S.info.mode === 'cdn') return; // no server-made preview frames when video goes straight to the browser
     const my = ++thumbReq; clearTimeout(nearTimer); clearTimeout(exactTimer);
     nearTimer = setTimeout(() => fetchThumb(`/api/wp/${S.info.id}/thumb?t=${t.toFixed(1)}`, my, false, t), 30);
     exactTimer = setTimeout(() => fetchThumb(`/api/wp/${S.info.id}/thumb?t=${Math.round(t)}&exact=1`, my, true, t), 260);
