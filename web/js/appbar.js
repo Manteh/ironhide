@@ -29,7 +29,7 @@
     <div class="r"><button data-a="search" title="Search (⌘K)">${I.search}</button><button class="pill" data-a="resume" title="Continue watching">${I.play}<span>Resume</span></button><button data-a="friends" title="Friends">${I.friends}<b class="dot" data-dot="friends"></b></button><button data-a="bell" title="What's new">${I.bell}<b class="dot warn sm" data-dot="bell"></b></button><button data-a="menu" title="Settings">${I.gear}</button><i class="sep"></i><button class="me" data-a="profile" title="Your profile"><i></i><span></span></button></div>`;
   const q = (s) => bar.querySelector(s);
 
-  const NAMES = [[/^#\/?$/, 'Home'], [/^#\/continue/, 'Continue watching'], [/^#\/shelf/, 'Shelf'], [/^#\/(friends|together)/, 'Friends'], [/^#\/profile/, 'Profile'], [/^#\/settings/, 'Settings'], [/^#\/search\//, 'Search'], [/^#\/feed\/([^?]*)/, null]];
+  const NAMES = [[/^#\/?$/, 'IronHide'], [/^#\/continue/, 'Continue watching'], [/^#\/shelf/, 'Shelf'], [/^#\/(friends|together)/, 'Friends'], [/^#\/profile/, 'Profile'], [/^#\/settings/, 'Settings'], [/^#\/search\//, 'Search'], [/^#\/feed\/([^?]*)/, null]];
   function title() {
     const h = location.hash || '#/';
     for (const [re, name] of NAMES) { const m = h.match(re); if (m) return name || decodeURIComponent(m[1]).replace(/[-_]/g, ' ').replace(/^./, (c) => c.toUpperCase()); }
