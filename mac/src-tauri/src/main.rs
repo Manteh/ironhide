@@ -25,6 +25,8 @@ const NATIVE_JS: &str = r#"(() => {
   if (!localStorage.getItem('cursorAppDefault')) { localStorage.setItem('cursorAppDefault', '1'); localStorage.setItem('cursor', 'off'); }
   const css = `
     html { overscroll-behavior: none; }
+    /* Large headings in New York (the macOS serif) for a more editorial feel. Trial. */
+    h1, h1.title, .greet h1, .pf-who h1, .ninfo h2, .hero h1, .hero h2 { font-family: ui-serif, 'New York', 'Iowan Old Style', Georgia, serif !important; font-weight: 600 !important; letter-spacing: -.015em !important; font-optical-sizing: auto; }
     body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     input, textarea, [contenteditable], .selectable { -webkit-user-select: text; user-select: text; }
     ::-webkit-scrollbar { width: 14px; height: 14px; background: transparent; }
