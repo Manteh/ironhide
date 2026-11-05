@@ -14,8 +14,25 @@ use std::{
 };
 use tauri::{
     menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
-    AppHandle, Manager, RunEvent, Url,
+    window::Color,
+    AppHandle, Manager, RunEvent, TitleBarStyle, Url, WebviewUrl, WebviewWindowBuilder,
 };
+
+/// Makes the page feel like an app instead of a browser tab (only runs on the IronHide daemon's pages).
+const NATIVE_JS: &str = r#"(() => {
+  if (location.protocol !== 'http:' || location.hostname !== '127.0.0.1') return;
+  const css = `
+    html { overscroll-behavior: none; }
+    body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    input, textarea, [contenteditable], .selectable { -webkit-user-select: text; user-select: text; }
+    ::-webkit-scrollbar { width: 14px; height: 14px; background: transparent; }
+    ::-webkit-scrollbar-corner { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 10px; border: 4px solid transparent; background-clip: content-box; min-height: 40px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.3); background-clip: content-box; }
+  `;
+  const add = () => { const s = document.createElement('style'); s.textContent = css; document.documentElement.appendChild(s); };
+  document.documentElement ? add() : document.addEventListener('DOMContentLoaded', add);
+})();"#;
 
 /// The daemon child, only set when this app started it (an already-running daemon is left alone).
 struct Daemon(Mutex<Option<Child>>);
@@ -161,6 +178,18 @@ fn main() {
         .manage(Daemon(Mutex::new(None)))
         .setup(|app| {
             let h = app.handle();
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                .title("IronHide")
+                .inner_size(1440.0, 900.0)
+                .min_inner_size(960.0, 600.0)
+                .center()
+                .background_color(Color(13, 13, 14, 255))
+                // title bar takes the window colour and the title is hidden, like Discord
+                .title_bar_style(TitleBarStyle::Transparent)
+                .hidden_title(true)
+                .disable_drag_drop_handler()
+                .initialization_script(NATIVE_JS)
+                .build()?;
             let nav = |id: &str, label: &str, key: &str| MenuItemBuilder::with_id(id, label).accelerator(key).build(h);
             let app_menu = SubmenuBuilder::new(h, "IronHide")
                 .about(Some(AboutMetadata::default()))
