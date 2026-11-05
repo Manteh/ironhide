@@ -3,6 +3,7 @@ import { readFile, unlink } from 'fs/promises';
 import { unlinkSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { tmpdir } from 'os';
+import net from 'net';
 import { fileURLToPath } from 'url';
 import { getProp, setProp, isMpvRunning as ipcRunning } from './mpv-ipc.js';
 import { getSettings, STREAM_LANGS } from './settings.js';
@@ -11,6 +12,36 @@ import { setPlayState, getPlayState } from './playstate.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LUA_SCRIPT = join(__dirname, 'mpv-progress.lua');
 const MPV_BIN = '/Applications/mpv.app/Contents/MacOS/mpv';
+
+// When the IronHide Mac app is open it plays in its own window (libmpv). Same mpv options, progress script and
+// IPC socket as the external player; falls through to the external mpv when the app is not running.
+const APP_SOCK = '/tmp/ironhide-app.sock';
+function appRunning() {
+  return new Promise((resolve) => {
+    const s = net.createConnection(APP_SOCK);
+    s.once('connect', () => { s.destroy(); resolve(true); });
+    s.once('error', () => resolve(false));
+  });
+}
+function playInApp(url, args, env) {
+  return new Promise((resolve) => {
+    const sock = net.createConnection(APP_SOCK);
+    let started = false, buf = '';
+    sock.once('error', () => resolve(started ? { status: 'done', progress: null } : null));
+    sock.on('connect', () => sock.write(JSON.stringify({ url, args, env }) + '\n'));
+    sock.on('data', (d) => {
+      buf += d;
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        let ev; try { ev = JSON.parse(line); } catch { continue; }
+        if (ev.event === 'started') started = true;
+        if (ev.event === 'exit') { sock.destroy(); resolve({ status: 'done', progress: undefined }); }
+      }
+    });
+    sock.on('close', () => resolve(started ? { status: 'done', progress: undefined } : null));
+  });
+}
 
 async function resolveUrl(url) {
   const res = await fetch(url, { redirect: 'manual' });
@@ -64,6 +95,9 @@ export async function play(stream, subs = []) {
   if (stream.isRD && stream.url) {
     const resolved = await resolveUrl(stream.url);
     if (!resolved.ready) return { status: 'not_cached' };
+
+    const viaApp = await playInApp(resolved.url, mpvArgs, { IRONHIDE_PROGRESS_FILE: progressFile });
+    if (viaApp) return { status: 'done', progress: await readProgress(progressFile) };
 
     proc = spawn(MPV_BIN, [...mpvArgs, resolved.url], {
       stdio: 'inherit',
@@ -161,6 +195,15 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
       ...subs.map(x => `--sub-file=${x.path}`),
       location,
     ];
+    // The Mac app plays in its own window: hand the stream over instead of starting an external mpv.
+    if (await appRunning()) {
+      playInApp(location, mpvArgs.slice(0, -1), { IRONHIDE_PROGRESS_FILE: progressFile }).then(async () => {
+        await sleep(400);
+        if (onFinish) onFinish(await readProgress(progressFile));
+      });
+      presentWhenReady(getPlayState().token).catch((e) => { console.error('[player] showing mpv failed:', e.message); setPlayState({ phase: 'error', detail: 'The player did not start' }); });
+      return { status: 'playing', progressFile, cancel: () => {} };
+    }
     launchScript([
       `export IRONHIDE_PROGRESS_FILE=${sh(progressFile)}`,
       `nohup /opt/homebrew/bin/mpv ${mpvArgs.map(sh).join(' ')} > /dev/null 2>&1 &`,

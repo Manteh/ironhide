@@ -2,6 +2,8 @@
 // IronHide daemon, shows the existing web UI from it, and stops the daemon it started on quit.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod player;
+
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -25,13 +27,9 @@ const NATIVE_JS: &str = r#"(() => {
   if (!localStorage.getItem('cursorAppDefault')) { localStorage.setItem('cursorAppDefault', '1'); localStorage.setItem('cursor', 'off'); }
   const css = `
     html { overscroll-behavior: none; }
-    @font-face { font-family: 'Bebas Neue'; src: url('/fonts/BebasNeue-Regular.ttf') format('truetype'); font-display: swap; }
-    /* Cinematic condensed capitals for the big headings (trial) */
-    h1, h1.title, .greet h1, .pf-who h1, .ninfo h2 { font-family: 'Bebas Neue', 'Inter', sans-serif !important; font-weight: 400 !important; text-transform: uppercase; letter-spacing: .02em !important; line-height: 1 !important; font-size: 1.3em; }
-    .greet h1 { font-size: clamp(40px, 5.2vw, 64px) !important; }
-    .pf-who h1 { font-size: clamp(42px, 5.2vw, 64px) !important; }
-    .ninfo h2 { font-size: clamp(44px, 6.4vw, 76px) !important; }
-    h1.title { font-size: 40px !important; }
+    @font-face { font-family: 'Outfit'; src: url('/fonts/Outfit.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
+    /* Bold, round geometric headings (trial) */
+    h1, h1.title, .greet h1, .pf-who h1, .ninfo h2 { font-family: 'Outfit', 'Inter', sans-serif !important; font-weight: 700 !important; letter-spacing: -.02em !important; }
     body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     input, textarea, [contenteditable], .selectable { -webkit-user-select: text; user-select: text; }
     ::-webkit-scrollbar { width: 14px; height: 14px; background: transparent; }
@@ -199,6 +197,8 @@ fn main() {
                 .disable_drag_drop_handler()
                 .initialization_script(NATIVE_JS)
                 .build()?;
+            player::setup(h);
+            player::serve(h.clone());
             let nav = |id: &str, label: &str, key: &str| MenuItemBuilder::with_id(id, label).accelerator(key).build(h);
             let app_menu = SubmenuBuilder::new(h, "IronHide")
                 .about(Some(AboutMetadata::default()))
@@ -258,6 +258,7 @@ fn main() {
     app.run(|app, event| {
         if let RunEvent::Exit = event {
             stop_daemon(app);
+            player::cleanup();
         }
     });
 }
