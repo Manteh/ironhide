@@ -64,7 +64,8 @@
 
   const root = document.createElement('div');
   root.id = 'ihp'; root.hidden = true;
-  const slider = (id, label, min, max, step, icon, trk) => `<div class="sl" data-id="${id}"><label title="Double-click to reset">${icon ? I[icon] : ''}${label}<output></output></label><input type="range" min="${min}" max="${max}" step="${step}" value="0" style="--trk:${trk || 'rgba(255,255,255,.18)'}"></div>`;
+  const sld = (attrs, trk, cls = '') => `<div class="ihp-sld ${cls}" ${attrs} data-val="0" style="--trk:${trk || 'rgba(255,255,255,.16)'}"><i class="ihp-s-trk"></i><i class="ihp-s-fill"></i><b class="ihp-s-thumb"><em></em></b></div>`;
+  const slider = (id, label, min, max, step, icon, trk, def = 0) => `<div class="sl" data-id="${id}"><label title="Double-click to reset">${icon ? I[icon] : ''}${label}<output></output></label>${sld(`data-min="${min}" data-max="${max}" data-step="${step}" data-def="${def}"`, trk)}</div>`;
   root.innerHTML = `
     <div class="ihp-hit"></div><div class="ihp-shade t"></div><div class="ihp-shade b"></div>
     <div class="ihp-skip l"><b>${I.b10}<span>10 seconds</span></b></div><div class="ihp-skip r"><b>${I.f10}<span>10 seconds</span></b></div>
@@ -80,7 +81,7 @@
         <div class="g">
           <button class="ihp-play" data-a="toggle" title="Play / pause (Space)"><span class="i-pause">${I.pause}</span><span class="i-play">${I.play}</span></button>
           <button class="ihp-ib sk" data-a="back10" title="Back 10 s (←)">${I.b10}</button><button class="ihp-ib sk" data-a="fwd10" title="Forward 10 s (→)">${I.f10}</button>
-          <div class="ihp-vol"><button class="ihp-ib" data-a="mute" title="Mute (M)"></button><input type="range" min="0" max="150" step="1" data-vol></div>
+          <div class="ihp-vol"><button class="ihp-ib" data-a="mute" title="Mute (M)"></button>${sld('data-vol data-min="0" data-max="150" data-step="1" data-def="100"', '', 'sm')}</div>
         </div>
         <div class="g ihp-dock ihp-glass">
           <button class="ihp-sp" data-a="speed" title="Speed ([ and ])">1×</button><i class="sep"></i>
@@ -103,7 +104,7 @@
           <h4>HDR tone mapping</h4><div class="chips" data-tone>${TONE.map((t) => `<button data-tone="${t}">${t}</button>`).join('')}</div>
         </div>
         <div class="pg" data-pg="audio"><h4>Track</h4><div data-list="audio"></div><h4>Sync</h4>${slider('audio-delay', 'Audio delay', -2, 2, 0.05, '')}</div>
-        <div class="pg" data-pg="subs"><h4>Track</h4><div data-list="sub"></div><h4>Look</h4>${slider('sub-delay', 'Delay', -5, 5, 0.1, '')}${slider('sub-scale', 'Size', 0.5, 2.5, 0.05, '')}${slider('sub-pos', 'Position', 0, 100, 1, '')}</div>
+        <div class="pg" data-pg="subs"><h4>Track</h4><div data-list="sub"></div><h4>Look</h4>${slider('sub-delay', 'Delay', -5, 5, 0.1, '')}${slider('sub-scale', 'Size', 0.5, 2.5, 0.05, '', '', 1)}${slider('sub-pos', 'Position', 0, 100, 1, '', '', 100)}</div>
         <div class="pg" data-pg="play">
           <h4>Speed</h4><div class="chips" data-speeds>${SPEEDS.map((s) => `<button data-speed="${s}">${s}×</button>`).join('')}</div>
           <h4>Aspect ratio</h4><div class="chips" data-aspects>${ASPECTS.map((a, i) => `<button data-aspect="${i}">${a[0]}</button>`).join('')}</div>
@@ -114,11 +115,36 @@
     </aside>`;
   const q = (s, r = root) => r.querySelector(s);
   const qa = (s, r = root) => [...r.querySelectorAll(s)];
-  const fillRange = (el) => {
-    const mn = +el.min, mx = +el.max, p = (+el.value - mn) / (mx - mn) * 100, mid = mn < 0 ? 50 : 0;
-    el.style.setProperty('--lo', Math.min(p, mid) + '%'); el.style.setProperty('--hi', Math.max(p, mid) + '%');
-    if (el.hasAttribute('data-vol') || mn >= 0) el.style.setProperty('--lo', '0%');
-  };
+  // ---------- sliders: custom, GPU-friendly, throttled ----------
+  const pend = {}; let pendT = 0;
+  const flush = () => { pendT = 0; for (const k of Object.keys(pend)) { set(k, pend[k]); delete pend[k]; } };
+  const setThrottled = (name, value) => { pend[name] = value; if (!pendT) pendT = setTimeout(flush, 32); };
+  const sval = (el) => +el.dataset.val;
+  function paintSlider(el) {
+    const mn = +el.dataset.min, mx = +el.dataset.max, v = Math.min(mx, Math.max(mn, sval(el)));
+    const p = (v - mn) / (mx - mn), mid = mn < 0 ? -mn / (mx - mn) : 0, lo = Math.min(p, mid), hi = Math.max(p, mid);
+    q('.ihp-s-fill', el).style.transform = `translateX(${lo * 100}%) scaleX(${Math.max(hi - lo, 0.0001)})`;
+    q('.ihp-s-thumb', el).style.left = (p * 100) + '%';
+  }
+  function setSlider(el, v, silent) {
+    const mn = +el.dataset.min, mx = +el.dataset.max, step = +el.dataset.step || 1;
+    v = Math.min(mx, Math.max(mn, Math.round(v / step) * step)); v = +v.toFixed(3);
+    const def = +el.dataset.def; if (Math.abs(v - def) <= (mx - mn) * 0.012) v = def; // magnet at the default
+    el.dataset.val = v; paintSlider(el);
+    if (!silent) return v;
+    return v;
+  }
+  function initSlider(el, onSlide, onEnd) {
+    const tip = document.createElement('span'); tip.className = 'ihp-s-tip'; q('.ihp-s-thumb', el).append(tip);
+    const label = (v) => { const row = el.closest('.sl'); return row ? valueText(row.dataset.id, v) : Math.round(v) + '%'; };
+    const at = (e) => { const r = el.getBoundingClientRect(), mn = +el.dataset.min, mx = +el.dataset.max; return mn + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (mx - mn); };
+    const move = (e) => { const v = setSlider(el, at(e)); tip.textContent = label(v); onSlide(v); };
+    el.addEventListener('pointerdown', (e) => { el.setPointerCapture(e.pointerId); el.classList.add('drag'); sliding++; move(e); });
+    el.addEventListener('pointermove', (e) => { if (el.classList.contains('drag')) move(e); });
+    const end = () => { if (!el.classList.contains('drag')) return; el.classList.remove('drag'); sliding--; flush(); onEnd && onEnd(sval(el)); };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  }
+  let sliding = 0;
 
   // ---------- feedback ----------
   let hudT = 0;
@@ -135,24 +161,24 @@
   let hoverUI = false;
 
   // ---------- state -> UI ----------
-  let dragging = false, dragT = 0, lastPos = 0, lastAt = 0, lastTracks = '', playing = false, chapKey = '';
+  let lastMi = '', lastTags = '', dragging = false, dragT = 0, lastPos = 0, lastAt = 0, lastTracks = '', playing = false, chapKey = '';
   function paintStatic() {
     const paused = b('pause');
     root.classList.toggle('paused', paused);
     root.classList.toggle('buf', b('paused-for-cache'));
     const v = n('volume', 100), muted = b('mute') || v === 0;
-    q('[data-a=mute]').innerHTML = muted ? I.mute : v < 50 ? I.vol1 : I.vol;
-    q('.ihp-title').textContent = S['media-title'] || '';
+    const mi = muted ? I.mute : v < 50 ? I.vol1 : I.vol; if (mi !== lastMi) { lastMi = mi; q('[data-a=mute]').innerHTML = mi; }
+    const ti = S['media-title'] || ''; if (q('.ihp-title').textContent !== ti) q('.ihp-title').textContent = ti;
     const tags = [];
     if (n('width')) tags.push([n('height') >= 2000 || n('width') >= 3600 ? '4K' : n('height') + 'p', true]);
     if (S['hwdec-current'] && S['hwdec-current'] !== 'no') tags.push(['Hardware decode']);
-    q('.ihp-tags').innerHTML = tags.map(([t, hi]) => `<span class="ihp-tag${hi ? ' hi' : ''}">${t}</span>`).join('');
-    const vol = q('[data-vol]'); if (document.activeElement !== vol) { vol.value = v; fillRange(vol); }
+    const th = tags.map(([t, hi]) => `<span class="ihp-tag${hi ? ' hi' : ''}">${t}</span>`).join(''); if (th !== lastTags) { lastTags = th; q('.ihp-tags').innerHTML = th; }
+    const vol = q('[data-vol]'); if (!vol.classList.contains('drag')) setSlider(vol, v, true);
     q('[data-a=speed]').textContent = (+n('speed', 1).toFixed(2)) + '×';
     for (const row of qa('.sl')) {
-      const id = row.dataset.id, inp = q('input', row);
-      if (document.activeElement !== inp && S[id] !== undefined) { inp.value = n(id); fillRange(inp); }
-      q('output', row).textContent = valueText(id, n(id));
+      const id = row.dataset.id, s = q('.ihp-sld', row);
+      if (!s.classList.contains('drag') && S[id] !== undefined) { setSlider(s, n(id), true); }
+      const t = valueText(id, sval(s)), o = q('output', row); if (o.textContent !== t) o.textContent = t;
     }
     for (const x of qa('[data-speed]')) x.classList.toggle('on', Math.abs(+x.dataset.speed - n('speed', 1)) < 0.01);
     const pan = n('panscan'), asp = S['video-aspect-override'] || '-1';
@@ -305,15 +331,13 @@
       } else { lastClick = now; lastSide = side; setTimeout(() => { if (lastClick === now) { lastClick = 0; actions.toggle(); } }, 310); }
     }
   });
-  root.addEventListener('input', (e) => {
-    const el = e.target; if (el.type !== 'range') return;
-    fillRange(el);
-    if (el.hasAttribute('data-vol')) { set('volume', el.value); S.volume = el.value; q('[data-a=mute]').innerHTML = +el.value === 0 ? I.mute : +el.value < 50 ? I.vol1 : I.vol; return; }
-    const row = el.closest('.sl'); if (!row) return;
-    const id = row.dataset.id; set(id, el.value); S[id] = el.value; q('output', row).textContent = valueText(id, +el.value);
-    if (PICTURE.some(([k]) => k === id)) { savePicture(); for (const x of qa('[data-preset]')) x.classList.remove('on'); }
-  });
-  root.addEventListener('dblclick', (e) => { const l = e.target.closest('.sl label'); if (!l) return; const row = l.closest('.sl'), id = row.dataset.id, d = id === 'sub-scale' ? 1 : id === 'sub-pos' ? 100 : 0; set(id, d); S[id] = d; paintStatic(); if (PICTURE.some(([k]) => k === id)) savePicture(); });
+  // wire every slider once
+  initSlider(q('[data-vol]'), (v) => { S.volume = v; setThrottled('volume', v); const mi = v === 0 ? I.mute : v < 50 ? I.vol1 : I.vol; if (mi !== lastMi) { lastMi = mi; q('[data-a=mute]').innerHTML = mi; } });
+  for (const row of qa('.sl')) {
+    const id = row.dataset.id, s = q('.ihp-sld', row), isPic = PICTURE.some(([k]) => k === id);
+    initSlider(s, (v) => { S[id] = v; setThrottled(id, v); q('output', row).textContent = valueText(id, v); if (isPic) qa('[data-preset].on').forEach((x) => x.classList.remove('on')); }, () => { if (isPic) savePicture(); });
+  }
+  root.addEventListener('dblclick', (e) => { const l = e.target.closest('.sl label'); if (!l) return; const row = l.closest('.sl'), id = row.dataset.id, d = +q('.ihp-sld', row).dataset.def; set(id, d); S[id] = d; paintStatic(); if (PICTURE.some(([k]) => k === id)) savePicture(); });
   root.addEventListener('pointermove', wake);
   for (const sel of ['.ihp-bottom', '.ihp-top']) { q(sel).addEventListener('pointerenter', () => { hoverUI = true; }); q(sel).addEventListener('pointerleave', () => { hoverUI = false; wake(); }); }
 
@@ -328,7 +352,6 @@
   document.addEventListener('keydown', (e) => {
     if (root.hidden || e.metaKey || e.ctrlKey) return;
     const k = e.key; let used = true;
-    if (e.target.matches?.('input[type=range]') && k.startsWith('Arrow')) e.target.blur();
     switch (k) {
       case ' ': case 'k': actions.toggle(); break;
       case 'ArrowLeft': { const s = e.shiftKey ? -30 : -10; rel(s); ripple('l', Math.abs(s) + ' seconds'); break; }

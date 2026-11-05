@@ -77,9 +77,7 @@ html.ihp-on body::before, html.ihp-on body::after { display: none !important; }
 .ihp-ib svg { width: 26px; height: 26px; }
 .ihp-ib.sk svg { width: 30px; height: 30px; }
 .ihp-vol { display: flex; align-items: center; border-radius: 99px; transition: background .3s, padding .4s var(--ease); }
-.ihp-vol input { width: 0; opacity: 0; transition: width .45s var(--ease), opacity .3s, margin .45s; margin: 0; }
 .ihp-vol:hover, .ihp-vol:focus-within { background: rgba(255,255,255,.1); }
-.ihp-vol:hover input, .ihp-vol:focus-within input { width: 104px; opacity: 1; margin: 0 16px 0 2px; }
 .ihp-dock { display: flex; align-items: center; gap: 2px; padding: 5px; border-radius: 99px; }
 .ihp-dock .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .ihp-sp { min-width: 52px; height: 40px; border-radius: 99px; padding: 0 12px; font-weight: 750; font-size: 14px; font-variant-numeric: tabular-nums; color: rgba(255,255,255,.88); transition: background .25s, transform .3s var(--spring); }
@@ -110,13 +108,21 @@ html.ihp-on body::before, html.ihp-on body::after { display: none !important; }
 .ihp-hud svg { width: 22px; height: 22px; }
 .ihp-hud .bar { width: 96px; height: 5px; border-radius: 5px; background: rgba(255,255,255,.2); overflow: hidden; } .ihp-hud .bar i { display: block; height: 100%; background: #fff; border-radius: 5px; transition: width .2s; }
 
-/* sliders */
-#ihp input[type=range] { -webkit-appearance: none; appearance: none; height: 28px; outline: none; cursor: pointer; --lo: 0%; --hi: 50%; --trk: rgba(255,255,255,.18); background: linear-gradient(90deg, transparent var(--lo), var(--a) var(--lo) var(--hi), transparent var(--hi)) center / 100% 6px no-repeat, var(--trk) center / 100% 6px no-repeat; border-radius: 6px; }
-#ihp input[type=range]::-webkit-slider-runnable-track { height: 28px; background: transparent; }
-#ihp input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: 5px; border-radius: 50%; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.55); transition: transform .3s var(--spring); }
-#ihp input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.12); }
-#ihp input[type=range]:active::-webkit-slider-thumb { transform: scale(1.3); }
-.ihp-vol input { --trk: rgba(255,255,255,.22); }
+/* sliders: custom (no native range input) */
+.ihp-sld { position: relative; height: 32px; cursor: pointer; touch-action: none; margin: 2px 0 0; }
+.ihp-s-trk, .ihp-s-fill { position: absolute; left: 0; right: 0; top: 13px; height: 6px; border-radius: 6px; }
+.ihp-s-trk { background: var(--trk); box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); transition: transform .3s var(--ease); }
+.ihp-s-fill { background: linear-gradient(90deg, var(--a), var(--a2)); transform-origin: 0 50%; will-change: transform; transition: transform .5s var(--ease); }
+.ihp-s-thumb { position: absolute; top: 6px; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: #fff; box-shadow: 0 3px 12px rgba(0,0,0,.55), 0 0 0 0 color-mix(in srgb, var(--a) 40%, transparent); transition: left .5s var(--ease), transform .35s var(--spring), box-shadow .3s; }
+.ihp-sld:hover .ihp-s-thumb { transform: scale(1.12); }
+.ihp-sld.drag .ihp-s-fill, .ihp-sld.drag .ihp-s-thumb { transition: none; }
+.ihp-sld.drag .ihp-s-thumb { transform: scale(1.25); box-shadow: 0 3px 14px rgba(0,0,0,.6), 0 0 0 7px color-mix(in srgb, var(--a) 28%, transparent); }
+.ihp-s-tip { position: absolute; bottom: 30px; left: 50%; transform: translate(-50%, 6px) scale(.8); padding: 3px 9px; border-radius: 99px; background: #fff; color: #0c0c10; font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s, transform .35s var(--spring); }
+.ihp-sld.drag .ihp-s-tip { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.ihp-sld.sm { width: 0; opacity: 0; margin: 0; transition: width .45s var(--ease), opacity .3s, margin .45s; }
+.ihp-vol:hover .ihp-sld.sm, .ihp-vol .ihp-sld.sm.drag { width: 110px; opacity: 1; margin: 0 16px 0 2px; }
+.ihp-sld.sm .ihp-s-thumb { top: 8px; width: 16px; height: 16px; margin-left: -8px; }
+.ihp-sld.sm .ihp-s-trk, .ihp-sld.sm .ihp-s-fill { top: 14px; height: 4px; }
 
 /* side sheet */
 .ihp-panel { position: absolute; right: var(--pad); bottom: 150px; width: 392px; max-height: min(560px, calc(100vh - 210px)); display: flex; flex-direction: column; border-radius: 26px; background: rgba(20,20,26,.95); border: 1px solid var(--line); box-shadow: 0 30px 80px -16px #000, inset 0 1px 0 rgba(255,255,255,.06); transform-origin: 100% 100%; transform: translateY(18px) scale(.9); opacity: 0; transition: transform .6s var(--spring), opacity .25s; pointer-events: none; overflow: hidden; }
@@ -144,7 +150,6 @@ html.ihp-on body::before, html.ihp-on body::after { display: none !important; }
 .sl label { display: flex; align-items: center; gap: 10px; font-weight: 650; color: rgba(255,255,255,.9); cursor: default; }
 .sl label svg { width: 18px; height: 18px; opacity: .65; }
 .sl output { margin-left: auto; min-width: 46px; text-align: center; padding: 2px 9px; border-radius: 99px; background: rgba(255,255,255,.08); color: rgba(255,255,255,.8); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; }
-.sl input { width: 100%; margin: 1px 0 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .chips button { height: 34px; padding: 0 14px; border-radius: 99px; background: rgba(255,255,255,.08); font-weight: 650; transition: background .25s, transform .35s var(--spring), color .2s; }
 .chips button:hover { background: rgba(255,255,255,.15); }
