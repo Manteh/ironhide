@@ -1,0 +1,25 @@
+/* Polish for poster cards and the Continue watching row. Kept apart from browse.css. */
+
+/* progress: a rounded pill inset in the poster, over a soft scrim so it reads on any artwork */
+.bposter::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46%; background: linear-gradient(transparent, rgba(0,0,0,.58)); opacity: 0; pointer-events: none; transition: opacity .4s var(--ease); }
+.bc:has(.bprog) .bposter::after { opacity: 1; }
+.bprog { z-index: 2; left: 11px; right: 11px; bottom: 11px; height: 6px; border-radius: 99px; overflow: hidden; background: rgba(255,255,255,.24); box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: height .35s cubic-bezier(.34,1.5,.64,1), bottom .35s cubic-bezier(.34,1.5,.64,1); }
+.bprog i { border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 65%, #fff), var(--accent)); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent); transition: width .6s var(--ease); }
+.bc:hover .bprog, .bc:focus-visible .bprog { height: 8px; bottom: 10px; }
+
+/* Continue watching */
+.cont-row { gap: 20px; }
+.cont-row .bc { flex-basis: clamp(160px, 15.5vw, 224px); }
+.cont-row .bposter { border-radius: 18px; box-shadow: 0 16px 32px -20px rgba(0,0,0,.85), 0 0 0 1px var(--border); }
+.cont-row .binfo { padding: 12px 3px 0; }
+.cont-row .binfo h3 { font-size: 15px; font-weight: 650; letter-spacing: -.012em; }
+/* timing and episode sit directly under the title, left aligned, whether it is a resume or an "up next" card */
+.cont-row .bmeta { justify-content: flex-start; gap: 7px; margin-top: 4px; font-size: 12.5px; }
+.cont-row .bmeta span:empty { display: none; }
+.cont-row .bmeta span { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.cont-row .bmeta em { color: var(--muted); font-weight: 600; }
+.cont-row .bmeta span + em::before { content: '·'; margin-right: 7px; color: var(--muted); }
+.cont > header { margin-bottom: 12px; }
+.cont h2 { font-size: 20px; }
+.cont-row .bmeta span:empty + em::before { content: none; }
+.cont-row .bmeta span:empty + em { color: var(--text-2); }
