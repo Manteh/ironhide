@@ -303,7 +303,7 @@
   let shaderName = 'Off';
   function applyShader(name, quiet) {
     const [list, opts] = SHADERS[name] || SHADERS.Off; shaderName = name;
-    set('glsl-shaders', list); for (const [k, v] of Object.entries(opts)) set(k, v);
+    if (list) set('glsl-shaders', list); else cmd('change-list', 'glsl-shaders', 'clr', ''); for (const [k, v] of Object.entries(opts)) set(k, v);
     try { localStorage.setItem('ihp.shader', name); } catch {}
     qa('[data-shader]').forEach((x) => x.classList.toggle('on', x.dataset.shader === name));
     const sn = q('[data-snote]'); if (sn) sn.textContent = SHADERS[name][2];
