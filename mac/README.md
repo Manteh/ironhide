@@ -48,6 +48,6 @@ See [DESIGN.md](DESIGN.md).
 
 ## Known limits
 
-- The player controls render and follow mpv's state (checked by screenshot), but clicking them, the Picture panel sliders and the keyboard shortcuts have not been tried with a real mouse or keys. Your Settings → Playback → Player must be mpv for Play to use the in-app player.
+- Tested with a real mouse and keys on a real 4K HEVC remux: play, controls fade in on mouse move, Picture presets and sliders (mpv's brightness, contrast and saturation changed), reset, audio and subtitle track switching, speed, seek by click with hover time, pause, fullscreen button and Esc. Not tested: volume, aspect ratio, chapters, screenshot, audio/subtitle delay. Once the app quit by itself right after a seek click, then Space, then `f`; I could not reproduce it. Your Settings → Playback → Player must be mpv for Play to use the in-app player.
 - libmpv is not bundled inside the `.app`; it needs Homebrew's mpv installed.
 - Run only one copy of the app at a time (they share `/tmp/ironhide-app.sock`).

@@ -330,10 +330,17 @@ fn handle(app: AppHandle, stream: UnixStream, req: PlayReq) {
     let _ = writeln!(out, "{{\"event\":\"exit\"{}}}", r.err().map(|e| format!(",\"error\":{:?}", e)).unwrap_or_default());
 }
 
-/// Listen for play requests from the daemon.
-pub fn serve(app: AppHandle) {
+static OUR_INO: AtomicUsize = AtomicUsize::new(0);
+
+fn ino() -> usize {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata(APP_SOCK).map(|m| m.ino() as usize).unwrap_or(0)
+}
+
+fn bind_and_accept(app: AppHandle) -> bool {
     let _ = std::fs::remove_file(APP_SOCK);
-    let Ok(l) = UnixListener::bind(APP_SOCK) else { eprintln!("player: cannot listen on {APP_SOCK}"); return };
+    let Ok(l) = UnixListener::bind(APP_SOCK) else { eprintln!("player: cannot listen on {APP_SOCK}"); return false };
+    OUR_INO.store(ino(), Ordering::Relaxed);
     thread::spawn(move || {
         for s in l.incoming().flatten() {
             let app = app.clone();
@@ -349,10 +356,21 @@ pub fn serve(app: AppHandle) {
             });
         }
     });
+    true
 }
 
+/// Listen for play requests from the daemon. A watchdog re-creates the socket if another process removed it.
+pub fn serve(app: AppHandle) {
+    bind_and_accept(app.clone());
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_secs(2));
+        if ino() != OUR_INO.load(Ordering::Relaxed) { bind_and_accept(app.clone()); }
+    });
+}
+
+/// Remove the socket on exit, but only if it is still ours (another app instance may own it now).
 pub fn cleanup() {
-    let _ = std::fs::remove_file(APP_SOCK);
+    if ino() == OUR_INO.load(Ordering::Relaxed) { let _ = std::fs::remove_file(APP_SOCK); }
 }
 
 #[allow(dead_code)]

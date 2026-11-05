@@ -3,7 +3,7 @@
 (() => {
   const inv = window.__TAURI_INTERNALS__?.invoke;
   if (!inv || window.__ihp) return;
-  const call = (c, a = {}) => inv(c, a).catch(() => {});
+  const call = (c, a = {}) => inv(c, a).catch((e) => { try { toast('Player error: ' + (e?.message || e)); } catch {} });
   const cmd = (...a) => call('player_cmd', { args: a.map(String) });
   const set = (name, value) => call('player_set', { name, value: String(value) });
 

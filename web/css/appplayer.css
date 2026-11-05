@@ -7,7 +7,7 @@ html.ihp-on body::before, html.ihp-on body::after { display: none !important; }
 #ihp { --a: var(--accent, #6c68f2); position: fixed; inset: 0; z-index: 99999; color: #f4f4f5; font: 13px/1.4 var(--sans, -apple-system, system-ui, sans-serif); -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none; overflow: hidden; }
 #ihp[hidden] { display: none; }
 #ihp:not(.ui) { cursor: none; }
-#ihp button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+:where(#ihp button) { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 #ihp svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; display: block; }
 #ihp svg .f { fill: currentColor; stroke: none; }
 
@@ -74,9 +74,9 @@ html.ihp-on body::before, html.ihp-on body::after { display: none !important; }
 .ihp-n10 { font-size: 8.5px; font-weight: 800; position: absolute; }
 
 /* range sliders */
-#ihp input[type=range] { -webkit-appearance: none; appearance: none; height: 22px; background: none; outline: none; cursor: pointer; --p: 50%; }
-#ihp input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--a) var(--p), rgba(255,255,255,.18) var(--p)); }
-#ihp input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.5); transition: transform .2s var(--spring, ease); }
+#ihp input[type=range] { -webkit-appearance: none; appearance: none; height: 22px; outline: none; cursor: pointer; --p: 50%; background: linear-gradient(90deg, var(--a) var(--p), rgba(255,255,255,.18) var(--p)) center / 100% 4px no-repeat; border-radius: 4px; }
+#ihp input[type=range]::-webkit-slider-runnable-track { height: 22px; background: transparent; }
+#ihp input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: 4px; border-radius: 50%; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.5); transition: transform .2s var(--spring, ease); }
 #ihp input[type=range]:active::-webkit-slider-thumb { transform: scale(1.25); }
 
 /* side panel */
