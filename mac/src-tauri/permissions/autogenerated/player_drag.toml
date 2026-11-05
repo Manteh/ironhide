@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-player-drag"
+description = "Enables the player_drag command without any pre-configured scope."
+commands.allow = ["player_drag"]
+
+[[permission]]
+identifier = "deny-player-drag"
+description = "Denies the player_drag command without any pre-configured scope."
+commands.deny = ["player_drag"]

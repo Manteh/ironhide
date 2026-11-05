@@ -28,7 +28,7 @@ const NATIVE_JS: &str = r#"(() => {
   const css = `
     html { overscroll-behavior: none; }
     /* mpv has its own controls in the app, so the floating now-playing pill is not needed */
-    #np { display: none !important; }
+    #np, .nowv { display: none !important; }
     @font-face { font-family: 'Outfit'; src: url('/fonts/Outfit.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
     /* Bold, round geometric headings (trial) */
     h1, h1.title, .greet h1, .pf-who h1, .ninfo h2 { font-family: 'Outfit', 'Inter', sans-serif !important; font-weight: 700 !important; letter-spacing: -.02em !important; }
@@ -41,6 +41,8 @@ const NATIVE_JS: &str = r#"(() => {
     ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.3); background-clip: content-box; }
   `;
   const add = () => {
+    // the web app's "Now playing" remote is pointless here (the player has its own controls): remove it whenever it appears
+    new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('nowv')) n.remove(); }).observe(document.body || document.documentElement, { childList: true });
     const s = document.createElement('style'); s.textContent = css; document.documentElement.appendChild(s);
     // the in-app player overlay (controls, picture settings); lives in web/ next to the rest of the UI
     const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/css/appplayer.css'; document.documentElement.appendChild(l);
@@ -191,7 +193,7 @@ fn stop_daemon(app: &AppHandle) {
 fn main() {
     let app = tauri::Builder::default()
         .manage(Daemon(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![player::player_cmd, player::player_set, player::player_close, player::player_fullscreen, player::player_pip])
+        .invoke_handler(tauri::generate_handler![player::player_cmd, player::player_set, player::player_close, player::player_fullscreen, player::player_pip, player::player_drag])
         .setup(|app| {
             let h = app.handle();
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))

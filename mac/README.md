@@ -51,3 +51,7 @@ See [DESIGN.md](DESIGN.md).
 - Tested with a real mouse and keys on a real 4K HEVC remux: play, controls fade in on mouse move, Picture presets and sliders (mpv's brightness, contrast and saturation changed), reset, audio and subtitle track switching, speed, seek by click with hover time, pause, fullscreen button and Esc. Not tested: volume, aspect ratio, chapters, screenshot, audio/subtitle delay. Once the app quit by itself right after a seek click, then Space, then `f`; I could not reproduce it. Your Settings → Playback → Player must be mpv for Play to use the in-app player.
 - libmpv is not bundled inside the `.app`; it needs Homebrew's mpv installed.
 - Run only one copy of the app at a time (they share `/tmp/ironhide-app.sock`).
+
+## Your mpv settings
+
+The embedded player reads your `~/.config/mpv/mpv.conf` (scaling, dithering, tone mapping, cache, audio, subtitle style) and skips only the options that describe a standalone window or another video output (`vo`, `gpu-api`, `force-window`, `keep-open`, `script-opts`, ...). Your Nitrate presets and key nudges (Ctrl and Shift with the arrows, `z`/`x` audio delay) are built into the player. It cannot use `vo=gpu-next` or HDR output to the XDR display: libmpv's render API draws with OpenGL only.

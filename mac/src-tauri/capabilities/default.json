@@ -3,5 +3,5 @@
   "description": "IronHide window, including the page served by the local daemon",
   "windows": ["main"],
   "remote": { "urls": ["http://127.0.0.1:*/*", "http://localhost:*/*"] },
-  "permissions": ["allow-player-cmd", "allow-player-set", "allow-player-close", "allow-player-fullscreen", "allow-player-pip"]
+  "permissions": ["allow-player-cmd", "allow-player-set", "allow-player-close", "allow-player-fullscreen", "allow-player-pip", "allow-player-drag"]
 }

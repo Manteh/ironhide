@@ -50,13 +50,18 @@
     ['gamma', 'Gamma', 'gamma', 'linear-gradient(90deg,#08080b,#9a9aa6 70%,#fff)'],
     ['hue', 'Hue', 'hue', 'linear-gradient(90deg,#ff5d5d,#ffd24a,#5ddc7d,#4ac8ff,#8a6bff,#ff5dc8,#ff5d5d)'],
   ];
+  // your Nitrate presets (from ~/.config/mpv/scripts/nitrate_presets.lua)
   const PRESETS = {
-    Default: [{ brightness: 0, contrast: 0, saturation: 0, gamma: 0, hue: 0 }, 'linear-gradient(135deg,#2d2d36,#4a4a56)'],
-    Vivid: [{ brightness: 2, contrast: 10, saturation: 22, gamma: 0, hue: 0 }, 'linear-gradient(135deg,#ff5d73,#ffb84a 45%,#4aa8ff)'],
-    Cinema: [{ brightness: -4, contrast: 12, saturation: -6, gamma: -6, hue: 0 }, 'linear-gradient(135deg,#0d2230,#3a5a6c 55%,#c98a52)'],
-    'Dark room': [{ brightness: -8, contrast: -4, saturation: 0, gamma: 14, hue: 0 }, 'linear-gradient(135deg,#0b0b12,#242a44)'],
-    'Bright room': [{ brightness: 8, contrast: 6, saturation: 6, gamma: 10, hue: 0 }, 'linear-gradient(135deg,#ffe9b8,#ffc267 55%,#ff9a62)'],
-    Warm: [{ brightness: 0, contrast: 4, saturation: 8, gamma: 0, hue: -4 }, 'linear-gradient(135deg,#6a3a1f,#d98a4a 55%,#ffd29a)'],
+    'Vibrant Anime': [{ brightness: -5, contrast: 24, saturation: 26, gamma: -3, hue: 0 }, 'linear-gradient(135deg,#ff5d73,#ffb84a 45%,#4aa8ff)'],
+    'Shadow Lift': [{ brightness: 0, contrast: 22, saturation: 22, gamma: 5, hue: 0 }, 'linear-gradient(135deg,#0b0b12,#3a4a6c 55%,#d9b27a)'],
+    'Cinephile Pop': [{ brightness: -2, contrast: 14, saturation: 12, gamma: -1, hue: 0 }, 'linear-gradient(135deg,#0d2230,#3a5a6c 55%,#c98a52)'],
+    Neutral: [{ brightness: 0, contrast: 0, saturation: 0, gamma: 0, hue: 0 }, 'linear-gradient(135deg,#2d2d36,#4a4a56)'],
+  };
+  // render quality: the same options mpv's own `fast` and `high-quality` profiles set (from mpv's builtin.conf), plus your mpv.conf as "Balanced"
+  const RENDER = {
+    Performance: [{ scale: 'bilinear', cscale: 'bilinear', dscale: 'bilinear', 'correct-downscaling': 'no', 'linear-downscaling': 'no', 'sigmoid-upscaling': 'no', dither: 'no', 'hdr-compute-peak': 'no' }, 'bilinear', 'mpv “fast”: cheapest scaling, no dithering. For battery or a busy Mac.'],
+    Balanced: [{ scale: 'spline36', cscale: 'spline36', dscale: 'hermite', 'correct-downscaling': 'yes', 'linear-downscaling': 'yes', 'sigmoid-upscaling': 'yes', dither: 'fruit', 'hdr-compute-peak': 'auto' }, 'spline36', 'Your mpv.conf: spline36 scaling, correct downscaling, 10-bit dithering.'],
+    'High quality': [{ scale: 'ewa_lanczossharp', 'scale-antiring': '0.6', cscale: 'ewa_lanczossharp', dscale: 'hermite', 'correct-downscaling': 'yes', 'linear-downscaling': 'yes', 'sigmoid-upscaling': 'yes', dither: 'fruit', 'hdr-compute-peak': 'yes' }, 'ewa_lanczossharp', 'mpv “high-quality”: ewa_lanczossharp with anti-ringing. The sharpest scaling; heavier on the GPU.'],
   };
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
   const ASPECTS = [['Auto', '-1', 0], ['16:9', '16:9', 0], ['4:3', '4:3', 0], ['2.35:1', '2.35:1', 0], ['Fill', '-1', 1]];
@@ -100,6 +105,7 @@
         <div class="pg" data-pg="pic">
           <h4>Looks</h4><div class="presets" data-presets>${Object.entries(PRESETS).map(([k, [, sw]]) => `<button data-preset="${k}" style="--sw:${sw}">${k}</button>`).join('')}</div>
           <h4>Adjust<button data-a="resetpic">Reset</button></h4>${PICTURE.map(([k, l, ic, trk]) => slider(k, l, -100, 100, 1, ic, trk)).join('')}
+          <h4>Render quality</h4><div class="chips" data-render>${Object.keys(RENDER).map((k) => `<button data-render="${k}">${k}</button>`).join('')}</div><div class="ihp-note" data-rnote></div>
           <h4>Quality</h4>
           <div class="tg"><div>Smooth motion<small>Blends frames for fluid pans</small></div><button data-tg="interp"></button></div>
           <div class="tg"><div>Remove banding<small>Smooths gradients in dark scenes</small></div><button data-tg="deband"></button></div>
@@ -188,6 +194,9 @@
     qa('[data-tone]').forEach((x) => x.classList.toggle('on', x.dataset.tone === (S['tone-mapping'] || 'auto')));
     q('[data-tg=deband]').classList.toggle('on', b('deband'));
     q('[data-tg=interp]').classList.toggle('on', b('interpolation'));
+    const sc = S.scale || ''; let rn = '';
+    qa('[data-render]').forEach((x) => { if (!x.dataset.render) return; const on = RENDER[x.dataset.render][1] === sc; x.classList.toggle('on', on); if (on) rn = RENDER[x.dataset.render][2]; });
+    const rnote = q('[data-rnote]'); if (rnote && rnote.textContent !== rn) rnote.textContent = rn;
     for (const x of qa('[data-preset]')) { const p = PRESETS[x.dataset.preset][0]; x.classList.toggle('on', PICTURE.every(([k]) => Math.round(n(k)) === p[k])); }
     root.classList.toggle('fs', fsNow());
   }
@@ -303,24 +312,36 @@
     back10: () => { rel(-10); ripple('l', '10 seconds'); }, fwd10: () => { rel(10); ripple('r', '10 seconds'); },
     mute: () => { cmd('cycle', 'mute'); hud(b('mute') ? I.vol : I.mute, b('mute') ? 'Sound on' : 'Muted'); },
     fs: () => { if (!root.classList.contains('pip')) call('player_fullscreen'); },
-    pip: () => call('player_pip'),
+    pip: () => call('player_pip', { aspect: n('width') > 0 && n('height') > 0 ? n('width') / n('height') : null }),
     speed: () => { const i = SPEEDS.findIndex((s) => Math.abs(s - n('speed', 1)) < 0.01); setSpeed(SPEEDS[(i + 1) % SPEEDS.length]); },
-    resetpic: () => { applyPicture(PRESETS.Default[0]); hud(I.pic, 'Picture reset'); },
+    resetpic: () => { applyPicture(PRESETS.Neutral[0]); hud(I.pic, 'Picture reset'); },
     chaps: () => { root.classList.toggle('ch-open'); wake(); const on = q('.cs .on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); },
     shot: () => { cmd('screenshot', 'window'); hud(I.snap, 'Screenshot saved to Pictures'); },
   };
 
+  // mini player: no visible controls. Tap = pause, drag = move the window, double tap = expand
+  let pipTap = 0;
+  root.addEventListener('pointerdown', (e) => {
+    if (!root.classList.contains('pip') || e.button) return;
+    const x0 = e.clientX, y0 = e.clientY; let moved = false;
+    const mv = (m) => { if (!moved && Math.hypot(m.clientX - x0, m.clientY - y0) > 4) { moved = true; off(); call('player_drag'); } };
+    const up = () => { off(); if (moved) return; const now = performance.now(); if (now - pipTap < 320) { pipTap = 0; actions.pip(); } else { pipTap = now; setTimeout(() => { if (pipTap === now) { pipTap = 0; actions.toggle(); } }, 330); } };
+    const off = () => { removeEventListener('pointermove', mv, true); removeEventListener('pointerup', up, true); };
+    addEventListener('pointermove', mv, true); addEventListener('pointerup', up, true);
+  });
   root.addEventListener('click', (e) => {
+    if (root.classList.contains('pip')) return;
     const a = e.target.closest('[data-a]');
     if (a) { const [k, v] = a.dataset.a.split(':'); if (k === 'tab') { panelOpen() && currentTab() === v ? closePanel() : tab(v); } else actions[k]?.(); return; }
     const t = e.target.closest('[data-tab]'); if (t) return tab(t.dataset.tab);
     const p = e.target.closest('[data-preset]'); if (p) { applyPicture(PRESETS[p.dataset.preset][0]); hud(I.pic, p.dataset.preset); return; }
     const sp = e.target.closest('[data-speed]'); if (sp) return setSpeed(+sp.dataset.speed);
     const as = e.target.closest('[data-aspect]'); if (as) { const [name, v, pan] = ASPECTS[+as.dataset.aspect]; set('video-aspect-override', v); set('panscan', pan); S['video-aspect-override'] = v; S.panscan = pan; hud(I.enter, name); paintStatic(); return; }
+    const rd = e.target.closest('button[data-render]'); if (rd) { const [opts] = RENDER[rd.dataset.render]; for (const [k, v] of Object.entries(opts)) { set(k, v); } S.scale = opts.scale; hud(I.pic, rd.dataset.render + ' rendering'); paintStatic(); return; }
     const to = e.target.closest('[data-tone]'); if (to) { set('tone-mapping', to.dataset.tone); S['tone-mapping'] = to.dataset.tone; paintStatic(); return; }
     const tg = e.target.closest('[data-tg]'); if (tg) {
       if (tg.dataset.tg === 'deband') { const v = !b('deband'); set('deband', v ? 'yes' : 'no'); S.deband = v ? 'yes' : 'no'; }
-      else { const v = !b('interpolation'); set('interpolation', v ? 'yes' : 'no'); if (v) set('video-sync', 'display-resample'); S.interpolation = v ? 'yes' : 'no'; }
+      else { const v = !b('interpolation'); set('interpolation', v ? 'yes' : 'no'); if (v) { set('video-sync', 'display-resample'); set('tscale', 'oversample'); } else set('video-sync', 'audio'); S.interpolation = v ? 'yes' : 'no'; }
       paintStatic(); return;
     }
     const st = e.target.closest('[data-set]'); if (st) { set(st.dataset.set, st.dataset.v); S[st.dataset.set] = st.dataset.v; lastTracks = ''; paintTracks(S['track-list'] || [], S['chapter-list'] || []); return; }
@@ -353,12 +374,21 @@
   trk.addEventListener('pointerup', () => { if (!dragging) return; dragging = false; trk.classList.remove('drag'); seekTo(dragT); lastPos = dragT; lastAt = performance.now(); });
 
   document.addEventListener('keydown', (e) => {
-    if (root.hidden || e.metaKey || e.ctrlKey) return;
+    if (root.hidden || e.metaKey) return;
     const k = e.key; let used = true;
+    // your mpv picture nudges: Ctrl+Up/Down gamma, Ctrl+Left/Right brightness, Shift+Up/Down contrast, Shift+Left/Right saturation
+    const nudge = (prop, d, label) => { const v = Math.max(-100, Math.min(100, n(prop) + d)); set(prop, v); S[prop] = v; paintStatic(); hud(I.pic, `${label} ${v > 0 ? '+' : ''}${v}`, (v + 100) / 200); };
+    if (e.ctrlKey && k.startsWith('Arrow')) { ({ ArrowUp: () => nudge('gamma', 1, 'Gamma'), ArrowDown: () => nudge('gamma', -1, 'Gamma'), ArrowRight: () => nudge('brightness', 1, 'Brightness'), ArrowLeft: () => nudge('brightness', -1, 'Brightness') })[k](); e.preventDefault(); e.stopPropagation(); wake(); return; }
+    if (e.shiftKey && k.startsWith('Arrow')) { ({ ArrowUp: () => nudge('contrast', 2, 'Contrast'), ArrowDown: () => nudge('contrast', -2, 'Contrast'), ArrowRight: () => nudge('saturation', 2, 'Saturation'), ArrowLeft: () => nudge('saturation', -2, 'Saturation') })[k](); e.preventDefault(); e.stopPropagation(); wake(); return; }
+    if (e.ctrlKey) return;
+    // audio sync like your input.conf: z/x +-50 ms, Z/X +-100 ms, Alt+z reset
+    const adelay = (d) => { const v = +(n('audio-delay') + d).toFixed(2); set('audio-delay', v); S['audio-delay'] = v; paintStatic(); hud(I.audio, `Audio delay ${v > 0 ? '+' : ''}${(v * 1000).toFixed(0)} ms`); };
+    if (k === 'z' || k === 'x' || k === 'Z' || k === 'X') { adelay((k === 'z' ? -0.05 : k === 'x' ? 0.05 : k === 'Z' ? -0.1 : 0.1)); e.preventDefault(); e.stopPropagation(); wake(); return; }
+    if (e.altKey && e.code === 'KeyZ') { set('audio-delay', 0); S['audio-delay'] = 0; paintStatic(); hud(I.audio, 'Audio delay reset'); e.preventDefault(); e.stopPropagation(); return; }
     switch (k) {
       case ' ': case 'k': actions.toggle(); break;
-      case 'ArrowLeft': { const s = e.shiftKey ? -30 : -10; rel(s); ripple('l', Math.abs(s) + ' seconds'); break; }
-      case 'ArrowRight': { const s = e.shiftKey ? 30 : 10; rel(s); ripple('r', s + ' seconds'); break; }
+      case 'ArrowLeft': rel(-10); ripple('l', '10 seconds'); break;
+      case 'ArrowRight': rel(10); ripple('r', '10 seconds'); break;
       case 'ArrowUp': setVol(n('volume', 100) + 5); break;
       case 'ArrowDown': setVol(n('volume', 100) - 5); break;
       case 'f': actions.fs(); break;

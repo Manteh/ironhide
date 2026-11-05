@@ -180,6 +180,9 @@ pub fn setup(app: &AppHandle) {
     let fmt = unsafe { NSOpenGLPixelFormat::initWithAttributes(mtm.alloc::<NSOpenGLPixelFormat>(), std::ptr::NonNull::new(attrs.as_ptr().cast_mut()).unwrap()) };
     let Some(fmt) = fmt else { eprintln!("player: no OpenGL pixel format"); return };
     let Some(ctx) = NSOpenGLContext::initWithFormat_shareContext(mtm.alloc::<NSOpenGLContext>(), &fmt, None) else { return };
+    // vsync: flip once per display refresh (without it frames tear and pacing jitters)
+    let one: i32 = 1;
+    let _: () = unsafe { msg_send![&*ctx, setValues: &one as *const i32, forParameter: 222isize] }; // NSOpenGLContextParameterSwapInterval
     VIEW.store(Retained::into_raw(view) as usize, Ordering::Relaxed);
     CTX.store(Retained::into_raw(ctx) as usize, Ordering::Relaxed);
     nswin.setAcceptsMouseMovedEvents(true);
@@ -229,6 +232,25 @@ fn parse_req(line: &str) -> Option<PlayReq> {
     Some(PlayReq { url: v["url"].as_str()?.to_string(), args: strs("args"), env })
 }
 
+/// Apply the user's own mpv.conf to the embedded player. Options that describe a standalone window or a different
+/// video output (vo, gpu-api, force-window, ...) are skipped: this player draws into the app window.
+fn load_user_conf(i: &libmpv2::MpvInitializer) {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let Ok(text) = std::fs::read_to_string(format!("{home}/.config/mpv/mpv.conf")) else { return };
+    const SKIP: &[&str] = &["vo", "gpu-api", "gpu-context", "force-window", "script-opts", "keep-open", "osc", "osd-level", "fullscreen", "geometry", "autofit", "ontop", "input-ipc-server", "window-maximized", "macos-fs-animation-duration", "title", "screenshot-directory"];
+    let mut lines: Vec<(String, String)> = Vec::new();
+    for l in text.lines() {
+        let l = l.split('#').next().unwrap_or("").trim();
+        if l.is_empty() { continue; }
+        let (k, v) = l.split_once('=').map(|(k, v)| (k.trim(), v.trim())).unwrap_or((l, "yes"));
+        if SKIP.contains(&k) { continue; }
+        lines.push((k.to_string(), v.trim_matches('"').to_string()));
+    }
+    // a profile goes first so the lines below can override what it sets
+    lines.sort_by_key(|(k, _)| k != "profile");
+    for (k, v) in lines { let _ = i.set_option(&k, v.as_str()); }
+}
+
 /// mpv's client handles are thread-safe; the Rust wrapper just does not say so.
 struct Sh<T>(T);
 unsafe impl<T> Send for Sh<T> {}
@@ -254,6 +276,9 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
         i.set_option("input-default-bindings", "yes")?;
         i.set_option("input-vo-keyboard", "yes")?;
         i.set_option("keep-open", "no")?;
+        i.set_option("hwdec-codecs", "all")?;
+        i.set_option("vd-lavc-dr", "yes")?;
+        load_user_conf(&i); // your ~/.config/mpv/mpv.conf: scaling, dithering, HDR tone mapping, cache, audio, subtitles
         for a in &args {
             let a = a.trim_start_matches("--");
             let (k, v) = a.split_once('=').unwrap_or((a, "yes"));
@@ -469,7 +494,7 @@ fn js(app: &AppHandle, code: &str) {
 const PROPS: &[&str] = &[
     "pause", "time-pos", "duration", "volume", "mute", "speed", "media-title", "demuxer-cache-time", "paused-for-cache",
     "contrast", "brightness", "gamma", "saturation", "hue", "sub-delay", "audio-delay", "sub-scale", "sub-pos",
-    "panscan", "video-aspect-override", "deband", "interpolation", "tone-mapping", "hwdec-current", "width", "height", "sid", "aid",
+    "panscan", "video-aspect-override", "scale", "deband", "interpolation", "tone-mapping", "hwdec-current", "width", "height", "sid", "aid",
 ];
 
 
@@ -477,18 +502,22 @@ const PROPS: &[&str] = &[
 // ---- picture in picture: the same window, shrunk and floated above everything ----
 static PIP_SAVED: Mutex<Option<(tauri::PhysicalPosition<i32>, tauri::PhysicalSize<u32>)>> = Mutex::new(None);
 
-fn pip_enter(win: &tauri::WebviewWindow) {
+fn pip_enter(win: &tauri::WebviewWindow, aspect: Option<f64>) {
     if PIP.swap(1, Ordering::Relaxed) == 1 { return; }
     if win.is_fullscreen().unwrap_or(false) { let _ = win.set_fullscreen(false); thread::sleep(Duration::from_millis(900)); }
     if let (Ok(p), Ok(sz)) = (win.outer_position(), win.outer_size()) { *PIP_SAVED.lock().unwrap() = Some((p, sz)); }
     let _ = win.set_min_size(None::<tauri::LogicalSize<f64>>);
     let _ = win.set_always_on_top(true);
     let _ = win.set_visible_on_all_workspaces(true);
-    let _ = win.set_size(tauri::LogicalSize::new(440.0, 270.0));
+    let ar = aspect.filter(|a| *a > 0.5 && *a < 4.0).unwrap_or(16.0 / 9.0);
+    let (lw, lh) = ((270.0 * ar).clamp(300.0, 640.0), 270.0);
+    let _ = win.set_decorations(false); // no title bar: nothing between you and the picture
+    let _ = win.set_shadow(true);
+    let _ = win.set_size(tauri::LogicalSize::new(lw, lh));
     if let Ok(Some(m)) = win.current_monitor() {
         let sc = m.scale_factor();
         let (mx, my, mw, mh) = (m.position().x, m.position().y, m.size().width as i32, m.size().height as i32);
-        let (w, h) = ((440.0 * sc) as i32, (270.0 * sc) as i32);
+        let (w, h) = ((lw * sc) as i32, (lh * sc) as i32);
         let _ = win.set_position(tauri::PhysicalPosition::new(mx + mw - w - (24.0 * sc) as i32, my + mh - h - (60.0 * sc) as i32));
     }
     let _ = win.eval("window.__ihp && window.__ihp.pip(true)");
@@ -498,6 +527,9 @@ fn pip_leave(win: &tauri::WebviewWindow) {
     if PIP.swap(0, Ordering::Relaxed) == 0 { return; }
     let _ = win.set_always_on_top(false);
     let _ = win.set_visible_on_all_workspaces(false);
+    let _ = win.set_decorations(true);
+    let _ = win.set_title_bar_style(tauri::TitleBarStyle::Transparent);
+    let _ = win.set_title("");
     let _ = win.set_min_size(Some(tauri::LogicalSize::new(960.0, 600.0)));
     if let Some((p, sz)) = PIP_SAVED.lock().unwrap().take() { let _ = win.set_size(sz); let _ = win.set_position(p); }
     let _ = win.eval("window.__ihp && window.__ihp.pip(false)");
@@ -508,6 +540,9 @@ fn pip_exit(app: &AppHandle) {
 }
 
 #[tauri::command]
-pub fn player_pip(window: tauri::WebviewWindow) {
-    if PIP.load(Ordering::Relaxed) == 1 { pip_leave(&window); } else { pip_enter(&window); }
+pub fn player_pip(window: tauri::WebviewWindow, aspect: Option<f64>) {
+    if PIP.load(Ordering::Relaxed) == 1 { pip_leave(&window); } else { pip_enter(&window, aspect); }
 }
+
+#[tauri::command]
+pub fn player_drag(window: tauri::WebviewWindow) { let _ = window.start_dragging(); }
