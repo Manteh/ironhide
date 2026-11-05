@@ -31,6 +31,7 @@
     gamma: svg('<path d="M3.5 19.5C8 19.5 9.5 12 12 4.5M12 4.5c1.2 5 3 8.2 8.5 10.5" opacity="0"/><path d="M4 18c5-1 8.5-5 16-12"/><path d="M4 18C9 18 16 15 20 6" opacity="0"/>'),
     hue: svg('<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="3.4"/><path d="M12 3.6v5M12 15.4v5" opacity=".0"/>'),
     list: svg('<path d="M8.5 6.5H20M8.5 12H20M8.5 17.5H20"/><circle class="f" cx="4.4" cy="6.5" r="1.1"/><circle class="f" cx="4.4" cy="12" r="1.1"/><circle class="f" cx="4.4" cy="17.5" r="1.1"/>'),
+    pip: svg('<rect x="3.4" y="5.2" width="17.2" height="13.6" rx="3"/><rect class="f" x="11.6" y="11.2" width="6.6" height="4.6" rx="1.3"/>'),
     snap: svg('<path d="M4 8.7A2.7 2.7 0 0 1 6.7 6h1.1l1.2-1.9h6l1.2 1.9h1.1A2.7 2.7 0 0 1 20 8.7v7.6a2.7 2.7 0 0 1-2.7 2.7H6.7A2.7 2.7 0 0 1 4 16.3Z"/><circle cx="12" cy="12.4" r="3.3"/>'),
     star: svg('<path class="f" d="m12 3.8 2.5 5.3 5.8.7-4.3 4 1.1 5.7-5.1-2.9-5.1 2.9 1.1-5.7-4.3-4 5.8-.7Z"/>'),
     reddit: svg('<circle cx="12" cy="13.6" r="6.4"/><circle class="f" cx="9.6" cy="13" r=".9"/><circle class="f" cx="14.4" cy="13" r=".9"/><path d="M9.6 16c1.4 1 3.4 1 4.8 0M12 7.2l1.2-3.2 3.2.8"/>'),
@@ -88,6 +89,7 @@
           <button class="ihp-ib" data-a="chaps" title="Chapters (H)" hidden>${I.list}</button>
           <button class="ihp-ib" data-a="tab:subs" title="Subtitles (C)">${I.subs}</button><button class="ihp-ib" data-a="tab:audio" title="Audio (A)">${I.audio}</button>
           <button class="ihp-ib" data-a="tab:pic" title="Picture (P)">${I.pic}</button><button class="ihp-ib" data-a="tab:info" title="About this title (I)">${I.info}</button><i class="sep"></i>
+          <button class="ihp-ib" data-a="pip" title="Picture in picture (W)">${I.pip}</button>
           <button class="ihp-ib ihp-fs" data-a="fs" title="Full screen (F)"><span class="i-enter">${I.enter}</span><span class="i-exit">${I.exit}</span></button>
         </div>
       </div>
@@ -300,7 +302,8 @@
     toggle: () => { cmd('cycle', 'pause'); pulse(b('pause') ? I.play : I.pause); },
     back10: () => { rel(-10); ripple('l', '10 seconds'); }, fwd10: () => { rel(10); ripple('r', '10 seconds'); },
     mute: () => { cmd('cycle', 'mute'); hud(b('mute') ? I.vol : I.mute, b('mute') ? 'Sound on' : 'Muted'); },
-    fs: () => call('player_fullscreen'),
+    fs: () => { if (!root.classList.contains('pip')) call('player_fullscreen'); },
+    pip: () => call('player_pip'),
     speed: () => { const i = SPEEDS.findIndex((s) => Math.abs(s - n('speed', 1)) < 0.01); setSpeed(SPEEDS[(i + 1) % SPEEDS.length]); },
     resetpic: () => { applyPicture(PRESETS.Default[0]); hud(I.pic, 'Picture reset'); },
     chaps: () => { root.classList.toggle('ch-open'); wake(); const on = q('.cs .on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); },
@@ -359,6 +362,7 @@
       case 'ArrowUp': setVol(n('volume', 100) + 5); break;
       case 'ArrowDown': setVol(n('volume', 100) - 5); break;
       case 'f': actions.fs(); break;
+      case 'w': actions.pip(); break;
       case 'm': actions.mute(); break;
       case '[': setSpeed(n('speed', 1) - 0.25); break;
       case ']': setSpeed(n('speed', 1) + 0.25); break;
@@ -368,7 +372,7 @@
       case 'h': actions.chaps(); break;
       case 'i': panelOpen() && currentTab() === 'info' ? closePanel() : tab('info'); break;
       case 'q': actions.close(); break;
-      case 'Escape': panelOpen() ? closePanel() : fsNow() ? actions.fs() : actions.close(); break;
+      case 'Escape': panelOpen() ? closePanel() : root.classList.contains('pip') ? actions.pip() : fsNow() ? actions.fs() : actions.close(); break;
       default: used = false;
     }
     if (used) { e.preventDefault(); e.stopPropagation(); wake(); }
@@ -383,7 +387,8 @@
       document.documentElement.classList.add('ihp-on'); playing = true; wake(); requestAnimationFrame(frame);
       try { const p = JSON.parse(localStorage.getItem('ihp.pic') || 'null'); if (p) setTimeout(() => applyPicture(p), 500); } catch {}
     },
-    close() { playing = false; root.hidden = true; document.documentElement.classList.remove('ihp-on'); root.classList.remove('pn', 'ui'); },
+    pip(on) { root.classList.toggle('pip', !!on); if (on) { closePanel(); root.classList.remove('ch-open'); } wake(); },
+    close() { root.classList.remove('pip'); playing = false; root.hidden = true; document.documentElement.classList.remove('ihp-on'); root.classList.remove('pn', 'ui'); },
     state(s) {
       Object.assign(S, s); lastPos = n('time-pos'); lastAt = performance.now();
       if (S['track-list']) paintTracks(S['track-list'], S['chapter-list'] || []);

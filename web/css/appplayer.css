@@ -213,4 +213,18 @@ html.ihp-on body::before, html.ihp-on body::after { display: none !important; }
 .cs small { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; color: rgba(255,255,255,.5); text-transform: uppercase; font-variant-numeric: tabular-nums; }
 .cs b { font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* mini player (picture in picture) */
+#ihp.pip { --pad: 12px; }
+#ihp.pip .ihp-meta, #ihp.pip .ihp-times, #ihp.pip .ihp-chaps, #ihp.pip .ihp-panel, #ihp.pip .ihp-ib.sk, #ihp.pip .ihp-vol, #ihp.pip .ihp-sp, #ihp.pip .ihp-dock .sep, #ihp.pip .ihp-dock .ihp-ib:not([data-a=pip]), #ihp.pip .ihp-skip, #ihp.pip .ihp-tags { display: none !important; }
+#ihp.pip .ihp-bottom { bottom: 10px; }
+#ihp.pip .ihp-top { top: 8px; }
+#ihp.pip .ihp-round { width: 34px; height: 34px; } #ihp.pip .ihp-round svg { width: 18px; height: 18px; }
+#ihp.pip .ihp-play { width: 44px; height: 44px; margin: 0; } #ihp.pip .ihp-play svg { width: 20px; height: 20px; }
+#ihp.pip .ihp-row { margin-top: 2px; } #ihp.pip .ihp-dock { padding: 2px; }
+#ihp.pip .ihp-dock .ihp-ib { width: 36px; height: 34px; }
+#ihp.pip .trk { height: 20px; } #ihp.pip .ihp-shade.b { min-height: 120px; height: 60%; }
+#ihp.pip .ihp-pulse { width: 64px; height: 64px; } #ihp.pip .ihp-pulse svg { width: 28px; height: 28px; }
+#ihp .ihp-ib[data-a=pip] { transition: background .25s, transform .35s var(--spring), color .2s; }
+#ihp.pip .ihp-ib[data-a=pip] { background: color-mix(in srgb, var(--a) 80%, transparent); color: #fff; }
+
 @media (prefers-reduced-motion: reduce) { #ihp * { transition-duration: .01s !important; animation-duration: .01s !important; } }

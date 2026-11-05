@@ -8,7 +8,7 @@ use std::{
     io::{BufRead, BufReader, Write},
     os::unix::net::{UnixListener, UnixStream},
     sync::{
-        atomic::{AtomicI32, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering},
         mpsc::{channel, Receiver, RecvTimeoutError, Sender},
         Mutex,
     },
@@ -35,13 +35,15 @@ extern "C" {
 pub const APP_SOCK: &str = "/tmp/ironhide-app.sock";
 
 enum Msg {
-    Redraw,
     Cmd(Vec<String>),
     Stop,
 }
 
 // state shared between the main thread (view events) and the playback thread
 static TX: Mutex<Option<Sender<Msg>>> = Mutex::new(None);
+static RDX: Mutex<Option<Sender<()>>> = Mutex::new(None); // wakes the render thread (resize, new frame)
+static PIP: AtomicI32 = AtomicI32::new(0);
+fn redraw() { if let Some(t) = RDX.lock().unwrap().as_ref() { let _ = t.send(()); } }
 static VIEW: AtomicUsize = AtomicUsize::new(0); // *NSView
 static CTX: AtomicUsize = AtomicUsize::new(0); // *NSOpenGLContext
 static PX_W: AtomicI32 = AtomicI32::new(0);
@@ -142,7 +144,7 @@ impl VideoView {
             let ctx: &NSOpenGLContext = unsafe { &*(c as *const NSOpenGLContext) };
             ctx.update(MainThreadMarker::new().unwrap());
         }
-        send(Msg::Redraw);
+        redraw();
     }
     fn pointer(&self, e: &NSEvent) {
         let p = self.convertPoint_fromView(e.locationInWindow(), None);
@@ -227,7 +229,15 @@ fn parse_req(line: &str) -> Option<PlayReq> {
     Some(PlayReq { url: v["url"].as_str()?.to_string(), args: strs("args"), env })
 }
 
-/// One playback: owns the mpv core and the render loop until the file ends or is stopped.
+/// mpv's client handles are thread-safe; the Rust wrapper just does not say so.
+struct Sh<T>(T);
+unsafe impl<T> Send for Sh<T> {}
+unsafe impl<T> Sync for Sh<T> {}
+
+/// One playback. Three threads, so nothing can stall drawing:
+///   render:  only draws frames (waits for "new frame" or a resize, then renders and flips)
+///   state:   reads mpv's properties on its own client handle and pushes only what changed to the page
+///   control: this thread, applies slider/keyboard commands and watches for the end of the file
 fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> {
     for (k, v) in &req.env {
         std::env::set_var(k, v);
@@ -258,26 +268,37 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
         Ok(())
     })
     .map_err(|e| format!("mpv init: {e}"))?;
-
     let ctx_ptr = CTX.load(Ordering::Relaxed);
     if ctx_ptr == 0 { return Err("no video view".into()); }
-    let gl: &NSOpenGLContext = unsafe { &*(ctx_ptr as *const NSOpenGLContext) };
-    gl.makeCurrentContext();
 
-    let mut rc: RenderContext<'_> = mpv.create_render_context(vec![RenderParam::ApiType(RenderParamApiType::OpenGl), RenderParam::InitParams(OpenGLInitParams { get_proc_address: gl_proc, ctx: () })]).map_err(|e| format!("render: {e}"))?;
-    let tx = TX.lock().unwrap().clone();
-    if let Some(tx) = tx {
-        rc.set_update_callback(move || { let _ = tx.send(Msg::Redraw); });
-    }
-    let events = mpv.create_client(None).map_err(|e| e.to_string())?;
-    mpv.command("loadfile", &[&req.url, "replace"]).map_err(|e| format!("loadfile: {e}"))?;
+    let mpv = Sh(mpv);
+    let stop = AtomicBool::new(false);
+    let (rdx_tx, rdx_rx) = channel::<()>();
+    *RDX.lock().unwrap() = Some(rdx_tx.clone());
+    let (ready_tx, ready_rx) = channel::<Result<(), String>>();
+    let mut result: Result<(), String> = Ok(());
 
-    let mut shown = false;
-    let mut last_push = std::time::Instant::now() - Duration::from_secs(1);
-    let mut ticks = 0u32;
-    'run: loop {
-        match rx.recv_timeout(Duration::from_millis(30)) {
-            Ok(Msg::Redraw) | Err(RecvTimeoutError::Timeout) => {
+    thread::scope(|sc| {
+        // ---- render thread ----
+        let (mpv_r, stop_r, wake) = (&mpv, &stop, rdx_tx.clone());
+        sc.spawn(move || {
+            let gl: &NSOpenGLContext = unsafe { &*(ctx_ptr as *const NSOpenGLContext) };
+            gl.makeCurrentContext();
+            let mut rc: RenderContext<'_> = match mpv_r.0.create_render_context(vec![
+                RenderParam::ApiType(RenderParamApiType::OpenGl),
+                RenderParam::InitParams(OpenGLInitParams { get_proc_address: gl_proc, ctx: () }),
+            ]) {
+                Ok(r) => r,
+                Err(e) => { let _ = ready_tx.send(Err(format!("render: {e}"))); return; }
+            };
+            rc.set_update_callback(move || { let _ = wake.send(()); });
+            let _ = ready_tx.send(Ok(()));
+            while !stop_r.load(Ordering::Relaxed) {
+                match rdx_rx.recv_timeout(Duration::from_millis(33)) {
+                    Ok(()) | Err(RecvTimeoutError::Timeout) => {}
+                    Err(RecvTimeoutError::Disconnected) => break,
+                }
+                while rdx_rx.try_recv().is_ok() {} // coalesce
                 let (w, h) = (PX_W.load(Ordering::Relaxed), PX_H.load(Ordering::Relaxed));
                 if w > 0 && h > 0 {
                     gl.makeCurrentContext();
@@ -287,35 +308,86 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
                     }
                 }
             }
-            Ok(Msg::Cmd(c)) => {
-                let (name, rest) = c.split_first().ok_or("empty")?;
-                let rest: Vec<&str> = rest.iter().map(|s| s.as_str()).collect();
-                let _ = mpv.command(name, &rest);
+        });
+
+        match ready_rx.recv() {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => { result = Err(e); stop.store(true, Ordering::Relaxed); return; }
+            Err(_) => { result = Err("render thread died".into()); stop.store(true, Ordering::Relaxed); return; }
+        }
+        if let Err(e) = mpv.0.command("loadfile", &[&req.url, "replace"]) { result = Err(format!("loadfile: {e}")); stop.store(true, Ordering::Relaxed); return; }
+
+        // ---- state thread: own client handle, change-only pushes ----
+        let poll_client = mpv.0.create_client(None).map(Sh);
+        if let Ok(pc) = poll_client {
+            let (stop, app) = (&stop, app.clone());
+            sc.spawn(move || {
+                let pc = pc;
+                let mut last: std::collections::HashMap<&str, String> = std::collections::HashMap::new();
+                let (mut shown, mut tick) = (false, 0u32);
+                while !stop.load(Ordering::Relaxed) {
+                    thread::sleep(Duration::from_millis(120));
+                    if !shown && pc.0.get_property::<String>("pause").as_deref() == Ok("no") && pc.0.get_property::<f64>("duration").unwrap_or(0.0) > 0.0 {
+                        shown = true;
+                        show(&app, true);
+                        js(&app, "window.__ihp && window.__ihp.open()");
+                    }
+                    if !shown { continue; }
+                    let full = tick % 8 == 0; tick += 1;
+                    let mut diff = serde_json::Map::new();
+                    for p in PROPS {
+                        let Ok(v) = pc.0.get_property::<String>(p) else { continue };
+                        let slow = matches!(*p, "time-pos" | "demuxer-cache-time"); // the page interpolates these
+                        let changed = match last.get(p) {
+                            None => true,
+                            Some(old) if slow => (old.parse::<f64>().unwrap_or(0.0) - v.parse::<f64>().unwrap_or(0.0)).abs() >= 1.0,
+                            Some(old) => *old != v,
+                        };
+                        if changed { last.insert(p, v.clone()); diff.insert((*p).to_string(), serde_json::Value::String(v)); }
+                    }
+                    if full {
+                        for p in ["track-list", "chapter-list"] {
+                            if let Ok(v) = pc.0.get_property::<String>(p) {
+                                if last.get(p) != Some(&v) {
+                                    if let Ok(j) = serde_json::from_str::<serde_json::Value>(&v) { diff.insert(p.to_string(), j); }
+                                    last.insert(if p == "track-list" { "track-list" } else { "chapter-list" }, v);
+                                }
+                            }
+                        }
+                    }
+                    if !diff.is_empty() { js(&app, &format!("window.__ihp && window.__ihp.state({})", serde_json::Value::Object(diff))); }
+                }
+            });
+        }
+
+        // ---- control thread (this one) ----
+        let events = match mpv.0.create_client(None) { Ok(e) => Sh(e), Err(e) => { result = Err(e.to_string()); stop.store(true, Ordering::Relaxed); return; } };
+        'run: loop {
+            match rx.recv_timeout(Duration::from_millis(40)) {
+                Ok(Msg::Cmd(c)) => {
+                    if let Some((name, rest)) = c.split_first() {
+                        let rest: Vec<&str> = rest.iter().map(|s| s.as_str()).collect();
+                        let _ = mpv.0.command(name, &rest);
+                    }
+                }
+                Ok(Msg::Stop) | Err(RecvTimeoutError::Disconnected) => { let _ = mpv.0.command("quit", &[]); break 'run; }
+                Err(RecvTimeoutError::Timeout) => {}
             }
-            Ok(Msg::Stop) | Err(RecvTimeoutError::Disconnected) => { let _ = mpv.command("quit", &[]); break 'run; }
-        }
-        if !shown && mpv.get_property::<bool>("pause") == Ok(false) && mpv.get_property::<f64>("duration").unwrap_or(0.0) > 0.0 {
-            shown = true;
-            show(app, true);
-            js(app, "window.__ihp && window.__ihp.open()");
-        }
-        if shown && last_push.elapsed() >= Duration::from_millis(100) {
-            last_push = std::time::Instant::now();
-            let full = ticks % 10 == 0;
-            ticks += 1;
-            js(app, &format!("window.__ihp && window.__ihp.state({})", state_json(&mpv, full)));
-        }
-        while let Some(ev) = events.wait_event(0.0) {
-            match ev {
-                Ok(Event::EndFile(_)) | Ok(Event::Shutdown) => break 'run,
-                Err(_) => break 'run,
-                _ => {}
+            while let Some(ev) = events.0.wait_event(0.0) {
+                match ev {
+                    Ok(Event::EndFile(_)) | Ok(Event::Shutdown) => break 'run,
+                    Err(_) => break 'run,
+                    _ => {}
+                }
             }
         }
-    }
+        stop.store(true, Ordering::Relaxed);
+        redraw();
+    });
+    *RDX.lock().unwrap() = None;
     js(app, "window.__ihp && window.__ihp.close()");
-    drop(rc);
-    Ok(())
+    pip_exit(app);
+    result
 }
 
 fn handle(app: AppHandle, stream: UnixStream, req: PlayReq) {
@@ -400,17 +472,42 @@ const PROPS: &[&str] = &[
     "panscan", "video-aspect-override", "deband", "interpolation", "tone-mapping", "hwdec-current", "width", "height", "sid", "aid",
 ];
 
-fn state_json(mpv: &Mpv, full: bool) -> String {
-    let mut m = serde_json::Map::new();
-    for p in PROPS {
-        if let Ok(v) = mpv.get_property::<String>(p) { m.insert((*p).to_string(), serde_json::Value::String(v)); }
+
+
+// ---- picture in picture: the same window, shrunk and floated above everything ----
+static PIP_SAVED: Mutex<Option<(tauri::PhysicalPosition<i32>, tauri::PhysicalSize<u32>)>> = Mutex::new(None);
+
+fn pip_enter(win: &tauri::WebviewWindow) {
+    if PIP.swap(1, Ordering::Relaxed) == 1 { return; }
+    if win.is_fullscreen().unwrap_or(false) { let _ = win.set_fullscreen(false); thread::sleep(Duration::from_millis(900)); }
+    if let (Ok(p), Ok(sz)) = (win.outer_position(), win.outer_size()) { *PIP_SAVED.lock().unwrap() = Some((p, sz)); }
+    let _ = win.set_min_size(None::<tauri::LogicalSize<f64>>);
+    let _ = win.set_always_on_top(true);
+    let _ = win.set_visible_on_all_workspaces(true);
+    let _ = win.set_size(tauri::LogicalSize::new(440.0, 270.0));
+    if let Ok(Some(m)) = win.current_monitor() {
+        let sc = m.scale_factor();
+        let (mx, my, mw, mh) = (m.position().x, m.position().y, m.size().width as i32, m.size().height as i32);
+        let (w, h) = ((440.0 * sc) as i32, (270.0 * sc) as i32);
+        let _ = win.set_position(tauri::PhysicalPosition::new(mx + mw - w - (24.0 * sc) as i32, my + mh - h - (60.0 * sc) as i32));
     }
-    if full {
-        for p in ["track-list", "chapter-list"] {
-            if let Ok(v) = mpv.get_property::<String>(p) {
-                if let Ok(j) = serde_json::from_str::<serde_json::Value>(&v) { m.insert(p.to_string(), j); }
-            }
-        }
-    }
-    serde_json::Value::Object(m).to_string()
+    let _ = win.eval("window.__ihp && window.__ihp.pip(true)");
+}
+
+fn pip_leave(win: &tauri::WebviewWindow) {
+    if PIP.swap(0, Ordering::Relaxed) == 0 { return; }
+    let _ = win.set_always_on_top(false);
+    let _ = win.set_visible_on_all_workspaces(false);
+    let _ = win.set_min_size(Some(tauri::LogicalSize::new(960.0, 600.0)));
+    if let Some((p, sz)) = PIP_SAVED.lock().unwrap().take() { let _ = win.set_size(sz); let _ = win.set_position(p); }
+    let _ = win.eval("window.__ihp && window.__ihp.pip(false)");
+}
+
+fn pip_exit(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") { pip_leave(&w); }
+}
+
+#[tauri::command]
+pub fn player_pip(window: tauri::WebviewWindow) {
+    if PIP.load(Ordering::Relaxed) == 1 { pip_leave(&window); } else { pip_enter(&window); }
 }

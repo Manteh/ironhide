@@ -191,7 +191,7 @@ fn stop_daemon(app: &AppHandle) {
 fn main() {
     let app = tauri::Builder::default()
         .manage(Daemon(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![player::player_cmd, player::player_set, player::player_close, player::player_fullscreen])
+        .invoke_handler(tauri::generate_handler![player::player_cmd, player::player_set, player::player_close, player::player_fullscreen, player::player_pip])
         .setup(|app| {
             let h = app.handle();
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
