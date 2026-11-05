@@ -33,3 +33,7 @@
 .btn.primary:hover, .pill:not(.ghost2):not(.sq):hover { background: #fff; filter: none; transform: translateY(-1px); box-shadow: 0 16px 36px -12px color-mix(in srgb, var(--accent) 90%, transparent), 0 1px 0 #fff inset, 0 0 0 1px rgba(0,0,0,.06); }
 .btn.primary:active, .pill:not(.ghost2):not(.sq):active { transform: scale(.97); }
 .btn.primary svg, .pill:not(.ghost2):not(.sq) svg { color: var(--accent-2); }
+
+/* the logo shield used a fixed indigo gradient: follow the accent */
+#lg stop:nth-child(1) { stop-color: color-mix(in srgb, var(--accent) 86%, #fff); }
+#lg stop:nth-child(2) { stop-color: var(--accent-2); }
