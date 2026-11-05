@@ -21,6 +21,8 @@ use tauri::{
 /// Makes the page feel like an app instead of a browser tab (only runs on the IronHide daemon's pages).
 const NATIVE_JS: &str = r#"(() => {
   if (location.protocol !== 'http:' || location.hostname !== '127.0.0.1') return;
+  // The page-drawn cursor trails the real pointer; the system cursor has no lag. Once per install, so Settings can turn it back on.
+  if (!localStorage.getItem('cursorAppDefault')) { localStorage.setItem('cursorAppDefault', '1'); localStorage.setItem('cursor', 'off'); }
   const css = `
     html { overscroll-behavior: none; }
     body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
