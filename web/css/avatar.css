@@ -24,12 +24,16 @@
 .fr-glow { filter: drop-shadow(0 0 calc(var(--s) * .18) color-mix(in srgb, var(--fa) 80%, transparent)); }
 .fr-glow .avx { background: linear-gradient(135deg, var(--fa), var(--fb)); }
 .fr-pulse .avx { background: linear-gradient(135deg, var(--fa), var(--fb)); }
-.fr-pulse { animation: avpulse 2.4s ease-in-out infinite; }
-@keyframes avpulse { 0%, 100% { filter: drop-shadow(0 0 0 transparent); } 50% { filter: drop-shadow(0 0 calc(var(--s) * .22) color-mix(in srgb, var(--fa) 85%, transparent)); } }
-.fr-spin .avx { background: conic-gradient(from var(--avrot), var(--fa), var(--fb), var(--fa)); animation: avspin 4s linear infinite; }
-@keyframes avspin { to { --avrot: 360deg; } }
-@media (prefers-reduced-motion: reduce), (html[data-motion="off"]) { .fr-pulse, .fr-spin .avx { animation: none; } }
-html[data-motion="off"] .fr-pulse, html[data-motion="off"] .fr-spin .avx { animation: none; }
+/* Animated frames only change transform or opacity (composited on the GPU). Animating a gradient angle or a drop-shadow
+   filter repaints the whole element every frame, which made the profile and avatar pages lag with many avatars on screen. */
+.fr-pulse { isolation: isolate; }
+.fr-pulse::after { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: var(--rad, 50%); background: var(--fa); filter: blur(calc(var(--s) * .2)); opacity: 0; animation: avpulse 2.4s ease-in-out infinite; will-change: opacity; pointer-events: none; }
+@keyframes avpulse { 0%, 100% { opacity: 0; } 50% { opacity: .85; } }
+.fr-spin .avx { background: transparent; overflow: hidden; }
+.fr-spin .avx::before { content: ''; position: absolute; inset: -30%; background: conic-gradient(var(--fa), var(--fb), var(--fa)); animation: avspin 4s linear infinite; will-change: transform; }
+@keyframes avspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .fr-pulse::after, .fr-spin .avx::before { animation: none; } }
+html[data-motion="off"] .fr-pulse::after, html[data-motion="off"] .fr-spin .avx::before { animation: none; }
 
 /* avatar studio (settings) */
 .av-studio { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: var(--s6); align-items: start; }

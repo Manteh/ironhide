@@ -43,6 +43,9 @@ enum Msg {
 static TX: Mutex<Option<Sender<Msg>>> = Mutex::new(None);
 static RDX: Mutex<Option<Sender<()>>> = Mutex::new(None); // wakes the render thread (resize, new frame)
 static PIP: AtomicI32 = AtomicI32::new(0);
+// The GL context may only be drawn into while the view is attached; attach, detach, resize and draw never overlap.
+static ATTACHED: AtomicBool = AtomicBool::new(false);
+static GL_LOCK: Mutex<()> = Mutex::new(());
 fn redraw() { if let Some(t) = RDX.lock().unwrap().as_ref() { let _ = t.send(()); } }
 static VIEW: AtomicUsize = AtomicUsize::new(0); // *NSView
 static CTX: AtomicUsize = AtomicUsize::new(0); // *NSOpenGLContext
@@ -140,7 +143,8 @@ impl VideoView {
         PX_W.store((b.size.width * s) as i32, Ordering::Relaxed);
         PX_H.store((b.size.height * s) as i32, Ordering::Relaxed);
         let c = CTX.load(Ordering::Relaxed);
-        if c != 0 {
+        if c != 0 && ATTACHED.load(Ordering::Relaxed) {
+            let _g = GL_LOCK.lock().unwrap();
             let ctx: &NSOpenGLContext = unsafe { &*(c as *const NSOpenGLContext) };
             ctx.update(MainThreadMarker::new().unwrap());
         }
@@ -202,10 +206,18 @@ fn show(app: &AppHandle, visible: bool) {
         let ctx: &NSOpenGLContext = unsafe { &*(c as *const NSOpenGLContext) };
         if visible {
             view.setHidden(false);
-            unsafe { ctx.setView(Some(view), MainThreadMarker::new().unwrap()) };
+            {
+                let _g = GL_LOCK.lock().unwrap();
+                unsafe { ctx.setView(Some(view), MainThreadMarker::new().unwrap()) };
+                ATTACHED.store(true, Ordering::Relaxed);
+            }
             view.sync_size();
         } else {
-            ctx.clearDrawable();
+            {
+                let _g = GL_LOCK.lock().unwrap();
+                ATTACHED.store(false, Ordering::Relaxed);
+                ctx.clearDrawable();
+            }
             view.setHidden(true);
             if let Some(w) = app2.get_webview_window("main") { let _ = w.set_focus(); }
         }
@@ -325,11 +337,14 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
                 }
                 while rdx_rx.try_recv().is_ok() {} // coalesce
                 let (w, h) = (PX_W.load(Ordering::Relaxed), PX_H.load(Ordering::Relaxed));
-                if w > 0 && h > 0 {
-                    gl.makeCurrentContext();
-                    if rc.render::<()>(0, w, h, true).is_ok() {
-                        gl.flushBuffer();
-                        rc.report_swap();
+                if w > 0 && h > 0 && ATTACHED.load(Ordering::Relaxed) {
+                    let _g = GL_LOCK.lock().unwrap();
+                    if ATTACHED.load(Ordering::Relaxed) {
+                        gl.makeCurrentContext();
+                        if rc.render::<()>(0, w, h, true).is_ok() {
+                            gl.flushBuffer();
+                            rc.report_swap();
+                        }
                     }
                 }
             }
