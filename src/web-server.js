@@ -31,6 +31,7 @@ import {
 
 import { searchMedia, getImdbId, getLatestEpisode } from './tmdb.js';
 import { getNowPlaying, isMpvRunning } from './mpv-ipc.js';
+import { getInfo, nowImdbId } from './moviemeta.js';
 import { getPlayState, setPlayState, beginLaunch } from './playstate.js';
 
 const WEB_DIR = fileURLToPath(new URL('../web', import.meta.url));
@@ -241,6 +242,8 @@ async function handleApi(req, res, urlPath) {
     }
 
     if (method === 'GET' && urlPath === '/api/settings') return jsonResponse(res, await getSettings());
+    // cast, details and what people think, for the title that is playing (or a given IMDb id)
+    if (method === 'GET' && urlPath.startsWith('/api/info/')) { const id = urlPath.slice(10); return jsonResponse(res, await getInfo(id === 'now' ? nowImdbId() : id).catch((e) => ({ error: String(e.message || e) }))); }
     // extra IronHides on this Mac (another person, own friend code). Spawns processes, so only our own pages may call it.
     if (urlPath === '/api/instances' || /^\/api\/instances\/[a-z0-9]+(\/(start|stop))?$/.test(urlPath)) {
       if (req.headers.origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.origin)) return errorResponse(res, 'Not allowed from this site', 403);
