@@ -543,7 +543,7 @@ fn pip_leave(win: &tauri::WebviewWindow) {
     let _ = win.set_always_on_top(false);
     let _ = win.set_visible_on_all_workspaces(false);
     let _ = win.set_decorations(true);
-    let _ = win.set_title_bar_style(tauri::TitleBarStyle::Transparent);
+    let _ = win.set_title_bar_style(tauri::TitleBarStyle::Overlay);
     let _ = win.set_title("");
     let _ = win.set_min_size(Some(tauri::LogicalSize::new(960.0, 600.0)));
     if let Some((p, sz)) = PIP_SAVED.lock().unwrap().take() { let _ = win.set_size(sz); let _ = win.set_position(p); }
@@ -561,3 +561,8 @@ pub fn player_pip(window: tauri::WebviewWindow, aspect: Option<f64>) {
 
 #[tauri::command]
 pub fn player_drag(window: tauri::WebviewWindow) { let _ = window.start_dragging(); }
+
+#[tauri::command]
+pub fn win_zoom(window: tauri::WebviewWindow) {
+    if window.is_maximized().unwrap_or(false) { let _ = window.unmaximize(); } else { let _ = window.maximize(); }
+}

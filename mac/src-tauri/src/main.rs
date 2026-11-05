@@ -47,6 +47,9 @@ const NATIVE_JS: &str = r#"(() => {
     // the in-app player overlay (controls, picture settings); lives in web/ next to the rest of the UI
     const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/css/appplayer.css'; document.documentElement.appendChild(l);
     const j = document.createElement('script'); j.type = 'module'; j.src = '/js/appplayer.js'; document.documentElement.appendChild(j);
+    // the window header (back/forward, page name, search, friends, settings, profile)
+    const bl = document.createElement('link'); bl.rel = 'stylesheet'; bl.href = '/css/appbar.css'; document.documentElement.appendChild(bl);
+    const bj = document.createElement('script'); bj.type = 'module'; bj.src = '/js/appbar.js'; document.documentElement.appendChild(bj);
   };
   document.documentElement ? add() : document.addEventListener('DOMContentLoaded', add);
 })();"#;
@@ -193,7 +196,7 @@ fn stop_daemon(app: &AppHandle) {
 fn main() {
     let app = tauri::Builder::default()
         .manage(Daemon(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![player::player_cmd, player::player_set, player::player_close, player::player_fullscreen, player::player_pip, player::player_drag])
+        .invoke_handler(tauri::generate_handler![player::player_cmd, player::player_set, player::player_close, player::player_fullscreen, player::player_pip, player::player_drag, player::win_zoom])
         .setup(|app| {
             let h = app.handle();
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
@@ -203,7 +206,8 @@ fn main() {
                 .center()
                 .background_color(Color(13, 13, 14, 255))
                 // title bar takes the window colour and the title is hidden, like Discord
-                .title_bar_style(TitleBarStyle::Transparent)
+                .title_bar_style(TitleBarStyle::Overlay)
+                .traffic_light_position(tauri::LogicalPosition::new(16.0, 12.0))
                 .hidden_title(true)
                 .disable_drag_drop_handler()
                 .initialization_script(NATIVE_JS)
