@@ -4,14 +4,14 @@ A native Mac app: a small Rust (Tauri 2) shell around the existing IronHide web 
 
 - The window is a WKWebView showing the daemon's UI (`http://127.0.0.1:7676`). Home, Library, Search, Title, Friends, Profile, Settings and watch rooms are the same `web/` code, nothing is duplicated.
 - The app starts the daemon (`node src/daemon.js`) when it launches and stops it when you quit. If a daemon is already running on the port, the app attaches to it and leaves it alone on quit.
-- Playback: **mpv** (native, fullscreen, HEVC/4K/DTS) is the daemon's existing player and stays the recommended way to watch. The web player also works inside the window (WKWebView decodes H.264/HEVC through VideoToolbox).
+- Playback: **mpv plays inside the app window** (libmpv, OpenGL, VideoToolbox hardware decoding, so 4K HEVC works). When you press Play, the daemon hands the stream to the app instead of starting an external mpv; mpv's own on-screen controls, subtitles and audio tracks are used. Keys: Space, arrows, `f` (full screen), Esc (leave full screen, then close), `q` (close). If the app is not open, the daemon starts the external mpv as before. The web player still works too.
 - Native menu: Go ▸ Home / Continue / Shelf / Friends / Profile / Search (⌘1–5, ⌘K), Settings (⌘,), Reload (⌘R), full screen.
 
 ## Requirements
 
 - macOS 12+, Xcode command line tools
 - Rust (`rustup`), and the Tauri CLI: `cargo install tauri-cli --version "^2" --locked`
-- Node.js (Homebrew `node`), mpv at `/Applications/mpv.app`, ffmpeg for the web player
+- Node.js (Homebrew `node`), `brew install mpv` (the app links `/opt/homebrew/lib/libmpv.dylib`; mpv.app is still used when the app is closed), ffmpeg for the web player
 
 ## Run (development)
 
@@ -45,3 +45,9 @@ Daemon log: `~/Library/Logs/IronHide/daemon.log`. Your data stays in `~/.config/
 ## Why this shape
 
 See [DESIGN.md](DESIGN.md).
+
+## Known limits
+
+- Mouse and keyboard forwarding to mpv, and the on-screen controls appearing on hover, are implemented but have only been checked by driving mpv over its IPC socket, not with a real mouse.
+- libmpv is not bundled inside the `.app`; it needs Homebrew's mpv installed.
+- Run only one copy of the app at a time (they share `/tmp/ironhide-app.sock`).

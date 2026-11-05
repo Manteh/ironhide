@@ -27,6 +27,8 @@ const NATIVE_JS: &str = r#"(() => {
   if (!localStorage.getItem('cursorAppDefault')) { localStorage.setItem('cursorAppDefault', '1'); localStorage.setItem('cursor', 'off'); }
   const css = `
     html { overscroll-behavior: none; }
+    /* mpv has its own controls in the app, so the floating now-playing pill is not needed */
+    #np { display: none !important; }
     @font-face { font-family: 'Outfit'; src: url('/fonts/Outfit.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
     /* Bold, round geometric headings (trial) */
     h1, h1.title, .greet h1, .pf-who h1, .ninfo h2 { font-family: 'Outfit', 'Inter', sans-serif !important; font-weight: 700 !important; letter-spacing: -.02em !important; }
