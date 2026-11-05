@@ -43,10 +43,10 @@
   }
   bar.addEventListener('click', (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return;
-    e.stopPropagation(); closeMenu();
+    closeMenu(); // other popovers close themselves: the page's click-outside handler sees this click too
     ({ back: () => history.back(), fwd: () => history.forward(), reload: () => location.reload(),
        search: () => document.getElementById('nSearch')?.click(), resume: () => { location.hash = '#/continue'; }, friends: () => { location.hash = '#/friends'; },
-       bell: () => document.querySelector('#updBell .ub-btn')?.click(), menu: () => toggleMenu(),
+       bell: () => { const pop = document.querySelector('#updBell .ub-pop'); if (pop && !pop.hidden) return; /* open: the click-outside handler closes it */ setTimeout(() => document.querySelector('#updBell .ub-btn')?.click(), 0); }, menu: () => { const wasOn = menu.classList.contains('on'); closeMenu(); if (!wasOn) setTimeout(() => menu.classList.add('on'), 0); },
        profile: () => { location.hash = '#/profile'; } })[b.dataset.a]?.();
   });
   // drag the window by the bar, double-click to zoom
