@@ -63,6 +63,14 @@
     Balanced: [{ scale: 'spline36', cscale: 'spline36', dscale: 'hermite', 'correct-downscaling': 'yes', 'linear-downscaling': 'yes', 'sigmoid-upscaling': 'yes', dither: 'fruit', 'hdr-compute-peak': 'auto' }, 'spline36', 'Your mpv.conf: spline36 scaling, correct downscaling, 10-bit dithering.'],
     'High quality': [{ scale: 'ewa_lanczossharp', 'scale-antiring': '0.6', cscale: 'ewa_lanczossharp', dscale: 'hermite', 'correct-downscaling': 'yes', 'linear-downscaling': 'yes', 'sigmoid-upscaling': 'yes', dither: 'fruit', 'hdr-compute-peak': 'yes' }, 'ewa_lanczossharp', 'mpv “high-quality”: ewa_lanczossharp with anti-ringing. The sharpest scaling; heavier on the GPU.'],
   };
+  // shader pipelines (files live in ~/.config/mpv/shaders). Hooks only run when they apply, e.g. upscalers when the picture is enlarged.
+  const SH = (...f) => f.map((x) => '~/.config/mpv/shaders/' + x + '.glsl').join(':');
+  const SHADERS = {
+    Off: ['', {}, 'No extra shaders.'],
+    Anime: [SH('Anime4K_Clamp_Highlights', 'Anime4K_Restore_CNN_M', 'Anime4K_Upscale_CNN_x2_M', 'Anime4K_AutoDownscalePre_x2', 'Anime4K_AutoDownscalePre_x4'), {}, 'Anime4K: restores line art, then upscales with a neural network. For anime and cartoons.'],
+    'Live action': [SH('KrigBilateral', 'FSRCNNX_x2_8-0-4-1', 'SSimSuperRes'), {}, 'KrigBilateral chroma + FSRCNNX neural upscaling + SSimSuperRes. Sharpens lower-resolution films on a bigger screen.'],
+    'Sharp downscale': [SH('KrigBilateral', 'SSimDownscaler'), { dscale: 'mitchell', 'linear-downscaling': 'no', 'correct-downscaling': 'yes' }, 'KrigBilateral chroma + SSimDownscaler. Keeps fine detail when 4K is shown in a smaller window.'],
+  };
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
   const ASPECTS = [['Auto', '-1', 0], ['16:9', '16:9', 0], ['4:3', '4:3', 0], ['2.35:1', '2.35:1', 0], ['Fill', '-1', 1]];
   const TONE = ['auto', 'bt.2390', 'hable', 'mobius', 'reinhard'];
@@ -106,6 +114,7 @@
           <h4>Looks</h4><div class="presets" data-presets>${Object.entries(PRESETS).map(([k, [, sw]]) => `<button data-preset="${k}" style="--sw:${sw}">${k}</button>`).join('')}</div>
           <h4>Adjust<button data-a="resetpic">Reset</button></h4>${PICTURE.map(([k, l, ic, trk]) => slider(k, l, -100, 100, 1, ic, trk)).join('')}
           <h4>Render quality</h4><div class="chips" data-render>${Object.keys(RENDER).map((k) => `<button data-render="${k}">${k}</button>`).join('')}</div><div class="ihp-note" data-rnote></div>
+          <h4>Shaders</h4><div class="chips" data-shaders>${Object.keys(SHADERS).map((k) => `<button data-shader="${k}">${k}</button>`).join('')}</div><div class="ihp-note" data-snote></div>
           <h4>Quality</h4>
           <div class="tg"><div>Smooth motion<small>Blends frames for fluid pans</small></div><button data-tg="interp"></button></div>
           <div class="tg"><div>Remove banding<small>Smooths gradients in dark scenes</small></div><button data-tg="deband"></button></div>
@@ -291,6 +300,15 @@
   const rel = (s) => { cmd('seek', s, 'relative'); };
   const setVol = (v) => { v = Math.max(0, Math.min(150, v)); set('volume', v); S.volume = v; hud(v === 0 ? I.mute : v < 50 ? I.vol1 : I.vol, Math.round(v) + '%', v / 150); paintStatic(); };
   const setSpeed = (s) => { s = Math.max(0.25, Math.min(3, s)); set('speed', s); S.speed = s; hud(I.gauge, 'Speed ' + (+s.toFixed(2)) + '×'); paintStatic(); };
+  let shaderName = 'Off';
+  function applyShader(name, quiet) {
+    const [list, opts] = SHADERS[name] || SHADERS.Off; shaderName = name;
+    set('glsl-shaders', list); for (const [k, v] of Object.entries(opts)) set(k, v);
+    try { localStorage.setItem('ihp.shader', name); } catch {}
+    qa('[data-shader]').forEach((x) => x.classList.toggle('on', x.dataset.shader === name));
+    const sn = q('[data-snote]'); if (sn) sn.textContent = SHADERS[name][2];
+    if (!quiet) hud(I.pic, name === 'Off' ? 'Shaders off' : name + ' shaders');
+  }
   function applyPicture(vals) { for (const [k, v] of Object.entries(vals)) { set(k, v); S[k] = v; } savePicture(); paintStatic(); }
   const savePicture = () => { try { localStorage.setItem('ihp.pic', JSON.stringify(Object.fromEntries(PICTURE.map(([k]) => [k, n(k)])))); } catch {} };
   const panelOpen = () => root.classList.contains('pn');
@@ -337,6 +355,7 @@
     const p = e.target.closest('[data-preset]'); if (p) { applyPicture(PRESETS[p.dataset.preset][0]); hud(I.pic, p.dataset.preset); return; }
     const sp = e.target.closest('[data-speed]'); if (sp) return setSpeed(+sp.dataset.speed);
     const as = e.target.closest('[data-aspect]'); if (as) { const [name, v, pan] = ASPECTS[+as.dataset.aspect]; set('video-aspect-override', v); set('panscan', pan); S['video-aspect-override'] = v; S.panscan = pan; hud(I.enter, name); paintStatic(); return; }
+    const shd = e.target.closest('button[data-shader]'); if (shd) { applyShader(shd.dataset.shader); return; }
     const rd = e.target.closest('button[data-render]'); if (rd) { const [opts] = RENDER[rd.dataset.render]; for (const [k, v] of Object.entries(opts)) { set(k, v); } S.scale = opts.scale; hud(I.pic, rd.dataset.render + ' rendering'); paintStatic(); return; }
     const to = e.target.closest('[data-tone]'); if (to) { set('tone-mapping', to.dataset.tone); S['tone-mapping'] = to.dataset.tone; paintStatic(); return; }
     const tg = e.target.closest('[data-tg]'); if (tg) {
@@ -416,6 +435,7 @@
       tab('pic'); root.classList.remove('pn');
       document.documentElement.classList.add('ihp-on'); playing = true; wake(); requestAnimationFrame(frame);
       try { const p = JSON.parse(localStorage.getItem('ihp.pic') || 'null'); if (p) setTimeout(() => applyPicture(p), 500); } catch {}
+      try { const sh = localStorage.getItem('ihp.shader'); setTimeout(() => applyShader(SHADERS[sh] ? sh : 'Off', true), 700); } catch {}
     },
     pip(on) { root.classList.toggle('pip', !!on); if (on) { closePanel(); root.classList.remove('ch-open'); } wake(); },
     close() { root.classList.remove('pip'); playing = false; root.hidden = true; document.documentElement.classList.remove('ihp-on'); root.classList.remove('pn', 'ui'); },
