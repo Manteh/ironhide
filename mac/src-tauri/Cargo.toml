@@ -10,7 +10,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 libmpv2 = "7.0.0"
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
+objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSValue", "NSString", "NSObject"] }
 objc2-app-kit = { version = "0.3", features = ["NSView", "NSWindow", "NSResponder", "NSEvent", "NSOpenGL", "NSGraphics"] }
 serde_json = "1"
 tauri = { version = "2", features = [] }

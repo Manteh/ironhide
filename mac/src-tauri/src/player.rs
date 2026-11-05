@@ -171,7 +171,8 @@ pub fn setup(app: &AppHandle) {
     view.setAutoresizingMask(objc2_app_kit::NSAutoresizingMaskOptions::ViewWidthSizable | objc2_app_kit::NSAutoresizingMaskOptions::ViewHeightSizable);
     let _: () = unsafe { msg_send![&*view, setWantsBestResolutionOpenGLSurface: true] };
     view.setHidden(true);
-    content.addSubview(&view);
+    // below the web view: the web view turns transparent while playing and draws the player controls on top
+    content.addSubview_positioned_relativeTo(&view, objc2_app_kit::NSWindowOrderingMode::Below, None);
     // 3.2 core profile, double buffered (what libmpv's OpenGL renderer needs on macOS)
     let attrs: [u32; 8] = [99, 0x3200, 5, 73, 8, 24, 0, 0];
     let fmt = unsafe { NSOpenGLPixelFormat::initWithAttributes(mtm.alloc::<NSOpenGLPixelFormat>(), std::ptr::NonNull::new(attrs.as_ptr().cast_mut()).unwrap()) };
@@ -198,7 +199,6 @@ fn show(app: &AppHandle, visible: bool) {
             view.setHidden(false);
             unsafe { ctx.setView(Some(view), MainThreadMarker::new().unwrap()) };
             view.sync_size();
-            if let Some(w) = view.window() { w.makeFirstResponder(Some(view)); }
         } else {
             ctx.clearDrawable();
             view.setHidden(true);
@@ -236,7 +236,11 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
     let mpv = Mpv::with_initializer(|i| {
         i.set_option("vo", "libmpv")?;
         i.set_option("hwdec", "videotoolbox")?;
-        i.set_option("osc", "yes")?;
+        i.set_option("osc", "no")?;
+        i.set_option("osd-level", "0")?;
+        i.set_option("volume-max", "150")?;
+        i.set_option("screenshot-directory", "~/Pictures")?;
+        i.set_option("screenshot-template", "IronHide %F %P")?;
         i.set_option("input-default-bindings", "yes")?;
         i.set_option("input-vo-keyboard", "yes")?;
         i.set_option("keep-open", "no")?;
@@ -269,6 +273,8 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
     mpv.command("loadfile", &[&req.url, "replace"]).map_err(|e| format!("loadfile: {e}"))?;
 
     let mut shown = false;
+    let mut last_push = std::time::Instant::now() - Duration::from_secs(1);
+    let mut ticks = 0u32;
     'run: loop {
         match rx.recv_timeout(Duration::from_millis(30)) {
             Ok(Msg::Redraw) | Err(RecvTimeoutError::Timeout) => {
@@ -291,6 +297,13 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
         if !shown && mpv.get_property::<bool>("pause") == Ok(false) && mpv.get_property::<f64>("duration").unwrap_or(0.0) > 0.0 {
             shown = true;
             show(app, true);
+            js(app, "window.__ihp && window.__ihp.open()");
+        }
+        if shown && last_push.elapsed() >= Duration::from_millis(100) {
+            last_push = std::time::Instant::now();
+            let full = ticks % 10 == 0;
+            ticks += 1;
+            js(app, &format!("window.__ihp && window.__ihp.state({})", state_json(&mpv, full)));
         }
         while let Some(ev) = events.wait_event(0.0) {
             match ev {
@@ -300,6 +313,7 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
             }
         }
     }
+    js(app, "window.__ihp && window.__ihp.close()");
     drop(rc);
     Ok(())
 }
@@ -343,3 +357,42 @@ pub fn cleanup() {
 
 #[allow(dead_code)]
 fn _unused(_: *mut AnyObject, _: NSPoint) {}
+
+
+// ---- commands the web player calls (window.__TAURI_INTERNALS__.invoke) ----
+#[tauri::command]
+pub fn player_cmd(args: Vec<String>) { send(Msg::Cmd(args)); }
+#[tauri::command]
+pub fn player_set(name: String, value: String) { send(Msg::Cmd(vec!["set".into(), name, value])); }
+#[tauri::command]
+pub fn player_close() { send(Msg::Stop); }
+#[tauri::command]
+pub fn player_fullscreen(window: tauri::WebviewWindow) {
+    let f = window.is_fullscreen().unwrap_or(false);
+    let _ = window.set_fullscreen(!f);
+}
+
+fn js(app: &AppHandle, code: &str) {
+    if let Some(w) = app.get_webview_window("main") { let _ = w.eval(code); }
+}
+
+const PROPS: &[&str] = &[
+    "pause", "time-pos", "duration", "volume", "mute", "speed", "media-title", "demuxer-cache-time", "paused-for-cache",
+    "contrast", "brightness", "gamma", "saturation", "hue", "sub-delay", "audio-delay", "sub-scale", "sub-pos",
+    "panscan", "video-aspect-override", "deband", "interpolation", "tone-mapping", "hwdec-current", "width", "height", "sid", "aid",
+];
+
+fn state_json(mpv: &Mpv, full: bool) -> String {
+    let mut m = serde_json::Map::new();
+    for p in PROPS {
+        if let Ok(v) = mpv.get_property::<String>(p) { m.insert((*p).to_string(), serde_json::Value::String(v)); }
+    }
+    if full {
+        for p in ["track-list", "chapter-list"] {
+            if let Ok(v) = mpv.get_property::<String>(p) {
+                if let Ok(j) = serde_json::from_str::<serde_json::Value>(&v) { m.insert(p.to_string(), j); }
+            }
+        }
+    }
+    serde_json::Value::Object(m).to_string()
+}

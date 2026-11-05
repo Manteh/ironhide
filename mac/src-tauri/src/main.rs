@@ -35,11 +35,17 @@ const NATIVE_JS: &str = r#"(() => {
     body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     input, textarea, [contenteditable], .selectable { -webkit-user-select: text; user-select: text; }
     ::-webkit-scrollbar { width: 14px; height: 14px; background: transparent; }
+    html:not(.ihp-on) ::-webkit-scrollbar-track { background: var(--bg, #0d0d0e); }
     ::-webkit-scrollbar-corner { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 10px; border: 4px solid transparent; background-clip: content-box; min-height: 40px; }
     ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.3); background-clip: content-box; }
   `;
-  const add = () => { const s = document.createElement('style'); s.textContent = css; document.documentElement.appendChild(s); };
+  const add = () => {
+    const s = document.createElement('style'); s.textContent = css; document.documentElement.appendChild(s);
+    // the in-app player overlay (controls, picture settings); lives in web/ next to the rest of the UI
+    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/css/appplayer.css'; document.documentElement.appendChild(l);
+    const j = document.createElement('script'); j.type = 'module'; j.src = '/js/appplayer.js'; document.documentElement.appendChild(j);
+  };
   document.documentElement ? add() : document.addEventListener('DOMContentLoaded', add);
 })();"#;
 
@@ -185,6 +191,7 @@ fn stop_daemon(app: &AppHandle) {
 fn main() {
     let app = tauri::Builder::default()
         .manage(Daemon(Mutex::new(None)))
+        .invoke_handler(tauri::generate_handler![player::player_cmd, player::player_set, player::player_close, player::player_fullscreen])
         .setup(|app| {
             let h = app.handle();
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
@@ -200,6 +207,16 @@ fn main() {
                 .initialization_script(NATIVE_JS)
                 .build()?;
             player::setup(h);
+            // transparent web view background, so the video underneath shows through while playing
+            if let Some(w) = h.get_webview_window("main") {
+                let _ = w.with_webview(|wv| unsafe {
+                    use objc2::{msg_send, runtime::AnyObject};
+                    let view: *mut AnyObject = wv.inner().cast();
+                    let no: *mut AnyObject = msg_send![objc2::class!(NSNumber), numberWithBool: false];
+                    let key = objc2_foundation::NSString::from_str("drawsBackground");
+                    let _: () = msg_send![view, setValue: no, forKey: &*key];
+                });
+            }
             player::serve(h.clone());
             let nav = |id: &str, label: &str, key: &str| MenuItemBuilder::with_id(id, label).accelerator(key).build(h);
             let app_menu = SubmenuBuilder::new(h, "IronHide")

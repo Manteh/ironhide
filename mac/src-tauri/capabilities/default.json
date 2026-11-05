@@ -1,1 +1,7 @@
-{"identifier":"default","description":"IronHide window","windows":["main"],"permissions":[]}
+{
+  "identifier": "default",
+  "description": "IronHide window, including the page served by the local daemon",
+  "windows": ["main"],
+  "remote": { "urls": ["http://127.0.0.1:*/*", "http://localhost:*/*"] },
+  "permissions": []
+}
