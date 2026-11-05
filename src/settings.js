@@ -20,7 +20,7 @@ const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : 'You');
 const ALLOWED = {
   appearance: {
     theme: ['dark', 'midnight', 'light', 'system'],
-    accent: ['indigo', 'orange', 'emerald', 'rose', 'sky'],
+    accent: ['auto', 'ember', 'indigo', 'orange', 'emerald', 'rose', 'sky'],
     density: ['comfortable', 'compact'],
     radius: ['sharp', 'round', 'pill'],
     motion: ['full', 'reduced'],

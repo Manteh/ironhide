@@ -1,0 +1,6 @@
+/* Accent colours that fit the app: "ember" (warm copper) and "auto" (follows the artwork you point at, see js/accent-auto.js).
+   The accent properties are registered as colours so they fade smoothly instead of snapping between titles. */
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #ff9d4d; }
+@property --accent-2 { syntax: '<color>'; inherits: true; initial-value: #f0701f; }
+:root { transition: --accent .9s cubic-bezier(.2,.7,.2,1), --accent-2 .9s cubic-bezier(.2,.7,.2,1); }
+[data-accent="ember"], [data-accent="auto"] { --accent: #ff9d4d; --accent-2: #f0701f; --on-accent: #1a0e04; }
