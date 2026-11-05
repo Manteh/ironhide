@@ -65,12 +65,18 @@
   };
   // shader pipelines (files live in ~/.config/mpv/shaders). Hooks only run when they apply, e.g. upscalers when the picture is enlarged.
   const SH = (...f) => f.map((x) => '~/.config/mpv/shaders/' + x + '.glsl').join(':');
+  // Benchmarked on this Mac at 1080p shown on a 2880x1802 window (24 fps, 8 s each): "Anime", "Anime denoise", "Anime GAN" and
+  // "Live action" dropped 0 frames. Not offered because they dropped most frames here: Anime4K VL/HQ, Anime4K GAN M,
+  // KrigBilateral (48 dropped on its own) and FSRCNNX combined with SSimSuperRes and KrigBilateral (169 dropped).
   const SHADERS = {
     Off: ['', {}, 'No extra shaders.'],
-    Anime: [SH('Anime4K_Clamp_Highlights', 'Anime4K_Restore_CNN_M', 'Anime4K_Upscale_CNN_x2_M', 'Anime4K_AutoDownscalePre_x2', 'Anime4K_AutoDownscalePre_x4'), {}, 'Anime4K: restores line art, then upscales with a neural network. For anime and cartoons.'],
-    'Live action': [SH('KrigBilateral', 'FSRCNNX_x2_8-0-4-1', 'SSimSuperRes'), {}, 'KrigBilateral chroma + FSRCNNX neural upscaling + SSimSuperRes. Sharpens lower-resolution films on a bigger screen.'],
-    'Sharp downscale': [SH('KrigBilateral', 'SSimDownscaler'), { dscale: 'mitchell', 'linear-downscaling': 'no', 'correct-downscaling': 'yes' }, 'KrigBilateral chroma + SSimDownscaler. Keeps fine detail when 4K is shown in a smaller window.'],
+    Anime: [SH('Anime4K_Clamp_Highlights', 'Anime4K_Restore_CNN_M', 'Anime4K_Upscale_CNN_x2_M', 'Anime4K_AutoDownscalePre_x2', 'Anime4K_AutoDownscalePre_x4', 'Anime4K_Upscale_CNN_x2_S'), {}, 'Anime4K mode A (fast): restores line art, then upscales 2x twice. Real-time on this Mac.'],
+    'Anime denoise': [SH('Anime4K_Clamp_Highlights', 'Anime4K_Upscale_Denoise_CNN_x2_M', 'Anime4K_AutoDownscalePre_x2', 'Anime4K_AutoDownscalePre_x4', 'Anime4K_Upscale_CNN_x2_S'), {}, 'Anime4K mode C (fast): removes noise while upscaling. For noisy or compressed anime.'],
+    'Anime GAN': [SH('Anime4K_Clamp_Highlights', 'Anime4K_Upscale_GAN_x2_S', 'Anime4K_AutoDownscalePre_x2', 'Anime4K_AutoDownscalePre_x4'), {}, 'Anime4K GAN (small): sharper, more painted lines than the CNN modes. Real-time at 1080p here; the medium GAN is too heavy.'],
+    'Live action': [SH('FSRCNNX_x2_8-0-4-1'), {}, 'FSRCNNX neural upscaling for live-action video shown larger than its resolution. Does nothing when the picture is shrunk (4K in a window).'],
+    'Sharp downscale': [SH('SSimDownscaler'), { dscale: 'mitchell', 'linear-downscaling': 'no', 'correct-downscaling': 'yes' }, 'SSimDownscaler: keeps fine detail when 4K is shown in a smaller window. Not benchmarked.'],
   };
+
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
   const ASPECTS = [['Auto', '-1', 0], ['16:9', '16:9', 0], ['4:3', '4:3', 0], ['2.35:1', '2.35:1', 0], ['Fill', '-1', 1]];
   const TONE = ['auto', 'bt.2390', 'hable', 'mobius', 'reinhard'];
