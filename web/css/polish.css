@@ -3,7 +3,7 @@
 /* progress: a rounded pill inset in the poster, over a soft scrim so it reads on any artwork */
 .bposter::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46%; background: linear-gradient(transparent, rgba(0,0,0,.58)); opacity: 0; pointer-events: none; transition: opacity .4s var(--ease); }
 .bc:has(.bprog) .bposter::after { opacity: 1; }
-.bprog { z-index: 2; left: 11px; right: 11px; bottom: 11px; height: 6px; border-radius: 99px; overflow: hidden; background: rgba(255,255,255,.24); box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: height .35s cubic-bezier(.34,1.5,.64,1), bottom .35s cubic-bezier(.34,1.5,.64,1); }
+.bprog { z-index: 2; left: 11px; right: 11px; bottom: 11px; height: 6px; border-radius: 99px; overflow: hidden; background: rgba(255,255,255,.24); box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); transition: height .35s cubic-bezier(.34,1.5,.64,1), bottom .35s cubic-bezier(.34,1.5,.64,1); }
 .bprog i { border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 65%, #fff), var(--accent)); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent); transition: width .6s var(--ease); }
 .bc:hover .bprog, .bc:focus-visible .bprog { height: 8px; bottom: 10px; }
 
@@ -27,13 +27,12 @@
 /* Primary buttons: tonal glass. A dark translucent fill tinted with the accent, a hairline accent border and light accent text.
    It reads as the main action through colour and glow, like the rest of the UI, instead of a white block. */
 .btn.primary, .pill:not(.ghost2):not(.sq) {
-  background: color-mix(in srgb, var(--accent) 26%, rgba(16,16,20,.62)); color: color-mix(in srgb, var(--accent) 30%, #fff);
+  background: color-mix(in srgb, var(--accent) 26%, rgba(18,18,22,.86)); color: color-mix(in srgb, var(--accent) 30%, #fff);
   border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent); font-weight: 650; letter-spacing: -.005em;
-  -webkit-backdrop-filter: blur(18px) saturate(1.5); backdrop-filter: blur(18px) saturate(1.5);
   box-shadow: 0 12px 32px -16px color-mix(in srgb, var(--accent) 80%, transparent), inset 0 1px 0 rgba(255,255,255,.1);
   transition: transform .4s cubic-bezier(.34,1.5,.64,1), box-shadow .35s var(--ease), background .3s, border-color .3s;
 }
-.btn.primary:hover, .pill:not(.ghost2):not(.sq):hover { background: color-mix(in srgb, var(--accent) 38%, rgba(16,16,20,.6)); border-color: color-mix(in srgb, var(--accent) 62%, transparent); filter: none; transform: translateY(-1px); box-shadow: 0 16px 38px -16px color-mix(in srgb, var(--accent) 95%, transparent), inset 0 1px 0 rgba(255,255,255,.14); }
+.btn.primary:hover, .pill:not(.ghost2):not(.sq):hover { background: color-mix(in srgb, var(--accent) 38%, rgba(18,18,22,.84)); border-color: color-mix(in srgb, var(--accent) 62%, transparent); filter: none; transform: translateY(-1px); box-shadow: 0 16px 38px -16px color-mix(in srgb, var(--accent) 95%, transparent), inset 0 1px 0 rgba(255,255,255,.14); }
 .btn.primary:active, .pill:not(.ghost2):not(.sq):active { transform: scale(.97); }
 .btn.primary svg, .pill:not(.ghost2):not(.sq) svg { color: inherit; }
 
@@ -41,10 +40,32 @@
 #lg stop:nth-child(1) { stop-color: color-mix(in srgb, var(--accent) 86%, #fff); }
 #lg stop:nth-child(2) { stop-color: var(--accent-2); }
 
-/* 3D cards: transform comes from js/cards3d.js (a spring-smoothed --c3d), so no CSS transition may fight it */
-.bc:not(.sk) .bposter { transform: var(--c3d, none); transition: box-shadow .45s var(--ease); will-change: transform; }
-.bc:not(.sk):hover .bposter, .bc:not(.sk):focus-visible .bposter { transition: box-shadow .45s var(--ease); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, rgba(255,255,255,.5)), calc(var(--sx, 0px)) calc(28px + var(--sy, 0px)) 48px -22px rgba(0,0,0,.92), 0 0 60px -26px color-mix(in srgb, var(--accent) 70%, transparent); }
-.bc:not(.sk) .bimg { transition: none; will-change: transform; }
-.bc:not(.sk) .bposter::before { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit; background: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), rgba(255,255,255,.3), rgba(255,255,255,.07) 38%, transparent 62%); mix-blend-mode: soft-light; opacity: var(--ga, 0); }
-/* room for the lifted card inside scrolling rows, without moving the row's visible edges */
-.cont-row { padding: 16px 14px 20px; margin: -10px -14px; }
+/* 3D cards: transform comes from js/cards3d.js (spring-smoothed --c3d), so no CSS transition may fight it.
+   Kept deliberately cheap: static shadow, no blend modes, compositing layers only on the card being animated. */
+.bc:not(.sk) .bposter { transform: var(--c3d, none); isolation: isolate; transition: box-shadow .4s var(--ease); }
+.bc:not(.sk) .bposter[style*="--c3d"] { will-change: transform; }
+.bc:not(.sk):hover .bposter, .bc:not(.sk):focus-visible .bposter { transition: box-shadow .4s var(--ease); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, rgba(255,255,255,.45)), 0 30px 46px -24px rgba(0,0,0,.92); }
+.bc:not(.sk) .bimg { transition: none; }
+.bc:not(.sk) .bposter[style*="--c3d"] .bimg { will-change: transform; }
+.bc:not(.sk) .bposter::before { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit; background: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), rgba(255,255,255,.2), rgba(255,255,255,.05) 40%, transparent 64%); opacity: var(--ga, 0); }
+
+/* ---- ambient background (js/ambient.js): cheap, composited ---- */
+.amb { display: none !important; }
+#ihamb { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; contain: strict; }
+#ihamb .sc { position: absolute; inset: 0; opacity: 0; transition: opacity 1.5s cubic-bezier(.4,0,.2,1); will-change: opacity; }
+#ihamb .sc.on { opacity: 1; }
+#ihamb i { position: absolute; border-radius: 50%; width: 80vmax; height: 80vmax; translate: -50% -50%; will-change: transform; }
+#ihamb .b1 { animation: drift1 24s ease-in-out infinite alternate; } #ihamb .b2 { animation: drift2 31s ease-in-out infinite alternate; } #ihamb .b3 { animation: drift3 37s ease-in-out infinite alternate; }
+#ihamb::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--bg) 78%, transparent) 100%); }
+#ihspot { left: 0; top: 0; width: 560px !important; height: 560px !important; margin: -280px 0 0 -280px; translate: none !important; opacity: 0; will-change: transform; background: radial-gradient(closest-side, color-mix(in srgb, var(--spc, #4a5a8a) 26%, transparent), transparent) !important; }
+[data-theme="light"] #ihamb { opacity: .55; }
+html.ihp-on #ihamb { display: none; }
+
+/* ---- scrolling rows: room for lifted cards, no mask (a masked scroller re-composites every frame while cards animate inside it) ---- */
+.cont-row { padding: 36px 30px 30px; margin: -28px -30px -20px; scroll-padding: 0 30px; -webkit-mask-image: none; mask-image: none; }
+.bc:not(.sk):hover { z-index: 5; }
+/* the header's backdrop blur is recomputed whenever anything moves behind it: keep it light */
+#ihbar { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+
+/* browse.css transitions --c1..--y3 on :root (inherited, so every element re-styles each frame). The ambient cross-fade lives in js/ambient.js now. */
+:root { transition: none !important; }

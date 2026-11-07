@@ -296,7 +296,7 @@ export async function mount(el) {
 
   // cursor spotlight (smoothed) + card tilt + hero parallax
   let tx = innerWidth * 0.5, ty = innerHeight * 0.4, cx = tx, cy = ty, raf = 0;
-  const loop = () => { cx += (tx - cx) * 0.12; cy += (ty - cy) * 0.12; document.documentElement.style.setProperty('--mx', cx.toFixed(1) + 'px'); document.documentElement.style.setProperty('--my', cy.toFixed(1) + 'px'); raf = Math.abs(tx - cx) + Math.abs(ty - cy) > 0.5 ? requestAnimationFrame(loop) : 0; };
+  const loop = () => { cx += (tx - cx) * 0.12; cy += (ty - cy) * 0.12; window.__spot ? window.__spot(cx, cy) : (document.documentElement.style.setProperty('--mx', cx.toFixed(1) + 'px'), document.documentElement.style.setProperty('--my', cy.toFixed(1) + 'px')); raf = Math.abs(tx - cx) + Math.abs(ty - cy) > 0.5 ? requestAnimationFrame(loop) : 0; };
   let tiltCard = null;
   document.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'touch' || el.classList.contains('hidden')) return;

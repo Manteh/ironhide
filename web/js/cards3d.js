@@ -11,11 +11,10 @@ const K = ['rx', 'ry', 'y', 's', 'gx', 'gy', 'ga', 'ix', 'iy', 'is', 'sx', 'sy']
 function write(p, v) {
   p.style.setProperty('--c3d', `perspective(900px) translate3d(0, ${v.y.toFixed(2)}px, 0) rotateX(${v.rx.toFixed(2)}deg) rotateY(${v.ry.toFixed(2)}deg) scale(${v.s.toFixed(4)})`);
   p.style.setProperty('--gx', v.gx.toFixed(1) + '%'); p.style.setProperty('--gy', v.gy.toFixed(1) + '%'); p.style.setProperty('--ga', v.ga.toFixed(3));
-  p.style.setProperty('--sx', v.sx.toFixed(1) + 'px'); p.style.setProperty('--sy', v.sy.toFixed(1) + 'px');
   const img = p.querySelector('.bimg'); if (img) img.style.setProperty('transform', `translate3d(${v.ix.toFixed(2)}px, ${v.iy.toFixed(2)}px, 0) scale(${v.is.toFixed(4)})`);
 }
 function clear(p) {
-  for (const n of ['--c3d', '--gx', '--gy', '--ga', '--sx', '--sy']) p.style.removeProperty(n);
+  for (const n of ['--c3d', '--gx', '--gy', '--ga']) p.style.removeProperty(n);
   const img = p.querySelector('.bimg'); if (img) img.style.removeProperty('transform');
 }
 function frame() {

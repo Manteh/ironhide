@@ -1,8 +1,5 @@
 /* Accent colours that fit the app: "ember" (warm copper) and "auto" (follows the artwork you point at, see js/accent-auto.js).
-   The accent properties are registered as colours so they fade smoothly instead of snapping between titles. */
-@property --accent { syntax: '<color>'; inherits: true; initial-value: #ff9d4d; }
-@property --accent-2 { syntax: '<color>'; inherits: true; initial-value: #f0701f; }
-/* one transition list: the browse page's ambient glide (--c1..--y3, defined in browse.css) plus the accent. A second :root transition
-   declaration would replace the first and make the background colours snap. */
-:root { transition: --c1 1.6s var(--ease), --c2 1.9s var(--ease), --c3 2.2s var(--ease), --x1 1.7s var(--ease), --y1 1.7s var(--ease), --x2 2s var(--ease), --y2 2s var(--ease), --x3 2.3s var(--ease), --y3 2.3s var(--ease), --accent 1.4s var(--ease), --accent-2 1.4s var(--ease); }
+   The accent switches instantly: only the ambient background glides, which keeps the page from restyling every frame. */
+/* No transition on :root. The ambient colours cross-fade in js/ambient.js (opacity only); transitioning inherited custom properties on the root re-styles the whole page every frame. */
+
 [data-accent="ember"], [data-accent="auto"] { --accent: #ff9d4d; --accent-2: #f0701f; --on-accent: #1a0e04; }
