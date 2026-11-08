@@ -1,6 +1,8 @@
 #!/bin/bash
 # Install or update IronHide in one line:
 #   curl -fsSL https://raw.githubusercontent.com/Manteh/ironhide-app/HEAD/install.sh | bash
+# While the repo is private (needs the GitHub CLI, logged in):
+#   gh api repos/Manteh/ironhide-app/contents/install.sh -H "Accept: application/vnd.github.raw" | bash
 # Downloads the latest release from GitHub, puts IronHide.app in /Applications (or ~/Applications), and opens it.
 # Everything it needs (Node, the mpv player, ffmpeg) is inside the app: nothing else gets installed.
 set -euo pipefail
@@ -16,7 +18,10 @@ MAJOR=$(sw_vers -productVersion | cut -d. -f1)
 [ "$MAJOR" -ge 12 ] || die "IronHide needs macOS 12 or later."
 
 say "▸ Finding the latest IronHide…"
-API=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest") || die "Could not reach GitHub."
+# a public repo needs nothing; a private one is read through your GitHub CLI login (gh auth login)
+if API=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null); then GH=0
+elif command -v gh >/dev/null && API=$(gh api "repos/$REPO/releases/latest" 2>/dev/null); then GH=1
+else die "Could not read $REPO releases. If the repo is private, install the GitHub CLI and run: gh auth login"; fi
 URL=$(printf '%s' "$API" | grep -o "\"browser_download_url\": *\"[^\"]*IronHide-[^\"]*-$ARCH\.zip\"" | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')
 TAG=$(printf '%s' "$API" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
 [ -n "$URL" ] || die "No download found in the latest release."
@@ -24,7 +29,8 @@ TAG=$(printf '%s' "$API" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 say "▸ Downloading IronHide $TAG…"
-curl -fL --progress-bar "$URL" -o "$TMP/IronHide.zip"
+if [ "$GH" = 1 ]; then gh release download "$TAG" --repo "$REPO" --pattern "IronHide-*-$ARCH.zip" --output "$TMP/IronHide.zip"
+else curl -fL --progress-bar "$URL" -o "$TMP/IronHide.zip"; fi
 ditto -x -k "$TMP/IronHide.zip" "$TMP"
 [ -d "$TMP/IronHide.app" ] || die "The download did not contain IronHide.app."
 
