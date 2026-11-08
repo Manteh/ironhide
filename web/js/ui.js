@@ -3,7 +3,7 @@ import { DECOS, decoSvg } from './decorations.js';
 import { POLYS, clipOf, facetSvg } from './shapes.js';
 export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-export const posterOf = (id) => `https://images.metahub.space/poster/large/${id}/img`;
+export const posterOf = (id, size = 'large') => `https://images.metahub.space/poster/${size}/${id}/img`;
 export const pad = (n) => String(n).padStart(2, '0');
 export function fmtTime(s) {
   s = Math.max(0, Math.floor(s || 0));

@@ -219,3 +219,54 @@ html.ihp-on body::before, html.ihp-on body::after { display: none !important; }
 #ihp.pip { cursor: default !important; }
 
 @media (prefers-reduced-motion: reduce) { #ihp * { transition-duration: .01s !important; animation-duration: .01s !important; } }
+
+/* ---- picture panel, faster and calmer ---- */
+.ihp-panel { transition: transform .26s cubic-bezier(.2, .8, .2, 1), opacity .18s ease-out, width .26s cubic-bezier(.2, .8, .2, 1) !important; }
+.ihp-tabs .ind { transition: transform .22s cubic-bezier(.2, .8, .2, 1) !important; }
+.pg.on { animation: ihp-in .18s ease-out both !important; }
+.pg h4 button { color: #fff !important; opacity: .7; } .pg h4 button:hover { opacity: 1; }
+.presets.lk { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.presets.lk button { height: auto; padding: 6px; border-radius: 12px; display: grid; gap: 6px; align-items: start; text-align: left; background: rgba(255,255,255,.04); border: 1.5px solid transparent; text-shadow: none; font-size: 11.5px; font-weight: 650; color: rgba(255,255,255,.85); transition: background .12s, border-color .12s, transform .12s; }
+.presets.lk button i { display: block; height: 30px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.presets.lk button span { padding: 0 2px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.presets.lk button:hover { background: rgba(255,255,255,.09); transform: none; }
+.presets.lk button:active { transform: scale(.96); }
+.presets.lk button.on { border-color: #fff; background: rgba(255,255,255,.1); color: #fff; }
+.presets.lk button.sug::after { content: 'Suggested'; position: absolute; top: 9px; right: 9px; font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 2px 5px; border-radius: 4px; background: rgba(0,0,0,.55); color: #fff; }
+.lk-note { min-height: 16px; margin-top: 8px; }
+details.ft { margin-top: 14px; border-radius: 14px; background: rgba(255,255,255,.04); padding: 0 12px; }
+details.ft summary { list-style: none; display: flex; align-items: center; gap: 10px; height: 42px; cursor: pointer; font-size: 13px; font-weight: 650; color: rgba(255,255,255,.85); }
+details.ft summary::-webkit-details-marker { display: none; }
+details.ft summary::before { content: ''; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; margin-right: 2px; }
+details.ft[open] summary::before { transform: rotate(45deg); }
+details.ft summary span { margin-left: auto; font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,.5); }
+details.ft[open] { padding-bottom: 8px; }
+.sl label { font-size: 13px; } .sl output { min-width: 40px; padding: 1px 7px; font-size: 11.5px; }
+.ihp-sld { height: 26px; }
+/* neutral selection colours (no orange) */
+.chips button.on, .tg button.on { background: #f4f4f5 !important; color: #0b0b0d !important; }
+.tg button.on::after { background: #0b0b0d; }
+.tr.on { background: rgba(255,255,255,.1) !important; } .tr svg.ck { color: #fff !important; }
+.chips button { transition: background .12s, transform .12s, color .12s !important; }
+
+/* ---- paused info: readable details over a dimmed picture while paused and idle ---- */
+.ihp-pinfo { position: absolute; inset: 0; z-index: 4; display: flex; align-items: flex-end; padding: 0 clamp(32px, 6vw, 96px) clamp(48px, 9vh, 110px); pointer-events: none; opacity: 0; transition: opacity .6s ease;
+  background: linear-gradient(90deg, rgba(0,0,0,.82) 0%, rgba(0,0,0,.62) 38%, rgba(0,0,0,.1) 75%), linear-gradient(0deg, rgba(0,0,0,.6), transparent 55%); }
+#ihp.pinfo .ihp-pinfo { opacity: 1; }
+#ihp.pinfo .ihp-bottom, #ihp.pinfo .ihp-top { opacity: 0 !important; }
+.pi-wrap { max-width: 680px; transform: translateY(12px); transition: transform .8s cubic-bezier(.2, .8, .2, 1); }
+#ihp.pinfo .pi-wrap { transform: none; }
+.pi-k { font-size: 12px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.6); }
+.pi-wrap h2 { margin: 10px 0 8px; font-size: clamp(34px, 4vw, 58px); font-weight: 760; letter-spacing: -.03em; line-height: 1.02; color: #fff; }
+.pi-m { display: flex; align-items: center; gap: 10px; font-size: 15px; color: rgba(255,255,255,.75); }
+.pi-r { display: inline-flex; align-items: center; gap: 5px; color: #fff; font-weight: 700; } .pi-r svg { width: 15px; height: 15px; color: #f5c518; fill: #f5c518; }
+.pi-t { margin: 16px 0 0; font-size: 17px; font-style: italic; color: rgba(255,255,255,.88); }
+.pi-o { margin: 12px 0 0; font-size: 16px; line-height: 1.6; color: rgba(255,255,255,.8); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.pi-d { margin-top: 12px; font-size: 14px; color: rgba(255,255,255,.65); } .pi-d b { color: #fff; font-weight: 650; }
+.pi-cast { display: flex; gap: 16px; margin-top: 22px; }
+.pi-cast div { width: 84px; } .pi-cast i { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; overflow: hidden; background: rgba(255,255,255,.12); font-style: normal; font-weight: 700; margin-bottom: 7px; }
+.pi-cast img { width: 100%; height: 100%; object-fit: cover; }
+.pi-cast b { display: block; font-size: 12.5px; font-weight: 650; color: #fff; line-height: 1.25; } .pi-cast small { display: block; font-size: 11.5px; color: rgba(255,255,255,.55); margin-top: 2px; line-height: 1.25; }
+.pi-q { margin: 24px 0 0; padding-left: 14px; border-left: 2px solid rgba(255,255,255,.3); font-size: 14px; line-height: 1.55; color: rgba(255,255,255,.75); }
+.pi-q cite { display: block; margin-top: 6px; font-style: normal; font-size: 12.5px; color: rgba(255,255,255,.5); }
+@media (max-width: 760px) { .pi-cast { display: none; } }

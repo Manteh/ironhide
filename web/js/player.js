@@ -21,7 +21,7 @@ export function browserCaps() {
 
 const watchingNow = (info) => ({ state: S?.video?.paused ? 'paused' : 'playing', title: info.title, type: info.meta?.type === 'movie' ? 'movie' : 'series', imdbId: info.meta?.imdbId || '', poster: info.meta?.imdbId ? posterOf(info.meta.imdbId) : '' });
 // closing the tab also ends the status
-addEventListener('pagehide', () => { try { if (S?.info?.id) fetch(`/api/wp/${S.info.id}`, { method: 'DELETE', keepalive: true }); fetch('/api/social/watching', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ watching: null }) }); } catch {} });
+addEventListener('pagehide', () => { try { if (S?.info?.id) { const d = dur(), p = cur(); if (d > 0 && p > 5 && S.info.id) fetch(`/api/wp/${S.info.id}/progress`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ position: p, duration: d }) }); fetch(`/api/wp/${S.info.id}`, { method: 'DELETE', keepalive: true }); } fetch('/api/social/watching', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ watching: null }) }); } catch {} });
 
 export function openPlayer(info, opts = {}) {
   if (wp) closePlayer();
@@ -256,7 +256,7 @@ function bind() {
   const tellWatch = () => post('/api/social/watching', { watching: watchingNow(S.info) }).catch(() => {});
   video.addEventListener('pause', () => { playIcon(); wake(); tellWatch(); }); video.addEventListener('play', () => { playIcon(); wake(); tellWatch(); });
   video.addEventListener('volumechange', () => { localStorage.setItem('wp-vol', video.volume); playIcon(); });
-  video.addEventListener('ended', () => { save(); hooks.onDismiss?.(); closePlayer(); toast('Finished', 'ok'); });
+  video.addEventListener('ended', () => { const m = S.info.meta, t = S.info.title, room = S.room; save(true).then(() => { if (!room) import('./nextup.js').then((n) => n.offerNext({ ...m, title: m?.title || t })); }); hooks.onDismiss?.(); closePlayer(true); toast('Finished', 'ok'); });
   video.addEventListener('error', () => {
     if (!S.retried && S.info.mode === 'direct') { S.retried = true; S.transcode = true; badges(); toast('This browser can’t play that directly. Switching to GPU transcode…'); load(cur(), true); }
     else { spin(false); toast('Playback failed. Try the mpv player in Settings.', 'err'); }
@@ -379,22 +379,25 @@ function onKey(e) {
 }
 
 // ---------- persistence / teardown ----------
-function save() { if (!S) return; const d = dur(), p = cur(); if (d > 0 && p > 5) post(`/api/wp/${S.info.id}/progress`, { position: p, duration: d }).catch(() => {}); }
+function save(eof = false) { if (!S) return Promise.resolve(); const d = dur(), p = cur(); return d > 0 && p > 5 ? post(`/api/wp/${S.info.id}/progress`, { position: p, duration: d, eof }).catch(() => {}) : Promise.resolve(); }
 
 // read-only snapshot of the player, for diagnostics and sync tests
 export const debugState = () => (S ? { pos: cur(), paused: S.video.paused, offset: S.offset, ready: S.video.readyState, rate: S.video.playbackRate, mode: S.info.mode } : null);
 
-export function closePlayer() {
+export function closePlayer(already = false) {
   if (!wp) return;
   document.body.classList.remove('wp-full'); clearInterval(statsT); statsT = 0;
-  save(); clearInterval(S.saver); clearInterval(S.beat); clearTimeout(S.idle); mseStop();
+  // save where we are first; stopping near the end counts as finished and offers the next episode
+  const saved = already ? Promise.resolve() : save(), meta = S.info.meta, mtitle = S.info.title, nearEnd = dur() > 0 && (dur() - cur() < 240 || cur() / dur() > 0.88), inRoom = S.room;
+  if (!already && nearEnd && !inRoom) saved.then(() => import('./nextup.js').then((n) => n.offerNext({ ...meta, title: meta?.title || mtitle })));
+  clearInterval(S.saver); clearInterval(S.beat); clearTimeout(S.idle); mseStop();
   roomOff?.(); roomOff = null;
   post('/api/social/watching', { watching: null }).catch(() => {});
   document.removeEventListener('keydown', onKey, true);
   const id = S.info.id, el = wp, video = S.video;
   wp = null; S = null;
   try { video.pause(); video.removeAttribute('src'); video.load(); } catch {}
-  fetch(`/api/wp/${id}`, { method: 'DELETE' }).catch(() => {});
+  saved.finally(() => fetch(`/api/wp/${id}`, { method: 'DELETE' }).catch(() => {})); // after the position is saved, not racing it
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   el.classList.remove('in'); setTimeout(() => el.remove(), 500);
   import('./main.js').then((m) => m.refreshHistory?.());

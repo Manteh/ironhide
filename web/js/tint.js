@@ -33,36 +33,39 @@ function rgb2hsl(r, g, b) {
   return [h * 60, s, l];
 }
 
+// A designed palette from the poster: its most characteristic colour (vivid AND well represented, not merely the biggest
+// area), its second distinct colour if it has one, and a deep shade for depth. Then saturation and lightness are set in a
+// rich-but-calm range so the three always sit well together. Grey posters get an elegant tinted grey.
 function analyze(img) {
-  const W = 36, H = 54, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const W = 48, H = 72, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(img, 0, 0, W, H);
   const px = ctx.getImageData(0, 0, W, H).data;
-  const bins = Array.from({ length: 12 }, () => ({ w: 0, r: 0, g: 0, b: 0 }));
-  let avgL = 0, n = 0;
+  const bins = Array.from({ length: 24 }, () => ({ n: 0, w: 0, s: 0, l: 0, x: 0, y: 0 })); // 15° hue bins
+  let total = 0;
   for (let i = 0; i < px.length; i += 4) {
     if (px[i + 3] < 128) continue;
     const [h, s, l] = rgb2hsl(px[i], px[i + 1], px[i + 2]);
-    avgL += l; n++;
-    if (l < 0.1 || l > 0.94 || s < 0.16) continue;
-    const w = s * s * (1 - Math.abs(l - 0.5) * 1.5);
-    if (w < 0.01) continue;
-    const b = bins[Math.floor(h / 30) % 12];
-    b.w += w; b.r += px[i] * w; b.g += px[i + 1] * w; b.b += px[i + 2] * w;
+    total++;
+    if (l < 0.08 || l > 0.94 || s < 0.12) continue;
+    const b = bins[Math.floor(h / 15) % 24], w = Math.pow(s, 1.5) * (1 - Math.abs(l - 0.5) * 1.4);
+    if (w <= 0) continue;
+    const rad = (h * Math.PI) / 180;
+    b.n++; b.w += w; b.s += s; b.l += l; b.x += Math.cos(rad) * w; b.y += Math.sin(rad) * w;
   }
-  const ranked = bins.map((b, i) => ({ ...b, i })).filter((b) => b.w > 0).sort((a, b) => b.w - a.w);
-  const picked = [];
-  for (const b of ranked) {
-    if (picked.every((p) => { const d = Math.abs(p.i - b.i); return Math.min(d, 12 - d) >= 2; })) picked.push(b);
-    if (picked.length === 3) break;
+  // merge neighbouring bins into hue groups, rank by weight
+  const groups = bins.map((b, i) => { const p = bins[(i + 23) % 24], q = bins[(i + 1) % 24]; return { i, w: b.w + 0.5 * (p.w + q.w), b, x: b.x + 0.5 * (p.x + q.x), y: b.y + 0.5 * (p.y + q.y), s: b.n ? b.s / b.n : 0 }; })
+    .filter((g) => g.b.n > total * 0.012).sort((a, b) => b.w - a.w);
+  const hueOf = (g) => ((Math.atan2(g.y, g.x) * 180) / Math.PI + 360) % 360;
+  const css = (h, s, l) => `hsl(${Math.round(((h % 360) + 360) % 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`;
+  const key = groups[0];
+  if (!key || key.s < 0.18) { // essentially monochrome: a quiet tinted grey from whatever hue there is
+    const h = key ? hueOf(key) : 225;
+    return [css(h, 0.22, 0.34), css(h + 18, 0.18, 0.28), css(h - 14, 0.2, 0.2)];
   }
-  const toCss = (h, s, l) => `hsl(${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`;
-  const cols = picked.map((b) => {
-    const [h, s, l] = rgb2hsl(b.r / b.w, b.g / b.w, b.b / b.w);
-    return [h, Math.min(0.85, Math.max(0.5, s * 1.15)), Math.min(0.56, Math.max(0.36, l))];
-  });
-  // not enough distinct colour in the poster: derive neighbours of what we have
-  const base = cols[0] || [225, 0.28, 0.38];
-  while (cols.length < 3) { const k = cols.length; cols.push([(base[0] + (k === 1 ? 38 : -42) + 360) % 360, Math.max(0.3, base[1] * 0.85), Math.max(0.3, base[2] - 0.04)]); }
-  return cols.map((c) => toCss(...c));
+  const h1 = hueOf(key), sat = Math.min(0.78, Math.max(0.46, key.s * 1.1));
+  const second = groups.find((g) => { const d = Math.abs(((hueOf(g) - h1 + 540) % 360) - 180); return d > 40 && g.w > key.w * 0.18; });
+  const h2 = second ? hueOf(second) : h1 + 28;
+  const s2 = second ? Math.min(0.72, Math.max(0.4, second.s * 1.05)) : sat * 0.9;
+  return [css(h1, sat, 0.4), css(h2, s2, 0.34), css(h1 - 24, Math.min(0.6, sat * 0.85), 0.22)];
 }

@@ -89,7 +89,19 @@ function parseStream(s) {
   };
 }
 
-async function fetchStreams(url) {
+// Short cache (and one request in flight per URL): reopening a title, switching back to an episode or pressing Play
+// right after looking at the versions is instant instead of another round trip to the indexers.
+const recent = new Map();
+const FRESH_MS = 3 * 60e3;
+function fetchStreams(url) {
+  const hit = recent.get(url);
+  if (hit && Date.now() - hit.at < FRESH_MS) return hit.p;
+  const p = fetchStreamsNow(url).then((list) => { if (!list.length) recent.delete(url); return list; });
+  recent.set(url, { at: Date.now(), p });
+  if (recent.size > 200) recent.delete(recent.keys().next().value);
+  return p;
+}
+async function fetchStreamsNow(url) {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
     if (!res.ok) return [];

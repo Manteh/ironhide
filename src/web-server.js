@@ -4,15 +4,19 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { z } from 'zod';
-import { tools, getLoadedStreams } from './tools.js';
+import { tools, getLoadedStreams, getPlaybackStatus } from './tools.js';
 import { FEEDS, CINE_GENRES, getFeed, getGenres, search as catalogSearch, getTitle } from './catalog.js';
 import { forYou } from './discover.js';
+import { recommend, recommendSections, noteOpened, tasteSummary, rate, notInterested, ratingOf, loadTaste } from './recommend.js';
+const hiddenSet = async () => new Set(((await loadTaste().catch(() => ({}))).notInterested || []).map((n) => n.imdbId));
+import { smartSearch } from './search.js';
+import * as lab from './lab.js';
 import { getHistory } from './history.js';
 import { profileData, profileMeta } from './profile.js';
 import { parseLangs } from './ui.js';
 import * as social from './social.js';
 import { listInstances, createInstance, startInstance, stopInstance, removeInstance } from './instances.js';
-import { addToHistory, updateEntryProgress } from './history.js';
+import { addToHistory, updateEntryProgress, removeFromHistory, markWatched } from './history.js';
 import { learnQuality } from './preferences.js';
 import { refreshLink, touchSession, keyframesAround, ensureSyncClip, syncClipPath, capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
 import { readFile as readFileAsync } from 'fs/promises';
@@ -31,11 +35,17 @@ import {
 
 import { searchMedia, getImdbId, getLatestEpisode } from './tmdb.js';
 import { getNowPlaying, isMpvRunning } from './mpv-ipc.js';
-import { getInfo, nowImdbId } from './moviemeta.js';
+import { getInfo, nowImdbId, getPerson, tmdbToImdb } from './moviemeta.js';
+import { nextEpisodeAfter } from './catalog.js';
 import { getPlayState, setPlayState, beginLaunch } from './playstate.js';
 
 const WEB_DIR = fileURLToPath(new URL('../web', import.meta.url));
 // A key that names one release without any debrid key in it: the torrent hash and file when we can see them, else the release name.
+// Where this person stopped in a film or episode, if it wasn't finished
+const resumeFor = (hist, imdbId, season, episode) => {
+  const h = hist.find((x) => x.imdbId === imdbId && (x.season || null) === (season || null) && (x.episode || null) === (episode || null));
+  return h && (h.percent || 0) < 90 && h.position > 30 ? h.position : 0;
+};
 let lastNp = null; // the last good now-playing answer
 // A release the debrid server refused stays marked for a while, so nobody is sent back to it
 const brokenStreams = new Map(), BROKEN_MS = 30 * 60 * 1000;
@@ -66,15 +76,39 @@ const TAG_PATTERNS = [
   ['REMUX', /remux/i], ['DV', /\bDV\b|dolby.?vision|dovi/i], ['HDR', /hdr/i],
   ['IMAX', /imax/i], ['Atmos', /atmos|truehd|dts-hd/i],
 ];
-function describeStream(q) {
-  const source = /remux/i.test(q) ? 'Remux' : /blu-?ray|bdrip|brrip/i.test(q) ? 'Blu-ray' : /web-?dl/i.test(q) ? 'WEB-DL' : /webrip/i.test(q) ? 'WEBRip' : /hdtv/i.test(q) ? 'HDTV' : /dvd/i.test(q) ? 'DVD' : /\bcam\b|telesync|\bts\b|hdcam/i.test(q) ? 'CAM' : '';
-  const codec = /\bav1\b/i.test(q) ? 'AV1' : /hevc|x265|h\.?265/i.test(q) ? 'HEVC' : /x264|h\.?264|\bavc\b/i.test(q) ? 'H.264' : '';
-  const audio = /atmos/i.test(q) ? 'Atmos' : /truehd/i.test(q) ? 'TrueHD' : /dts-?hd/i.test(q) ? 'DTS-HD' : /\bdts\b/i.test(q) ? 'DTS' : /ddp ?5\.1|ddp ?7\.1|dd\+/i.test(q) ? 'DD+ 5.1' : /dd ?5\.1|\bac-?3\b/i.test(q) ? 'DD 5.1' : /\baac\b/i.test(q) ? 'AAC' : '';
+// Turns a release name into what a person cares about: picture, sound, languages, whether it's one episode or a whole pack.
+const DUB_STUDIOS = /lostfilm|hdrezka|alexfilm|newstudio|jaskier|kubik|coldfilm|\bmvo\b|\bdvo\b|\bavo\b|дубляж|многоголос/i;
+function describeStream(q, isSeries = false, title = '') {
+  const source = /remux/i.test(q) ? 'Remux' : /blu-?ray|bdrip|brrip/i.test(q) ? 'Blu-ray' : /web-?dl|webmux/i.test(q) ? 'WEB-DL' : /webrip/i.test(q) ? 'WEBRip' : /\bweb\b/i.test(q) ? 'WEB' : /hdtv/i.test(q) ? 'HDTV' : /dvd/i.test(q) ? 'DVD' : /\bcam\b|telesync|\bts\b|hdcam/i.test(q) ? 'CAM' : '';
+  const codec = /\bav1\b/i.test(q) ? 'AV1' : /hevc|x265|h[ .]?265/i.test(q) ? 'HEVC' : /x264|h[ .]?264|\bavc\b/i.test(q) ? 'H.264' : '';
+  const ch = (q.match(/(?:ddp|dd\+|eac3|e-ac-3|ac3|dd|aac|dts(?:-?hd)?(?:[ .-]?ma)?|truehd|opus|flac)[ .]?([1-9])[ .]([01])\b/i) || [])
+  const channels = ch[1] ? `${ch[1]}.${ch[2]}` : /\b7[ .]1\b/.test(q) ? '7.1' : /\b5[ .]1\b/.test(q) ? '5.1' : '';
+  const codecA = /atmos/i.test(q) ? 'Atmos' : /truehd/i.test(q) ? 'TrueHD' : /dts-?hd|dts[ .-]?ma/i.test(q) ? 'DTS-HD' : /\bdts\b/i.test(q) ? 'DTS' : /ddp|dd\+|eac-?3|e-ac-3/i.test(q) ? 'DD+' : /\bdd(?=\d|\b)|\bac-?3\b/i.test(q) ? 'DD' : /\baac(?=\d|\b)/i.test(q) ? 'AAC' : /\bopus\b/i.test(q) ? 'Opus' : '';
+  const audio = codecA && channels && !['Atmos'].includes(codecA) ? `${codecA} ${channels}` : codecA || (channels ? `${channels} sound` : '');
   const hdr = [];
   if (/dolby.?vision|\bdv\b|dovi/i.test(q)) hdr.push('Dolby Vision');
-  if (/hdr10\+/i.test(q)) hdr.push('HDR10+'); else if (/hdr/i.test(q)) hdr.push('HDR10');
-  const group = (q.match(/-([A-Za-z0-9]{2,14})(?:\[[^\]]*\])?(?:\.\w{2,4})?\s*$/) || [])[1] || '';
-  return { source, codec, audio, hdr, group, langs: parseLangs(q).filter((l) => l !== 'EN').slice(0, 3) };
+  if (/hdr10\+|hdr10plus/i.test(q)) hdr.push('HDR10+'); else if (/\bhdr(?:10)?\b/i.test(q) && !/\bsdr\b/i.test(q)) hdr.push('HDR10');
+  const group = (q.match(/-([A-Za-z0-9]{2,14})(?:\[[^\]]*\])?(?:\.\w{2,4})?\s*$/) || [])[1] || (q.match(/\|\s*([A-Za-z][\w ]{2,20})\s*$/) || [])[1]?.trim() || '';
+  // words from the title itself are not languages ("No Time to Die" is not Norwegian, "It" is not Italian)
+  const tw = new Set(String(title).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  const qNoTitle = q.split(/[.\s_\-]+/).filter((t) => !tw.has(t.toLowerCase())).join(' ');
+  const langs = new Set(parseLangs(qNoTitle).filter((l) => l !== 'EN'));
+  if (/[а-яё]/i.test(q) || DUB_STUDIOS.test(q)) langs.add('RU');
+  if (/\bukr\b|ззовні|укр/i.test(q)) { langs.add('UA'); }
+  if (/\bvff\b|\bvfq\b|\bvostfr\b/i.test(q)) langs.add('FR');
+  if (/lektor|napisy/i.test(q)) langs.add('PL');
+  if (/legendado|dublado/i.test(q)) langs.add('PT');
+  if (/stagione/i.test(q)) langs.add('IT');
+  // dubbed (voice-over in another language) vs original audio kept alongside
+  const dub = DUB_STUDIOS.test(q) || /\blektor\b|\bdublado\b|\bvff\b/i.test(q);
+  const original = /\boriginal\b|\beng\b|english|\+ ?eng/i.test(q) || !langs.size || /MULTI/i.test(q);
+  const subs = /\bsubs?\b|napisy|legendado|vostfr|субт/i.test(q);
+  const tenbit = /10[ .-]?bit/i.test(q);
+  const service = (q.match(/\b(AMZN|NF|DSNP|ATVP|HMAX|MAX|STAN|HULU|PCOK|PMTP|CATCHPLAY|MGMP)\b/) || [])[1] || '';
+  // a whole season (or several) in one torrent, rather than just this episode
+  const pack = isSeries && (/\bS\d{1,2}(?![ .]?E\d)\b|\bS\d{1,2}-S?\d{1,2}\b|season|stagione|сезон|sezon|complete|\d{2}x\d{2}-\d{2}|E\d{2}-E?\d{2}/i.test(q)) && !/\bS\d{1,2}[ .]?E\d{1,3}(?![ .-]?E?\d)/i.test(q);
+  const fixes = /\b(repack|proper|regrade)\b/i.test(q) ? (q.match(/\b(repack|proper|regrade)\b/i)[1]).toUpperCase() : '';
+  return { source, codec, audio, channels, hdr, group, langs: [...langs].slice(0, 3), dub, original, subs, tenbit, service, pack, fixes };
 }
 const streamTags = (q) => TAG_PATTERNS.filter(([, re]) => re.test(q)).map(([t]) => t);
 
@@ -145,19 +179,47 @@ async function handleApi(req, res, urlPath) {
 
   try {
     if (method === 'GET' && urlPath === '/api/catalog/feeds') {
-      return jsonResponse(res, { feeds: FEEDS.map(({ id, label, short, kind, type, noGenre, cine, year, shuffle }) => ({ id, label, short: short || label, kind, type, noGenre: !!noGenre, cine: !!cine, year: !!year, shuffle: !!shuffle })), cineGenres: CINE_GENRES, genres: await getGenres() });
+      return jsonResponse(res, { feeds: FEEDS.map(({ id, label, short, kind, type, noGenre, cine, year, shuffle, tmdb, single }) => ({ id, label, short: short || label, kind, type, noGenre: !!noGenre, cine: !!cine, year: !!year, shuffle: !!shuffle, tmdb: !!tmdb, single: !!single })), cineGenres: CINE_GENRES, genres: await getGenres() });
     }
 
-    if (method === 'GET' && urlPath === '/api/catalog/foryou') return jsonResponse(res, await forYou({ seed: new URL(req.url, 'http://localhost').searchParams.get('seed') || 0 }));
+    if (method === 'GET' && urlPath === '/api/catalog/foryou') {
+      // the taste engine; until it knows enough about you (or if TMDB is unreachable) the old mixed feed fills in
+      const seed = new URL(req.url, 'http://localhost').searchParams.get('seed') || 0;
+      const recs = await recommend({ seed }).catch(() => []);
+      if (recs.length >= 12) return jsonResponse(res, recs);
+      const mix = await forYou({ seed }); const have = new Set(recs.map((r) => r.imdbId)), hidden = await hiddenSet();
+      return jsonResponse(res, [...recs, ...mix.filter((m) => !have.has(m.imdbId) && !hidden.has(m.imdbId))].slice(0, 48));
+    }
+    if (method === 'GET' && urlPath === '/api/foryou/sections') return jsonResponse(res, await recommendSections({ seed: new URL(req.url, 'http://localhost').searchParams.get('seed') || 0 }).catch((e) => ({ sections: [], error: String(e.message || e) })));
+    if (method === 'POST' && urlPath === '/api/rec/opened') { const b = await parseBody(req); if (/^tt\d+$/.test(b.imdbId || '')) noteOpened(b.imdbId); return jsonResponse(res, { ok: true }); }
+    if (method === 'GET' && urlPath === '/api/taste') return jsonResponse(res, await tasteSummary().catch((e) => ({ error: String(e.message || e) })));
+    if (method === 'GET' && /^\/api\/rating\/tt\d+$/.test(urlPath)) return jsonResponse(res, await ratingOf(urlPath.split('/').pop()));
+    if (method === 'POST' && urlPath === '/api/rate') { try { return jsonResponse(res, await rate(await parseBody(req))); } catch (e) { return errorResponse(res, e.message, 400); } }
+    if (method === 'POST' && urlPath === '/api/notinterested') { try { return jsonResponse(res, await notInterested(await parseBody(req))); } catch (e) { return errorResponse(res, e.message, 400); } }
 
     const feedMatch = urlPath.match(/^\/api\/catalog\/feed\/([a-z_]+)$/);
     if (feedMatch && method === 'GET') {
       const fp = new URL(req.url, 'http://localhost').searchParams;
       const items = await getFeed(feedMatch[1], { genre: fp.get('genre') || '', skip: fp.get('skip') || 0, type: fp.get('type') || '', year: fp.get('year') || '', seed: fp.get('seed') || 0 });
       if (!items) return errorResponse(res, 'Unknown feed', 404);
-      return jsonResponse(res, items);
+      const hidden = await hiddenSet();
+      return jsonResponse(res, items.filter((x) => !hidden.has(x.imdbId)));
     }
 
+    if (urlPath.startsWith('/api/lab/')) {
+      const sub = urlPath.slice(9), qp = new URL(req.url, 'http://localhost').searchParams;
+      try {
+        if (method === 'GET' && sub === 'deck') return jsonResponse(res, await lab.deck({ n: +qp.get('n') || 20, seed: +qp.get('seed') || 0 }));
+        if (method === 'GET' && sub === 'pair') return jsonResponse(res, await lab.pair());
+        if (method === 'GET' && sub === 'board') return jsonResponse(res, await lab.board());
+        if (method === 'POST' && sub === 'skip') return jsonResponse(res, await lab.skip(await parseBody(req)));
+        if (method === 'POST' && sub === 'duel') return jsonResponse(res, await lab.duel(await parseBody(req)));
+      } catch (e) { return errorResponse(res, e.message, 400); }
+    }
+    if (method === 'GET' && urlPath === '/api/search/smart') {
+      const q = (new URL(req.url, 'http://localhost').searchParams.get('q') || '').trim();
+      return jsonResponse(res, await smartSearch(q).catch((e) => ({ titles: [], people: [], error: String(e.message || e) })));
+    }
     if (method === 'GET' && urlPath === '/api/catalog/search') {
       const q = (new URL(req.url, 'http://localhost').searchParams.get('q') || '').trim();
       return jsonResponse(res, q ? await catalogSearch(q) : []);
@@ -170,6 +232,8 @@ async function handleApi(req, res, urlPath) {
       return t ? jsonResponse(res, t) : errorResponse(res, 'Not found', 404);
     }
 
+    if (method === 'POST' && urlPath === '/api/history/remove') { const b = await parseBody(req); return jsonResponse(res, { removed: /^tt\d+$/.test(b.imdbId || '') ? await removeFromHistory(b.imdbId) : 0 }); }
+    if (method === 'POST' && urlPath === '/api/history/watched') { const b = await parseBody(req); return jsonResponse(res, { ok: /^tt\d+$/.test(b.imdbId || '') ? await markWatched(b.imdbId, b.season ?? null, b.episode ?? null) : false }); }
     if (method === 'GET' && urlPath === '/api/history') {
       return jsonResponse(res, await getHistory(100));
     }
@@ -180,7 +244,10 @@ async function handleApi(req, res, urlPath) {
       const type = p.get('type') === 'series' ? 'tv' : 'movie';
       const season = p.get('season') ? Number(p.get('season')) : undefined;
       const episode = p.get('episode') ? Number(p.get('episode')) : undefined;
-      await tools.ironhide_streams.handler({ imdbId: p.get('imdbId'), title: p.get('title') || '', type, season, episode });
+      // the name matters (player title, history, telling title words from languages): look it up when the caller didn't send it
+      let title = p.get('title') || '';
+      if (!title && /^tt\d+$/.test(p.get('imdbId') || '')) title = (await getTitle(p.get('imdbId'), type === 'tv' ? 'series' : 'movie').catch(() => null))?.title || '';
+      await tools.ironhide_streams.handler({ imdbId: p.get('imdbId'), title, type, season, episode });
       const { streams } = getLoadedStreams();
       const pb = (await getSettings()).playback;
       const best = pickBest(streams, pb.player === 'web' ? webPrefs(pb) : pb, { exclude: brokenSet(streams) });
@@ -196,7 +263,7 @@ async function handleApi(req, res, urlPath) {
         seeds: s.seeds,
         resolution: (s.quality.match(/2160p|4k|1080p|720p|480p/i) || [''])[0].toLowerCase().replace('4k', '2160p'),
         tags: streamTags(s.quality),
-        ...describeStream(s.quality),
+        ...describeStream(s.quality, type === 'tv', title),
       })));
     }
 
@@ -209,12 +276,10 @@ async function handleApi(req, res, urlPath) {
       const hist = await getHistory(200);
       if (type === 'tv' && !(season && episode)) {
         const last = hist.find(h => h.imdbId === body.imdbId && h.season);
-        if (last) { season = last.season; episode = (last.percent || 0) >= 90 ? last.episode + 1 : last.episode; if (episode === last.episode) resumeFrom = last.position; }
+        if (last) { const done = (last.percent || 0) >= 90; season = done && last.nextEp ? last.nextEp.season : last.season; episode = done ? (last.nextEp ? last.nextEp.episode : last.episode + 1) : last.episode; if (!done) resumeFrom = last.position; }
         else { season = 1; episode = 1; }
-      } else if (type === 'movie') {
-        const last = hist.find(h => h.imdbId === body.imdbId);
-        if (last && (last.percent || 0) < 90 && last.position > 30) resumeFrom = last.position;
       }
+      if (!resumeFrom) resumeFrom = resumeFor(hist, body.imdbId, type === 'tv' ? season : null, type === 'tv' ? episode : null);
       beginLaunch({ title: body.title || '', imdbId: body.imdbId });
       await tools.ironhide_streams.handler({ imdbId: body.imdbId, title: body.title || '', type, season, episode });
       const { streams } = getLoadedStreams();
@@ -225,6 +290,18 @@ async function handleApi(req, res, urlPath) {
       return jsonResponse(res, { ...out, played: { season, episode, resumeFrom: resumeFrom || 0 } });
     }
 
+    // After something ends: was it finished, and what comes next? Checked against the saved history and the episode list.
+    if (method === 'GET' && urlPath === '/api/nextup') {
+      const p = new URL(req.url, 'http://localhost').searchParams, id = p.get('imdbId') || '';
+      if (!/^tt\d+$/.test(id)) return jsonResponse(res, { finished: false, next: null });
+      const season = p.get('season') ? Number(p.get('season')) : null, episode = p.get('episode') ? Number(p.get('episode')) : null;
+      const h = (await getHistory(300)).find((x) => x.imdbId === id && (x.season || null) === season && (x.episode || null) === episode);
+      const finished = !!h && (h.percent || 0) >= 90;
+      const next = finished && season && episode ? (h.nextEp !== undefined ? h.nextEp : await nextEpisodeAfter(id, season, episode).catch(() => null)) : null;
+      return jsonResponse(res, { finished, next, ended: finished && !!season && !next });
+    }
+    // The last thing mpv played, once it has closed
+    if (method === 'GET' && urlPath === '/api/lastend') { const st = getPlaybackStatus(); return jsonResponse(res, st && st.status ? st : null); }
     if (method === 'GET' && urlPath === '/api/playstate') return jsonResponse(res, getPlayState());
     if (method === 'POST' && urlPath === '/api/play/cancel') { setPlayState({ phase: 'idle', detail: '' }); await tools.ironhide_control.handler({ action: 'stop' }).catch(() => {}); return jsonResponse(res, { ok: true }); }
 
@@ -233,7 +310,9 @@ async function handleApi(req, res, urlPath) {
       const meta0 = getLoadedStreams().meta || {};
       beginLaunch({ title: meta0.title || '', imdbId: meta0.imdbId || '', detail: 'Resolving the link' });
       setPlayState({ phase: 'resolving' });
-      return jsonResponse(res, await tools.ironhide_play.handler({ index: Number(body.index), resumeFrom: body.resumeFrom }));
+      const m0 = getLoadedStreams().meta || {};
+      const resume = body.resumeFrom ?? resumeFor(await getHistory(200), m0.imdbId, m0.season, m0.episode);
+      return jsonResponse(res, await tools.ironhide_play.handler({ index: Number(body.index), resumeFrom: resume || undefined }));
     }
 
     if (method === 'POST' && urlPath === '/api/control') {
@@ -243,6 +322,8 @@ async function handleApi(req, res, urlPath) {
 
     if (method === 'GET' && urlPath === '/api/settings') return jsonResponse(res, await getSettings());
     // cast, details and what people think, for the title that is playing (or a given IMDb id)
+    if (method === 'GET' && /^\/api\/person\/\d+$/.test(urlPath)) return jsonResponse(res, await getPerson(urlPath.split('/').pop()).catch((e) => ({ error: String(e.message || e) })));
+    if (method === 'GET' && /^\/api\/tmdb\/(movie|tv)\/\d+$/.test(urlPath)) { const [, , , kind, tid] = urlPath.split('/'); return jsonResponse(res, await tmdbToImdb(kind, tid).catch((e) => ({ error: String(e.message || e) }))); }
     if (method === 'GET' && urlPath.startsWith('/api/info/')) { const id = urlPath.slice(10); return jsonResponse(res, await getInfo(id === 'now' ? nowImdbId() : id).catch((e) => ({ error: String(e.message || e) }))); }
     // extra IronHides on this Mac (another person, own friend code). Spawns processes, so only our own pages may call it.
     if (urlPath === '/api/instances' || /^\/api\/instances\/[a-z0-9]+(\/(start|stop))?$/.test(urlPath)) {
@@ -340,17 +421,16 @@ async function handleApi(req, res, urlPath) {
         stream = loaded.streams[Number(body.index) - 1];
         if (!stream) return errorResponse(res, 'Pick a stream first', 400);
         season = loaded.meta.season; episode = loaded.meta.episode;
+        if (!resumeFrom) resumeFrom = resumeFor(await getHistory(200), loaded.meta.imdbId, season, episode); // picked a version by hand: still resume
         beginLaunch({ title: loaded.meta.title || '', imdbId: loaded.meta.imdbId || '', detail: 'Resolving the link' });
       } else {
         const hist = await getHistory(200);
         if (type === 'tv' && !(season && episode)) {
           const last = hist.find(h => h.imdbId === body.imdbId && h.season);
-          if (last) { season = last.season; episode = (last.percent || 0) >= 90 ? last.episode + 1 : last.episode; if (episode === last.episode) resumeFrom = last.position; }
+          if (last) { const done = (last.percent || 0) >= 90; season = done && last.nextEp ? last.nextEp.season : last.season; episode = done ? (last.nextEp ? last.nextEp.episode : last.episode + 1) : last.episode; if (!done) resumeFrom = last.position; }
           else { season = 1; episode = 1; }
-        } else if (type === 'movie') {
-          const last = hist.find(h => h.imdbId === body.imdbId);
-          if (last && (last.percent || 0) < 90 && last.position > 30) resumeFrom = last.position;
         }
+        if (!resumeFrom) resumeFrom = resumeFor(hist, body.imdbId, type === 'tv' ? season : null, type === 'tv' ? episode : null);
         beginLaunch({ title: body.title || '', imdbId: body.imdbId });
         await tools.ironhide_streams.handler({ imdbId: body.imdbId, title: body.title || '', type, season, episode });
         const loaded = getLoadedStreams();
@@ -430,9 +510,12 @@ async function handleApi(req, res, urlPath) {
         return res.end(vtt);
       }
       if (what === 'progress' && method === 'POST') {
-        const b = await parseBody(req), sess = getSession(id);
+        const sess = getSession(id), b = await parseBody(req); // take the session first: the player closes it right after saving
         if (sess && b.position >= 0 && b.duration > 0) {
-          await updateEntryProgress({ imdbId: sess.meta?.imdbId, season: sess.meta?.season, episode: sess.meta?.episode }, { position: b.position, duration: b.duration, percent: (b.position / b.duration) * 100 }).catch(() => {});
+          const m = sess.meta || {}, match = { imdbId: m.imdbId, season: m.season, episode: m.episode };
+          const n = await updateEntryProgress(match, { position: b.position, duration: b.duration, eof: !!b.eof }).catch(() => null);
+          if (n?.finished && m.season && m.episode) { const nextEp = await nextEpisodeAfter(m.imdbId, m.season, m.episode).catch(() => undefined); if (nextEp !== undefined) await updateEntryProgress(match, { position: b.position, duration: b.duration, eof: !!b.eof, nextEp }).catch(() => {}); }
+          return jsonResponse(res, { ok: true, finished: !!n?.finished });
         }
         return jsonResponse(res, { ok: true });
       }

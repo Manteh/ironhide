@@ -1,4 +1,5 @@
 import { api, post, put, del } from '../api.js';
+import { cursorWanted } from '../cursor.js';
 import { store, saveSettings, onLeave } from '../main.js';
 import { $, $$, esc, icon, avatar, toast, AVATAR_ICONS, AVATAR_COLORS } from '../ui.js';
 
@@ -109,11 +110,13 @@ function appearance(body) {
         row('Layout', 'Posters in a grid, detailed cards with a synopsis, or a compact list.', seg('layout', [['grid', 'Grid', 'library'], ['detail', 'Detailed'], ['list', 'List']], a.layout)) +
         row('Card size', 'How big each poster or card is.', seg('posterSize', [['xs', 'XS'], ['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']], a.posterSize)) +
         row('Featured banner', 'Show the large banner at the top of For You.', `<button class="switch ${a.showHero !== false ? 'on' : ''}" id="hero" role="switch" aria-checked="${a.showHero !== false}" aria-label="Featured banner"></button>`) +
+        row('Custom cursor', 'A soft ring that follows your pointer and grows over things you can click. Only with a mouse or trackpad.', `<button class="switch ${cursorWanted() ? 'on' : ''}" id="cur" role="switch" aria-checked="${cursorWanted()}" aria-label="Custom cursor"></button>`) +
         row('Reduce motion', 'Turn off animations and transitions.', `<button class="switch ${a.motion === 'reduced' ? 'on' : ''}" id="motion" role="switch" aria-checked="${a.motion === 'reduced'}" aria-label="Reduce motion"></button>`) });
     $$('[data-th]', body).forEach((b) => (b.onclick = () => set('theme', b.dataset.th)));
     $$('[data-ac]', body).forEach((b) => (b.onclick = () => set('accent', b.dataset.ac)));
     ['density', 'radius', 'posterSize', 'layout'].forEach((k) => bindSeg(body, k, (v) => set(k, v)));
     $('#hero', body)?.addEventListener('click', () => set('showHero', a.showHero === false));
+    $('#cur', body)?.addEventListener('click', () => { import('../cursor.js').then((m) => { m.setCursor(!m.cursorWanted()); draw(); }); });
     $('#motion', body).onclick = () => set('motion', a.motion === 'reduced' ? 'full' : 'reduced');
   };
   draw();

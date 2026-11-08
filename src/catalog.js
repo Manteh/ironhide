@@ -7,6 +7,13 @@ const TTL_MS = 10 * 60 * 1000;
 const cache = new Map();
 
 export const FEEDS = [
+  // live TMDB charts (films and series together; the type switch narrows them)
+  { id: 'today', label: 'Popular today', short: 'Today', kind: 'both', tmdb: true },
+  { id: 'rising', label: 'Rising fast', short: 'Rising', kind: 'both', tmdb: true, single: true },
+  { id: 'fresh', label: 'New releases', short: 'New', kind: 'both', tmdb: true },
+  { id: 'trending', label: 'Trending this week', short: 'Trending', kind: 'both', tmdb: true },
+  { id: 'popular', label: 'Popular', kind: 'both', tmdb: true },
+  { id: 'theaters', label: 'In cinemas now', short: 'In cinemas', kind: 'movies', tmdb: true },
   { id: 'trending_movies', label: 'Trending', kind: 'movies', type: 'movie' },
   { id: 'popular_movies', label: 'Popular', kind: 'movies', type: 'movie' },
   { id: 'watched_weekly', label: 'Most watched this week', short: 'Most watched', kind: 'movies', type: 'movie' },
@@ -101,6 +108,7 @@ async function cineFeed(id, { genre = '', skip = 0, type = 'movie', year = '', s
 export async function getFeed(feedId, { genre = '', skip = 0, type = '', year = '', seed = 0 } = {}) {
   const feed = FEEDS.find(f => f.id === feedId);
   if (!feed) return null;
+  if (feed.tmdb) { const { chart } = await import('./charts.js'); const t = type === 'all' ? '' : type; const out = await chart(feedId, { type: t, genre, skip }).catch(() => null); if (out) return out; }
   if (feed.cine) return cineFeed(feedId, { genre, skip, type, year, seed });
   const g = feed.noGenre ? '' : genre;
   const extra = [g && `genre=${encodeURIComponent(g)}`, skip && `skip=${Number(skip)}`].filter(Boolean).join('&');
@@ -166,4 +174,18 @@ export async function getTitle(imdbId, type) {
     }
     return out;
   });
+}
+
+// The episode that comes after this one: the next in the season, else the first of the next season, else nothing (the series ended).
+// Only counts episodes that are out already.
+export async function nextEpisodeAfter(imdbId, season, episode) {
+  const t = await getTitle(imdbId, 'series').catch(() => null);
+  if (!t?.seasons) return null;
+  const out = (e) => !e.released || e.released <= new Date().toISOString().slice(0, 10);
+  const find = (sn, ep) => (t.seasons[sn] || []).find((e) => e.episode === ep && out(e));
+  const here = (t.seasons[season] || []).find((e) => e.episode > episode && out(e));
+  if (here) return { season, episode: here.episode, name: here.name };
+  const later = Object.keys(t.seasons).map(Number).filter((n) => n > season && n > 0).sort((a, b) => a - b);
+  for (const sn of later) { const e = (t.seasons[sn] || []).find(out); if (e) return { season: sn, episode: e.episode, name: e.name }; }
+  return null;
 }

@@ -2,7 +2,48 @@
 // `status`: 'dev' = in this copy but still being proven; leave it out once it has held up in real use.
 export const CHANGELOG = [
   {
-    version: '0.9', range: 'e78d3be..HEAD', work: true, date: '2026-11-04', title: 'Watch party', status: 'dev',
+    version: '1.0', range: '28b1991..HEAD', date: '2026-11-08', title: 'Made for you', status: 'dev',
+    summary: 'IronHide learns your taste, finds anything as you type, and feels fast everywhere: picks you would actually love, a version picker that explains itself, and a Mac app that never stutters.',
+    groups: {
+      New: [
+        'Recommendations that learn you: every rating, every film you finish, every series you binge, what you save and what you hide shapes your picks. Each one shows a match % and why ("Because you loved FROM").',
+        'For You as rows: Top picks, Because you loved…, Hidden gems for you and Something different (acclaimed titles outside your usual).',
+        'Taste Lab: swipe through cards to rate what you have seen, play This or that to rank favourites against each other, see your board of all-time favourites and your taste stats.',
+        'Rate anything from its page: stars, "Not for me", and what stood out (story, acting, visuals…).',
+        'Your taste on your profile: genres you love, themes, people you follow, languages and eras, and how much the app knows about you.',
+        'Live charts from TMDB: Today (ranked, with big numbers), Rising (what is going viral), New (fresh films, new series and seasons), Trending, Popular and In cinemas. All, Films or Series in one tap.',
+        'Search, rebuilt: results on every keystroke, recent searches, and it understands what you mean: "korean thriller", "90s horror", "sci-fi series 2024", "like interstellar", or an actor\'s name.',
+        'Actor profiles: photo, biography, age and birthplace, credits, photos, known for, and a full filmography you can open titles from.',
+        'A new title page: backdrop, scores from several sources, cast, reviews, more like this, and episodes with thumbnails and progress.',
+        'Play starts the best version straight away; Versions opens a picker that merges duplicates, labels the best picture, sound, lightest and most shared, and compares everything in a sortable table.',
+        'While paused, the player shows the title, story, cast and a review after a few seconds instead of a still frame.',
+        'Picture looks for the in-app player: Reference, Film, Dark room, Bright room, Shadow detail, Animation, Restore and Vivid, with a suggested look for what is playing.',
+        'The screen stays awake while a video plays.',
+      ],
+      Improved: [
+        'Faster everywhere: titles open the instant you click, from the card you clicked; posters load first where you look; no blur or recolouring work while scrolling.',
+        'Buffering: two minutes ahead instead of ten seconds, a large back-buffer, instant seeks inside it, one reused connection for far jumps, and live previews while dragging the seek bar.',
+        'Smooth, chained animations on the title page, versions and profiles, tuned to finish in under half a second.',
+        'A calmer look: the Mac\'s own font, neutral buttons, a compact header and a soft background glow that follows the poster you point at.',
+        'Continue watching: a clean, full-width row that fades at the edges instead of cutting cards off.',
+        'Language and release details read properly: dubs, original audio, season packs, sound formats and HDR.',
+      ],
+      Fixed: [
+        'Titles in history and the player showed file names or download links instead of the real name.',
+        'A film\'s own title words were read as languages ("No Time to Die" came out as Norwegian).',
+        'Russian and other dubs could be chosen as the best version over the original audio.',
+        '"Not interested" only hid a title on one screen; it now leaves your picks and every list.',
+        'Cards stretched to different sizes when titles were long; posters sometimes never appeared.',
+        'The title page stayed over the video, trailer controls sat under the top bar, and the player could fail to start.',
+      ],
+      'Known limits': [
+        'Recommendations weigh signals with hand-tuned numbers; they will learn from what you open and finish over time.',
+        'A seek far beyond the buffer still waits for one request to the debrid server.',
+      ],
+    },
+  },
+  {
+    version: '0.9', range: 'e78d3be..28b1991', date: '2026-11-04', title: 'Watch party', status: 'dev',
     summary: 'The room now runs the show: the owner picks and presses play, and everyone else just has to be there.',
     groups: {
       New: [
@@ -21,6 +62,12 @@ export const CHANGELOG = [
         'Friends replaces Together: friends, what they are doing and rooms in one place. Friends see each other\'s rooms and just join, no codes.',
         'New catalogs: New (by year, back to 1950), Top rated, Hidden gems and Surprise me, with a Movies / Series switch, genre, sort, minimum rating and Hide watched.',
         'For You now follows the genres you actually watch, skips what you have seen, and changes every half hour or on Shuffle.',
+        'Continue watching row on Home, with the episode and time left right under the title.',
+        'Resume everywhere: replaying keeps your place, picking a version by hand resumes too, and closing the tab saves where you were.',
+        'Progress is saved while you watch, in mpv and the web player, and when you stop. Coming back puts you where you left off. Stopping near the end (credits, end of file) counts as finished and offers the next episode, checked against the episode list.',
+        'Side rail 2.0: invitations, friend requests, your room and what is playing sit at the top; every circle opens a card with buttons (resume, remote, join, accept). The dock swell now runs on a spring.',
+        'Right-click menus on cards and on the side circles: play, play in the other player, watch together, save, mark as watched, remove from Continue watching, hide, open on IMDb.',
+        'A custom cursor with a soft ring that grows over things you can click. Can be turned off in Settings, Appearance.',
         'Streams settings: your own audio languages, subtitles, which versions to hide, sorting and how many to load.',
         'Updates button in the corner, with a mark when something new has landed.',
         'Updates tab: this page.',

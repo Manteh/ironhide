@@ -4,10 +4,12 @@ import { getStreams } from "./torrentio.js";
 import { getSettings as getPrefs, hiddenKind } from "./settings.js";
 import { fetchSubtitles } from "./subtitles.js";
 import { parseLangs } from "./ui.js";
-import { addToHistory, getHistory, getLastWatched, updateLatestProgress } from "./history.js";
+import { addToHistory, getHistory, getLastWatched, updateLatestProgress, updateEntryProgress, normalizeProgress } from "./history.js";
+import { nextEpisodeAfter } from "./catalog.js";
 import { playDetached, readProgress, formatTime } from "./player.js";
 import { learnQuality, getQualityPreference, getGlobalPreference } from "./preferences.js";
 import { addRating, getTasteProfile, getRatings } from "./taste.js";
+import { invalidateRecommendations } from "./recommend.js";
 import {
   getNowPlaying, isMpvRunning,
   togglePause, pause, resume, stop,
@@ -194,73 +196,62 @@ let globalPlaybackStatus = null; // null = idle, { status, progress, nextEpisode
 let pendingRating = null; // set when mpv closes, cleared after user rates
 let mpvWasRunning = false; // tracks if mpv was running on last poll
 
+// ── Progress, finishing and the next episode ──
+// What was last read from mpv while it ran, so a crash or a missing progress file still leaves a saved position
+let liveProgress = null, lastFinishAt = 0;
+const matchOf = (m) => ({ imdbId: m.imdbId, season: m.season, episode: m.episode });
+const isTv = (m) => (m.type === "tv" || m.type === "series") && m.season && m.episode;
+
+// mpv closed (or the file ended): save where it stopped, decide if it was finished, and line up the next episode
+async function handleFinish(progress) {
+  progress = progress || liveProgress;
+  if (!progress || !(progress.duration > 0)) return;
+  if (Date.now() - lastFinishAt < 8000) return; // the monitor and the launcher both notice; handle it once
+  lastFinishAt = Date.now();
+  const meta = { ...globalMeta };
+  const n = normalizeProgress(progress);
+  let nextEp;
+  if (n.finished && isTv(meta)) nextEp = await nextEpisodeAfter(meta.imdbId, meta.season, meta.episode).catch(() => undefined);
+  if (meta.imdbId) await updateEntryProgress(matchOf(meta), { ...progress, ...(nextEp !== undefined ? { nextEp } : {}) }).catch(() => {});
+  else await updateLatestProgress(progress).catch(() => {});
+  globalPlaybackStatus = {
+    status: n.finished ? "completed" : "stopped",
+    progress: { position: n.position, duration: n.duration, percent: n.percent },
+    title: meta.title, imdbId: meta.imdbId, season: meta.season, episode: meta.episode,
+    nextEpisode: n.finished && isTv(meta) ? (nextEp ? { season: nextEp.season, episode: nextEp.episode, name: nextEp.name } : null) : null,
+    seriesEnded: n.finished && isTv(meta) && nextEp === null,
+  };
+  if (n.percent > 20 && meta.title) {
+    const ep = meta.season ? ` S${String(meta.season).padStart(2, "0")}E${String(meta.episode).padStart(2, "0")}` : "";
+    pendingRating = { imdbId: meta.imdbId, title: `${meta.title}${ep}`, type: meta.type, percent: n.percent };
+  }
+  liveProgress = null;
+}
+export const getPlaybackStatus = () => globalPlaybackStatus;
+
 // ── Active mpv monitor ──
-// Polls every 3 seconds. When mpv disappears, captures final state.
+// Polls every 3 seconds. While mpv runs it saves the position every ~6 s; when mpv disappears it captures the final state.
+let monitorTick = 0;
 function startMpvMonitor() {
   setInterval(async () => {
     const running = await isMpvRunning();
 
-    if (running && !mpvWasRunning) {
-      // mpv just started
-      mpvWasRunning = true;
+    if (running) {
+      if (!mpvWasRunning) { mpvWasRunning = true; liveProgress = null; }
+      if (++monitorTick % 2 === 0) {
+        const np = await getNowPlaying().catch(() => null);
+        if (np && np.duration > 0 && np.position >= 0 && globalMeta.imdbId) {
+          liveProgress = { position: np.position, duration: np.duration, percent: np.percent };
+          if (np.position > 5) await updateEntryProgress(matchOf(globalMeta), liveProgress).catch(() => {});
+        }
+      }
     }
 
     if (!running && mpvWasRunning) {
-      // mpv just closed — capture state
       mpvWasRunning = false;
-
-      // Read progress from fixed progress file
-      const { readFile, unlink } = await import("fs/promises");
-      const { join } = await import("path");
-      const { tmpdir } = await import("os");
-      const progressPath = join(tmpdir(), "ironhide-progress.json");
-
-      let progress = null;
-      try {
-        const data = await readFile(progressPath, "utf-8");
-        progress = JSON.parse(data.trim());
-      } catch {}
-
-      if (progress) {
-        await updateLatestProgress(progress).catch(() => {});
-      }
-
-      const completed = progress && progress.percent >= 90;
-      const meta = globalMeta;
-
-      // Set playback status
-      if (completed && meta.type === "tv" && meta.season && meta.episode) {
-        globalPlaybackStatus = {
-          status: "completed",
-          progress,
-          title: meta.title,
-          imdbId: meta.imdbId,
-          season: meta.season,
-          episode: meta.episode,
-          nextEpisode: { season: meta.season, episode: meta.episode + 1 },
-        };
-      } else if (progress) {
-        globalPlaybackStatus = {
-          status: completed ? "completed" : "stopped",
-          progress,
-          title: meta.title,
-          imdbId: meta.imdbId,
-          season: meta.season,
-          episode: meta.episode,
-          nextEpisode: null,
-        };
-      }
-
-      // Set pending rating if watched enough
-      if (progress && progress.percent > 20 && meta.title) {
-        const ep = meta.season ? ` S${String(meta.season).padStart(2, "0")}E${String(meta.episode).padStart(2, "0")}` : "";
-        pendingRating = {
-          imdbId: meta.imdbId,
-          title: `${meta.title}${ep}`,
-          type: meta.type,
-          percent: progress.percent,
-        };
-      }
+      await new Promise((r) => setTimeout(r, 1500)); // the launcher reads the final progress file first
+      const progress = await readProgress("/tmp/ironhide-progress.json").catch(() => null);
+      await handleFinish(progress);
     }
   }, 3000);
 }
@@ -286,49 +277,7 @@ server.registerTool(
       return { content: [{ type: "text", text: `Invalid index. Pick 1-${globalStreams.length}.` }] };
     }
 
-    // When mpv exits, update history and check if episode completed
-    const onFinish = async (progress) => {
-      if (progress) {
-        await updateLatestProgress(progress).catch(() => {});
-      }
-
-      const completed = progress && progress.percent >= 90;
-
-      // If TV episode completed, prepare next episode info
-      if (completed && globalMeta.type === "tv" && globalMeta.season && globalMeta.episode) {
-        const nextEp = globalMeta.episode + 1;
-        globalPlaybackStatus = {
-          status: "completed",
-          progress,
-          title: globalMeta.title,
-          imdbId: globalMeta.imdbId,
-          season: globalMeta.season,
-          episode: globalMeta.episode,
-          nextEpisode: { season: globalMeta.season, episode: nextEp },
-        };
-      } else if (progress) {
-        globalPlaybackStatus = {
-          status: completed ? "completed" : "stopped",
-          progress,
-          title: globalMeta.title,
-          imdbId: globalMeta.imdbId,
-          season: globalMeta.season,
-          episode: globalMeta.episode,
-          nextEpisode: null,
-        };
-      }
-
-      // Flag for rating prompt — only if watched enough (>20%)
-      if (progress && progress.percent > 20) {
-        const ep = globalMeta.season ? ` S${String(globalMeta.season).padStart(2, "0")}E${String(globalMeta.episode).padStart(2, "0")}` : "";
-        pendingRating = {
-          imdbId: globalMeta.imdbId,
-          title: `${globalMeta.title}${ep}`,
-          type: globalMeta.type,
-          percent: progress.percent,
-        };
-      }
-    };
+    const onFinish = handleFinish;
 
     const epTag = globalMeta.season ? ` S${String(globalMeta.season).padStart(2, "0")}E${String(globalMeta.episode).padStart(2, "0")}` : "";
     const result = await playDetached(stream, globalSubs, onFinish, resumeFrom, globalMeta.title ? `${globalMeta.title}${epTag}` : undefined);
@@ -682,11 +631,7 @@ server.registerTool(
     // Fetch subtitles in parallel
     const subs = await fetchSubtitles(entry.imdbId, entry.season, entry.episode).catch(() => []);
 
-    const onFinish = async (progress) => {
-      if (progress) {
-        await updateLatestProgress(progress).catch(() => {});
-      }
-    };
+    const onFinish = handleFinish;
 
     const resumeTag = entry.season ? ` S${String(entry.season).padStart(2, "0")}E${String(entry.episode).padStart(2, "0")}` : "";
     const result = await playDetached(stream, subs, onFinish, resumeFrom, `${entry.title}${resumeTag}`);
@@ -994,6 +939,7 @@ server.registerTool(
   },
   async ({ imdbId, title, type, rating, liked, disliked, notes, genres }) => {
     await addRating({ imdbId, title, type, rating, liked, disliked, notes, genres });
+    invalidateRecommendations();
 
     // Clear pending rating
     if (pendingRating?.imdbId === imdbId) {

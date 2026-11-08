@@ -256,6 +256,8 @@ export function pickBest(streams, p, { exclude = new Set(), browserSafe = false 
     if (p.remux === 'prefer' && remux) v += 20; if (p.remux === 'avoid' && remux) v -= 40;
     if (p.maxSizeGb > 0 && s.sizeBytes > p.maxSizeGb * 1e9) v -= 200;
     if (/\bDUAL\b|DUBBED|\bDUB\b/i.test(q)) v -= 30;
+    // Cyrillic release names and voice-over studios: a Russian dub, wrong for anyone who didn't ask for Russian
+    if ((/[а-яё]/i.test(q) || /lostfilm|hdrezka|alexfilm|newstudio|coldfilm|\bmvo\b|\bdvo\b/i.test(q)) && !(p.audioLangs || []).includes('ru')) v -= 60;
     if (/CAM|TELESYNC|\bTS\b|HDCAM/i.test(q)) v -= 300;
     if (/\b3D\b|\bH?SBS\b|\bH?OU\b/i.test(q)) v -= 300; // two pictures in one frame: only right on a 3D screen
     if (browserSafe) { // files a browser can play untouched: mp4 with h264 + AAC

@@ -45,9 +45,9 @@ export async function playIndex(index, info) {
 }
 window.playIndex = playIndex;
 
-export async function quickPlay(item) {
-  if (usingWeb()) return playWeb(item);
-  watchLaunch({ title: item.title, imdbId: item.imdbId, poster: item.poster });
+export async function quickPlay(item, opts = {}) {
+  if (opts.player === 'web' || (opts.player !== 'mpv' && usingWeb())) return playWeb(item);
+  watchLaunch({ title: item.title, imdbId: item.imdbId, poster: item.poster, backdrop: item.backdrop, season: item.season, episode: item.episode, version: 'Picking the best version' });
   try {
     await post('/api/quickplay', item);
     setTimeout(() => refreshHistory(), 4000);
@@ -62,14 +62,25 @@ let launch = null;
 
 export function watchLaunch(info, mode = 'mpv') {
   hideLaunch(true);
+  if (info?.title) window.__ihpTitle = info.title + (info.episode ? ` · S${String(info.season).padStart(2, '0')}E${String(info.episode).padStart(2, '0')}` : '');
   const STEPS_ = mode === 'web' ? WEB_STEPS : STEPS;
   const el = document.createElement('div');
-  el.className = 'launch';
-  el.innerHTML = `<div class="lcard"><div class="lposter" style="${info.imdbId || info.poster ? `background-image:url('${esc(info.poster || posterOf(info.imdbId))}')` : ''}"></div>
-    <div class="lbody"><div class="lkick">Getting ready</div><h3>${esc(info.title || 'Your title')}</h3><div class="ldetail" id="lDetail">Finding the best stream</div>
-      <ol class="lsteps">${STEPS_.map(([k, l]) => `<li data-s="${k}"><i></i><span>${l}</span></li>`).join('')}</ol>
-      <div class="lbar"><div id="lFill"></div></div>
-      <button class="btn ghost" id="lCancel">Cancel</button></div></div>`;
+  el.className = 'launch lx';
+  const art = info.poster || (info.imdbId ? posterOf(info.imdbId) : '');
+  const sub = [info.episode ? `S${String(info.season).padStart(2, '0')}E${String(info.episode).padStart(2, '0')}` : '', info.version || ''].filter(Boolean).join(' · ');
+  el.innerHTML = `<div class="lx-bg">${info.backdrop || art ? `<img src="${esc(info.backdrop || art)}" alt="" decoding="async">` : ''}</div>
+    <div class="lcard lx-card">
+      <div class="lx-poster">${art ? `<img src="${esc(art)}" alt="" decoding="async">` : ''}<span class="lx-sheen"></span></div>
+      <div class="lbody lx-body">
+        <div class="lkick">Getting ready</div>
+        <h3>${esc(info.title || 'Your title')}</h3>
+        ${sub ? `<div class="lx-ver">${esc(sub)}</div>` : ''}
+        <ol class="lsteps lx-steps">${STEPS_.map(([k, l]) => `<li data-s="${k}" title="${l}"><i></i></li>`).join('')}</ol>
+        <div class="lx-now"><span class="lx-spin"></span><span class="ldetail" id="lDetail">${STEPS_[0][1]}</span><span class="lx-time" id="lTime">0:00</span></div>
+        <div class="lbar" hidden><div id="lFill"></div></div>
+        <button class="lx-cancel" id="lCancel">Cancel</button>
+      </div>
+    </div>`;
   document.body.appendChild(el);
   requestAnimationFrame(() => el.classList.add('in'));
   const startedAt = Date.now();
@@ -84,7 +95,7 @@ export function watchLaunch(info, mode = 'mpv') {
     if (st.phase === 'playing' && !launch.done) {
       launch.done = true;
       if (mode === 'web') return; // the player opens when the session is ready
-      el.querySelector('.lkick').textContent = 'Now playing';
+      el.querySelector('.lkick').textContent = 'Now playing'; el.classList.add('ready');
       setTimeout(() => { hideLaunch(); import('./now.js').then((m) => m.openNow()); }, 1500);
     }
   };
@@ -93,7 +104,7 @@ export function watchLaunch(info, mode = 'mpv') {
     try { const st = await api('/api/playstate'); if (st.at >= startedAt - 400) apply(st); } catch {}
     if (Date.now() - startedAt > 90000) { toast('Starting took too long', 'err'); hideLaunch(); }
   };
-  launch.timer = setInterval(poll, 350); poll();
+  launch.timer = setInterval(() => { poll(); const t = Math.floor((Date.now() - startedAt) / 1000), te = el.querySelector('#lTime'); if (te) te.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; }, 350); poll();
   $('#lCancel', el).onclick = async () => { hideLaunch(); await post('/api/play/cancel').catch(() => {}); toast('Cancelled'); };
 }
 const $$li = (el) => [...el.querySelectorAll('.lsteps li')];
@@ -133,6 +144,7 @@ export function renderNav() {
     <button id="nSearch" class="ri" aria-label="Search" data-tip="Search  /">${icon('search')}<span>Search</span></button>
     <a href="#/continue" class="ri ${on(/^#\/continue/)}" aria-label="Continue watching" data-tip="Continue watching">${icon('play')}<span>Resume</span></a>
     <a href="#/shelf" class="ri ${on(/^#\/shelf/)}" aria-label="Shelf" data-tip="Shelf">${icon('bookmark')}<span>Shelf</span></a>
+    <a href="#/taste" class="ri ${on(/^#\/taste/)}" aria-label="Taste Lab" data-tip="Taste Lab">${icon('heart')}<span>Taste</span></a>
     <a href="#/friends" class="ri ${on(/^#\/(friends|together)/)}" aria-label="Friends, ${online} online" data-tip="Friends">${icon('users')}<span>Friends</span>${store.socialCount ? `<i class="rbadge">${store.socialCount}</i>` : online ? `<i class="rbadge on">${online}</i>` : ''}</a>
     <i class="rsep"></i>
     <a class="rme ${on(/^#\/profile/)}" href="#/profile" aria-label="Your profile" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 32)}</a>`;
@@ -156,12 +168,19 @@ function setupNowPlaying() {
   };
 }
 let npMiss = 0;
+// what mpv is playing right now, for the side rail. Only tells the rail when something it shows has changed.
+function setNp(v) {
+  const k = JSON.stringify(v && { ...v, left: Math.round(v.left / 60), pct: Math.round(v.pct / 3) });
+  if (k === store._npk) return;
+  store._npk = k; store.np = v; window.dispatchEvent(new Event('rail-refresh'));
+}
 async function pollRemote() {
   try {
     const d = await api('/api/nowplaying');
     const el = $('#np');
-    if (!d) { if (++npMiss >= 4) el.classList.add('hidden'); return; } // a slow answer is not the end
+    if (!d) { if (++npMiss >= 4) { el.classList.add('hidden'); setNp(null); } return; } // a slow answer is not the end
     npMiss = 0; el.classList.remove('hidden');
+    setNp({ title: d.title, imdbId: d.meta?.imdbId, season: d.meta?.season, episode: d.meta?.episode, playing: d.playing, pct: Math.round(d.percent || 0), left: Math.max(0, (d.duration || 0) - (d.position || 0)) });
     el.querySelector('.npt').textContent = d.title || 'Playing';
     el.querySelector('[data-r="toggle"]').innerHTML = icon(d.playing ? 'pause' : 'play');
     el.querySelector('.npbar i').style.width = (d.percent || 0) + '%';
@@ -218,6 +237,7 @@ route('/title/:type/:id', 'browse', 'title');
 route('/search/:q', 'browse', 'search');
 route('/friends', 'page', 'together');
 route('/together', 'page', 'together');
+route('/taste', 'page', 'taste');
 route('/profile', 'page', 'profile');
 route('/profile/:id', 'page', 'profile');
 route('/settings', 'page', 'settings');
@@ -248,6 +268,7 @@ document.addEventListener('keydown', (e) => {
   onEvent((ev, d) => { if (ev === 'reset') { location.href = '/'; return; } if (ev === 'toast') toast(d.text, d.kind === 'err' ? 'err' : d.kind === 'ok' ? 'ok' : ''); });
   onState((st) => { const n = st.incoming.length + st.invites.length, on = st.friends.filter((f) => f.online).length; if (n !== store.socialCount || on !== store.friendsOnline) { store.socialCount = n; store.friendsOnline = on; renderNav(); } });
   import('./updates-bell.js').then((m) => m.mountBell());
+  import('./cursor.js').then((m) => m.initCursor());
   window.addEventListener('hashchange', navigate);
   navigate(); refreshNodes(); setInterval(refreshNodes, 30000);
 })();

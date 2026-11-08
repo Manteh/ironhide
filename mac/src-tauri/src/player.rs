@@ -32,6 +32,40 @@ extern "C" {
     fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
 }
 
+// Keep the display (and the Mac) awake while a video is open. libmpv's render API does not do this
+// for an embedding app, so without it macOS dims and sleeps the screen after the idle timeout.
+#[link(name = "IOKit", kind = "framework")]
+extern "C" {
+    fn IOPMAssertionCreateWithName(kind: *const c_void, level: u32, name: *const c_void, id: *mut u32) -> i32;
+    fn IOPMAssertionRelease(id: u32) -> i32;
+}
+#[link(name = "CoreFoundation", kind = "framework")]
+extern "C" {
+    fn CFStringCreateWithCString(alloc: *const c_void, s: *const c_char, enc: u32) -> *const c_void;
+    fn CFRelease(o: *const c_void);
+}
+struct AwakeGuard(Vec<u32>);
+impl AwakeGuard {
+    fn new() -> Self {
+        let mut ids = Vec::new();
+        unsafe {
+            let cf = |s: &str| { let c = CString::new(s).unwrap(); CFStringCreateWithCString(std::ptr::null(), c.as_ptr(), 0x0800_0100) };
+            let name = cf("IronHide is playing a video");
+            for kind in ["PreventUserIdleDisplaySleep", "PreventUserIdleSystemSleep"] {
+                let k = cf(kind);
+                let mut id = 0u32;
+                if IOPMAssertionCreateWithName(k, 255, name, &mut id) == 0 { ids.push(id); }
+                CFRelease(k);
+            }
+            CFRelease(name);
+        }
+        AwakeGuard(ids)
+    }
+}
+impl Drop for AwakeGuard {
+    fn drop(&mut self) { for id in &self.0 { unsafe { IOPMAssertionRelease(*id); } } }
+}
+
 pub const APP_SOCK: &str = "/tmp/ironhide-app.sock";
 
 enum Msg {
@@ -277,6 +311,7 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
         std::env::set_var(k, v);
     }
     let args = req.args.clone();
+    let _awake = AwakeGuard::new(); // released when playback ends (drop)
     let mpv = Mpv::with_initializer(|i| {
         i.set_option("vo", "libmpv")?;
         i.set_option("hwdec", "videotoolbox")?;
@@ -291,6 +326,18 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
         i.set_option("hwdec-codecs", "all")?;
         i.set_option("vd-lavc-dr", "yes")?;
         load_user_conf(&i); // your ~/.config/mpv/mpv.conf: scaling, dithering, HDR tone mapping, cache, audio, subtitles
+        // Streaming over HTTPS from the debrid CDN: buffer far ahead (capped by bytes), keep a generous back-buffer so seeking
+        // back is instant, seek inside what's already buffered without a request, reuse one keep-alive connection for the
+        // range requests a seek makes (no new TLS handshake each time), read in bigger chunks, and reconnect if it drops.
+        // tuning only: an option this mpv doesn't know is skipped, it never stops playback
+        for (k, v) in [
+            ("cache", "yes"), ("demuxer-seekable-cache", "yes"), ("demuxer-max-bytes", "1024MiB"), ("demuxer-max-back-bytes", "512MiB"),
+            ("demuxer-readahead-secs", "120"), ("cache-secs", "120"), ("cache-pause-wait", "0.6"), ("stream-buffer-size", "4MiB"), ("network-timeout", "30"),
+            // one list (the "-append" form only exists on mpv's command line, not for libmpv)
+            ("demuxer-lavf-o", "multiple_requests=1,reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=4"),
+        ] {
+            if let Err(e) = i.set_option(k, v) { eprintln!("player: skipped option {k}: {e:?}"); }
+        }
         for a in &args {
             let a = a.trim_start_matches("--");
             let (k, v) = a.split_once('=').unwrap_or((a, "yes"));

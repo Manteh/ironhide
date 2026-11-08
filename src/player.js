@@ -188,7 +188,10 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
     const mpvArgs = [
       '--really-quiet', `--script=${LUA_SCRIPT}`, ...(await langArgs()),
       // open behind everything, paused, until the stream is buffered; then we reveal it
-      '--focus-on=never', '--pause', '--fullscreen=no', '--demuxer-readahead-secs=10',
+      '--focus-on=never', '--pause', '--fullscreen=no',
+      // buffer far ahead and keep one connection for seeks (the in-app player sets the same; this is for the external mpv)
+      '--cache=yes', '--demuxer-seekable-cache=yes', '--demuxer-readahead-secs=120', '--demuxer-max-back-bytes=512MiB', '--cache-pause-wait=0.6',
+      '--stream-buffer-size=4MiB', '--demuxer-lavf-o=multiple_requests=1,reconnect=1,reconnect_streamed=1',
       `--input-ipc-server=${ipcSocket}`,
       ...(title ? [`--force-media-title=${title}`] : []),
       ...(resumeFrom > 0 ? [`--start=${Math.floor(resumeFrom)}`] : []),

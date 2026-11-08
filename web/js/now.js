@@ -67,7 +67,7 @@ async function poll() {
   if (!np) {
     // keep what we were showing: one slow answer from mpv is not the end of the film
     box.classList.add('lost');
-    if (++ended >= 8) { $('#nTitle', box).textContent = 'Playback ended'; $('#nSub', box).textContent = ''; setTimeout(closeNow, 1400); clearInterval(timer); }
+    if (++ended >= 8) { $('#nTitle', box).textContent = 'Playback ended'; $('#nSub', box).textContent = ''; setTimeout(closeNow, 1400); clearInterval(timer); setTimeout(() => import('./nextup.js').then((n) => n.offerAfterMpv()), 1800); }
     return;
   }
   ended = 0; box.classList.remove('lost');

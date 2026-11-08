@@ -50,13 +50,39 @@
     ['gamma', 'Gamma', 'gamma', 'linear-gradient(90deg,#08080b,#9a9aa6 70%,#fff)'],
     ['hue', 'Hue', 'hue', 'linear-gradient(90deg,#ff5d5d,#ffd24a,#5ddc7d,#4ac8ff,#8a6bff,#ff5dc8,#ff5d5d)'],
   ];
-  // your Nitrate presets (from ~/.config/mpv/scripts/nitrate_presets.lua)
+  // Looks. mpv's equalizer runs -100..100; these are deliberately small moves (big ones crush blacks or clip highlights).
+  //  - Reference: the picture as mastered (the idea behind TVs' Filmmaker Mode). Right for good HDR and well-graded films.
+  //  - Film: a touch deeper mid-tones and contrast, like gamma 2.4 for a dim room, without crushing shadows.
+  //  - Dark room: richer blacks for a dark room at night. Bright room: lifts shadows and adds punch against daylight glare.
+  //  - Shadow detail: opens up murky, dark-graded streaming encodes (the "I can't see anything" episodes), with debanding.
+  //  - Animation: cleaner, more saturated flat colours, debanded (gradients in anime band easily).
+  //  - Restore: older or washed-out transfers get back contrast and colour. Vivid: showroom pop, for fun.
+  // Your own presets from nitrate_presets.lua stay too.
+  const P = (brightness, contrast, saturation, gamma, extra = {}) => ({ brightness, contrast, saturation, gamma, hue: 0, ...extra });
   const PRESETS = {
-    'Vibrant Anime': [{ brightness: -5, contrast: 24, saturation: 26, gamma: -3, hue: 0 }, 'linear-gradient(135deg,#ff5d73,#ffb84a 45%,#4aa8ff)'],
-    'Shadow Lift': [{ brightness: 0, contrast: 22, saturation: 22, gamma: 5, hue: 0 }, 'linear-gradient(135deg,#0b0b12,#3a4a6c 55%,#d9b27a)'],
-    'Cinephile Pop': [{ brightness: -2, contrast: 14, saturation: 12, gamma: -1, hue: 0 }, 'linear-gradient(135deg,#0d2230,#3a5a6c 55%,#c98a52)'],
-    Neutral: [{ brightness: 0, contrast: 0, saturation: 0, gamma: 0, hue: 0 }, 'linear-gradient(135deg,#2d2d36,#4a4a56)'],
+    Reference: [P(0, 0, 0, 0, { deband: 'no' }), 'linear-gradient(135deg,#2a2a31,#55555f)', 'As mastered. Best for good HDR and well-graded films.'],
+    Film: [P(-1, 5, 2, -4), 'linear-gradient(135deg,#0e1218,#4b4a58 60%,#c9a77c)', 'Deeper mid-tones for a dim room, shadows kept.'],
+    'Dark room': [P(-3, 7, 0, -6), 'linear-gradient(135deg,#050507,#1d2232 60%,#6d7591)', 'Richer blacks for watching at night.'],
+    'Bright room': [P(4, 8, 7, 8), 'linear-gradient(135deg,#6d7b8a,#d6dee6 60%,#fff6dc)', 'Lifts shadows and adds punch against daylight.'],
+    'Shadow detail': [P(3, -3, 2, 12, { deband: 'yes' }), 'linear-gradient(135deg,#0a0c12,#2f3a55 55%,#8fa3c9)', 'Opens up dark, murky streaming encodes.'],
+    Animation: [P(0, 8, 14, -2, { deband: 'yes' }), 'linear-gradient(135deg,#ff6b8b,#ffc35c 45%,#5cb7ff)', 'Clean, saturated flat colours; no banding.'],
+    Restore: [P(-2, 14, 10, -4), 'linear-gradient(135deg,#3d2f22,#8e6e4f 55%,#e8d2a8)', 'Brings back contrast and colour to older transfers.'],
+    Vivid: [P(0, 12, 18, -2), 'linear-gradient(135deg,#00b4a6,#5b6cff 50%,#ff4fa3)', 'Showroom pop. Not accurate, just fun.'],
+    'Vibrant Anime': [P(-5, 24, 26, -3), 'linear-gradient(135deg,#ff5d73,#ffb84a 45%,#4aa8ff)', 'Your preset.'],
+    'Shadow Lift': [P(0, 22, 22, 5), 'linear-gradient(135deg,#0b0b12,#3a4a6c 55%,#d9b27a)', 'Your preset.'],
+    'Cinephile Pop': [P(-2, 14, 12, -1), 'linear-gradient(135deg,#0d2230,#3a5a6c 55%,#c98a52)', 'Your preset.'],
   };
+  PRESETS.Neutral = PRESETS.Reference; // older code paths reset to "Neutral"
+  // which look fits what's playing (from its genres; HDR sources stay on Reference)
+  let suggested = '';
+  function suggest(genres = [], hdr = false) {
+    const g = genres.map((x) => x.toLowerCase());
+    if (hdr) return 'Reference';
+    if (g.some((x) => x.includes('anim'))) return 'Animation';
+    if (g.some((x) => /horror|thriller|crime|mystery/.test(x))) return 'Shadow detail';
+    if (g.some((x) => /documentary|history/.test(x))) return 'Reference';
+    return 'Film';
+  }
   // render quality: the same options mpv's own `fast` and `high-quality` profiles set (from mpv's builtin.conf), plus your mpv.conf as "Balanced"
   const RENDER = {
     Performance: [{ scale: 'bilinear', cscale: 'bilinear', dscale: 'bilinear', 'correct-downscaling': 'no', 'linear-downscaling': 'no', 'sigmoid-upscaling': 'no', dither: 'no', 'hdr-compute-peak': 'no' }, 'bilinear', 'mpv “fast”: cheapest scaling, no dithering. For battery or a busy Mac.'],
@@ -80,7 +106,7 @@
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
   const ASPECTS = [['Auto', '-1', 0], ['16:9', '16:9', 0], ['4:3', '4:3', 0], ['2.35:1', '2.35:1', 0], ['Fill', '-1', 1]];
   const TONE = ['auto', 'bt.2390', 'hable', 'mobius', 'reinhard'];
-  const TABS = [['pic', 'Picture', I.pic], ['audio', 'Audio', I.audio], ['subs', 'Subtitles', I.subs], ['play', 'Playback', I.gauge], ['info', 'Info', I.info]];
+  const TABS = [['pic', 'Picture', I.pic], ['audio', 'Audio', I.audio], ['subs', 'Subtitles', I.subs], ['play', 'Playback', I.gauge]];
 
   const root = document.createElement('div');
   root.id = 'ihp'; root.hidden = true;
@@ -107,18 +133,20 @@
           <button class="ihp-sp" data-a="speed" title="Speed ([ and ])">1×</button><i class="sep"></i>
           <button class="ihp-ib" data-a="chaps" title="Chapters (H)" hidden>${I.list}</button>
           <button class="ihp-ib" data-a="tab:subs" title="Subtitles (C)">${I.subs}</button><button class="ihp-ib" data-a="tab:audio" title="Audio (A)">${I.audio}</button>
-          <button class="ihp-ib" data-a="tab:pic" title="Picture (P)">${I.pic}</button><button class="ihp-ib" data-a="tab:info" title="About this title (I)">${I.info}</button><i class="sep"></i>
+          <button class="ihp-ib" data-a="tab:pic" title="Picture (P)">${I.pic}</button><i class="sep"></i>
           <button class="ihp-ib" data-a="pip" title="Picture in picture (W)">${I.pip}</button>
           <button class="ihp-ib ihp-fs" data-a="fs" title="Full screen (F)"><span class="i-enter">${I.enter}</span><span class="i-exit">${I.exit}</span></button>
         </div>
       </div>
     </div>
+    <section class="ihp-pinfo" aria-hidden="true"></section>
     <aside class="ihp-panel">
       <div class="ihp-tabs"><i class="ind"></i>${TABS.map(([k, l, ic]) => `<button data-tab="${k}">${ic}<span>${l}</span></button>`).join('')}</div>
       <div class="ihp-pages">
         <div class="pg" data-pg="pic">
-          <h4>Looks</h4><div class="presets" data-presets>${Object.entries(PRESETS).map(([k, [, sw]]) => `<button data-preset="${k}" style="--sw:${sw}">${k}</button>`).join('')}</div>
-          <h4>Adjust<button data-a="resetpic">Reset</button></h4>${PICTURE.map(([k, l, ic, trk]) => slider(k, l, -100, 100, 1, ic, trk)).join('')}
+          <h4>Looks<button data-a="resetpic">Reset</button></h4><div class="presets lk" data-presets>${Object.entries(PRESETS).filter(([k]) => k !== 'Neutral').map(([k, [, sw, d]]) => `<button data-preset="${k}" title="${d}"><i style="background:${sw}"></i><span>${k}</span></button>`).join('')}</div>
+          <div class="ihp-note lk-note" data-lnote></div>
+          <details class="ft"><summary>Fine-tune<span data-ftsum></span></summary>${PICTURE.map(([k, l, ic, trk]) => slider(k, l, -100, 100, 1, ic, trk)).join('')}</details>
           <h4>Render quality</h4><div class="chips" data-render>${Object.keys(RENDER).map((k) => `<button data-render="${k}">${k}</button>`).join('')}</div><div class="ihp-note" data-rnote></div>
           <h4>Shaders</h4><div class="chips" data-shaders>${Object.keys(SHADERS).map((k) => `<button data-shader="${k}">${k}</button>`).join('')}</div><div class="ihp-note" data-snote></div>
           <h4>Quality</h4>
@@ -180,18 +208,19 @@
   function ripple(side, label) { const el = q('.ihp-skip.' + side); q('span', el).textContent = label; el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); }
 
   let idleT = 0;
-  function wake() { root.classList.add('ui'); clearTimeout(idleT); idleT = setTimeout(() => { if (!panelOpen() && !dragging && !hoverUI) root.classList.remove('ui'); }, 3000); }
+  function wake() { hidePaused(); if (b('pause')) showPaused(); root.classList.add('ui'); clearTimeout(idleT); idleT = setTimeout(() => { if (!panelOpen() && !dragging && !hoverUI) root.classList.remove('ui'); }, 3000); }
   let hoverUI = false;
 
   // ---------- state -> UI ----------
   let lastMi = '', lastTags = '', dragging = false, dragT = 0, lastPos = 0, lastAt = 0, lastTracks = '', playing = false, chapKey = '';
   function paintStatic() {
     const paused = b('pause');
+    if (paused !== root.classList.contains('paused')) { if (paused) { buildPaused(); showPaused(); } else hidePaused(); }
     root.classList.toggle('paused', paused);
     root.classList.toggle('buf', b('paused-for-cache'));
     const v = n('volume', 100), muted = b('mute') || v === 0;
     const mi = muted ? I.mute : v < 50 ? I.vol1 : I.vol; if (mi !== lastMi) { lastMi = mi; q('[data-a=mute]').innerHTML = mi; }
-    const ti = S['media-title'] || ''; if (q('.ihp-title').textContent !== ti) q('.ihp-title').textContent = ti;
+    let ti = S['media-title'] || ''; if (!ti || /^https?:|requestdl|token=|[?&]\w+=/.test(ti)) ti = window.__ihpTitle || ti.replace(/[?#].*$/, '').split('/').pop(); if (q('.ihp-title').textContent !== ti) q('.ihp-title').textContent = ti;
     const tags = [];
     if (n('width')) tags.push([n('height') >= 2000 || n('width') >= 3600 ? '4K' : n('height') + 'p', true]);
     if (S['hwdec-current'] && S['hwdec-current'] !== 'no') tags.push(['Hardware decode']);
@@ -212,7 +241,10 @@
     const sc = S.scale || ''; let rn = '';
     qa('[data-render]').forEach((x) => { if (!x.dataset.render) return; const on = RENDER[x.dataset.render][1] === sc; x.classList.toggle('on', on); if (on) rn = RENDER[x.dataset.render][2]; });
     const rnote = q('[data-rnote]'); if (rnote && rnote.textContent !== rn) rnote.textContent = rn;
-    for (const x of qa('[data-preset]')) { const p = PRESETS[x.dataset.preset][0]; x.classList.toggle('on', PICTURE.every(([k]) => Math.round(n(k)) === p[k])); }
+    let cur = '';
+    for (const x of qa('[data-preset]')) { const p = PRESETS[x.dataset.preset][0]; const on = PICTURE.every(([k]) => Math.round(n(k)) === p[k]); x.classList.toggle('on', on); x.classList.toggle('sug', x.dataset.preset === suggested); if (on && !cur) cur = x.dataset.preset; }
+    const ln = q('[data-lnote]'); if (ln) ln.textContent = cur ? PRESETS[cur][2] : 'Custom: adjusted by hand.';
+    const fs = q('[data-ftsum]'); if (fs) fs.textContent = PICTURE.filter(([k]) => Math.round(n(k))).map(([k, l]) => `${l} ${n(k) > 0 ? '+' : ''}${Math.round(n(k))}`).slice(0, 3).join(' · ');
     root.classList.toggle('fs', fsNow());
   }
   const fsNow = () => !!document.fullscreenElement || (window.innerHeight >= screen.height - 2 && window.innerWidth >= screen.width - 2);
@@ -272,6 +304,38 @@
     requestAnimationFrame(frame);
   }
 
+  // ---------- paused info: what's on screen when you pause and leave the mouse still ----------
+  // Instead of a still frame: the title, what it's about, who's in it and what people think, laid over a dimmed picture.
+  // It appears after ~4 s of a paused, untouched player and leaves at the first mouse move, key or play.
+  let pinfoFor = '', pinfoT = 0;
+  async function buildPaused() {
+    const title = S['media-title'] || ''; if (title === pinfoFor) return; pinfoFor = title;
+    const el = q('.ihp-pinfo'); el.innerHTML = '';
+    try {
+      const d = await (await fetch('/api/info/now')).json(); if (d.error) return;
+      const rt = d.runtime ? `${Math.floor(d.runtime / 60)}h ${String(d.runtime % 60).padStart(2, '0')}m` : '';
+      const left = Math.max(0, n('duration') - n('time-pos')), lm = Math.round(left / 60);
+      const rv = (d.reviews || []).find((x) => x.text && x.text.length > 80);
+      el.innerHTML = `<div class="pi-wrap">
+        <div class="pi-k">Paused${lm ? ` · ${lm >= 60 ? `${Math.floor(lm / 60)}h ${String(lm % 60).padStart(2, '0')}m` : `${lm}m`} left` : ''}</div>
+        <h2>${esc(d.title)}</h2>
+        <div class="pi-m">${esc([d.year, rt, ...(d.genres || []).slice(0, 3)].filter(Boolean).join(' · '))}${d.rating ? ` <span class="pi-r">${I.star}${d.rating.score}</span>` : ''}</div>
+        ${d.tagline ? `<p class="pi-t">“${esc(d.tagline)}”</p>` : ''}
+        <p class="pi-o">${esc(d.overview)}</p>
+        ${d.directors?.length ? `<div class="pi-d">Directed by <b>${esc(d.directors.join(', '))}</b></div>` : ''}
+        ${(d.cast || []).length ? `<div class="pi-cast">${d.cast.slice(0, 6).map((c) => `<div><i>${c.photo ? `<img src="${esc(c.photo)}" alt="" draggable="false">` : esc(c.name[0])}</i><b>${esc(c.name)}</b><small>${esc(c.character)}</small></div>`).join('')}</div>` : ''}
+        ${rv ? `<blockquote class="pi-q">“${esc(rv.text.slice(0, 260))}${rv.text.length > 260 ? '…' : ''}” <cite>${esc(rv.author)}${rv.rating != null ? ` · ${rv.rating}/10` : ''}</cite></blockquote>` : ''}
+      </div>`;
+    } catch {}
+  }
+  function showPaused(now = false) {
+    clearTimeout(pinfoT);
+    const ok = () => b('pause') && !panelOpen() && !dragging && root.classList.contains('paused') && q('.ihp-pinfo').innerHTML;
+    if (now) { buildPaused().then(() => { if (b('pause')) root.classList.add('pinfo'); }); return; }
+    pinfoT = setTimeout(() => { buildPaused().then(() => { if (ok() && !root.classList.contains('ui')) root.classList.add('pinfo'); }); }, 4000);
+  }
+  const hidePaused = () => { clearTimeout(pinfoT); root.classList.remove('pinfo'); };
+
   // ---------- info (cast, details, what people think) ----------
   let infoState = '';
   async function loadInfo() {
@@ -316,12 +380,19 @@
     if (!quiet) hud(I.pic, name === 'Off' ? 'Shaders off' : name + ' shaders');
   }
   function applyPicture(vals) { for (const [k, v] of Object.entries(vals)) { set(k, v); S[k] = v; } savePicture(); paintStatic(); }
+  // the suggestion comes from what's playing (genres via the title info); fetched once per title
+  let sugFor = '';
+  async function loadSuggestion() {
+    const title = S['media-title'] || ''; if (!title || title === sugFor) return; sugFor = title;
+    try { const d = await (await fetch('/api/info/now')).json(); const hdr = /hdr|dolby|dv\b/i.test(q('.ihp-tags')?.textContent || ''); suggested = suggest(d.genres || [], hdr); paintStatic(); } catch {}
+  }
   const savePicture = () => { try { localStorage.setItem('ihp.pic', JSON.stringify(Object.fromEntries(PICTURE.map(([k]) => [k, n(k)])))); } catch {} };
   const panelOpen = () => root.classList.contains('pn');
   function tab(name) {
     root.classList.add('pn'); wake();
     const i = Math.max(0, TABS.findIndex((t) => t[0] === name));
     q('.ind').style.transform = `translateX(${i * 100}%)`; q('.ihp-panel').dataset.t = name;
+    if (name === 'pic') loadSuggestion();
     qa('[data-tab]').forEach((x) => x.classList.toggle('on', x.dataset.tab === name));
     qa('.pg').forEach((x) => x.classList.toggle('on', x.dataset.pg === name));
     if (name === 'info') loadInfo();
@@ -394,7 +465,7 @@
   const trk = q('.trk'), tip = q('.tip');
   const ratioAt = (e) => { const r = trk.getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); };
   const tipText = (t) => { const c = chapterAt(t); return fmt(t) + (c && c.title ? '  ·  ' + c.title : ''); };
-  trk.addEventListener('pointermove', (e) => { const r = ratioAt(e), t = r * n('duration'); tip.style.left = Math.min(Math.max(r * 100, 6), 94) + '%'; tip.textContent = tipText(t); if (dragging) { dragT = t; paintTime(dragT); } });
+  trk.addEventListener('pointermove', (e) => { const r = ratioAt(e), t = r * n('duration'); tip.style.left = Math.min(Math.max(r * 100, 6), 94) + '%'; tip.textContent = tipText(t); if (dragging) { dragT = t; paintTime(dragT); const now = performance.now(); if (now - (window.__ihpScrubAt || 0) > 180) { window.__ihpScrubAt = now; cmd('seek', Math.max(0, t), 'absolute+keyframes'); } } }); // live preview while dragging: fast keyframe seeks; the exact seek happens on release
   trk.addEventListener('pointerdown', (e) => { trk.setPointerCapture(e.pointerId); dragging = true; trk.classList.add('drag'); dragT = ratioAt(e) * n('duration'); paintTime(dragT); });
   trk.addEventListener('pointerup', () => { if (!dragging) return; dragging = false; trk.classList.remove('drag'); seekTo(dragT); lastPos = dragT; lastAt = performance.now(); });
 
@@ -425,7 +496,7 @@
       case 'c': panelOpen() && currentTab() === 'subs' ? closePanel() : tab('subs'); break;
       case 'a': panelOpen() && currentTab() === 'audio' ? closePanel() : tab('audio'); break;
       case 'h': actions.chaps(); break;
-      case 'i': panelOpen() && currentTab() === 'info' ? closePanel() : tab('info'); break;
+      case 'i': showPaused(true); break; // show the paused info card now
       case 'q': actions.close(); break;
       case 'Escape': panelOpen() ? closePanel() : root.classList.contains('pip') ? actions.pip() : fsNow() ? actions.fs() : actions.close(); break;
       default: used = false;

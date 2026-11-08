@@ -127,6 +127,7 @@ export default async function profile(el, params = {}) {
       ${section('Films and shows', '', `<div class="pf-split"><i style="width:${share}%"></i></div><div class="pf-leg"><span><u class="a"></u>Films · ${filmH.toFixed(1)} h</span><span><u class="b"></u>Shows · ${tvH.toFixed(1)} h</span></div><div id="pfGenres"></div>`)}
     </div>
 
+    ${fid ? '' : section('Your taste', 'What your picks are built from · <a href="#/taste">Open Taste Lab</a>', '<div id="pfTaste" class="tz"><p class="pf-empty">Reading your taste…</p></div>')}
     ${section('Favourites', fid ? 'Rated 4 or 5 stars' : 'Everything you rated 4 or 5 stars', favs.length ? `<div class="pf-row">${favs.slice(0, 14).map((r) => card(r, stars(r.rating))).join('')}</div>` : empty(fid ? 'No favourites yet.' : 'Rate something 4 or 5 stars and it lands here.'))}
 
     <div class="pf-two">
@@ -142,6 +143,25 @@ export default async function profile(el, params = {}) {
     <p class="pf-note">${fid ? 'Hours count how far they got in each film or episode once.' : "Hours count how far you got in each film or episode once, so rewatches don't add up. Until now IronHide only kept your last 100 plays, so older watching isn't counted. From here on it keeps 5,000. Friends can see this page: you can turn that off in Settings, Together."}</p>`;
 
   $('#pfRm', el)?.addEventListener('click', async () => { if (!confirm(`Remove ${buddy.name} from your friends?`)) return; await fetch(`/api/social/friends/${encodeURIComponent(fid)}`, { method: 'DELETE' }); location.hash = '#/friends'; });
+  // taste profile (from what you watch and rate): computed by the recommendation engine
+  if (!fid) api('/api/taste').then((t) => {
+    const tz = $('#pfTaste', el); if (!tz) return;
+    if (t.error) { tz.innerHTML = `<p class="pf-empty">${esc(t.error)}</p>`; return; }
+    const max = Math.max(...(t.genres || []).map((g) => g.score), 0.01);
+    const chips = (list) => list.map((x) => `<span>${esc(x.name)}</span>`).join('');
+    tz.innerHTML = `
+      <div class="tz-top"><div class="tz-meter"><b>${t.strength}%</b><small>taste known</small><i><u style="width:${t.strength}%"></u></i></div>
+        <p>Built from <b>${t.watched}</b> titles you watched${t.rated ? ` and <b>${t.rated}</b> you rated (avg ${t.avgRating}★)` : ''}. You lean toward <b>${t.leaning === 'both' ? 'films and series equally' : t.leaning}</b>.${t.rated < 10 ? ' Rating more titles makes your picks sharper.' : ''}</p></div>
+      <div class="tz-grid">
+        <div><h4>Genres you love</h4>${(t.genres || []).map((g) => `<div class="tz-bar"><span>${esc(g.name)}</span><i><u style="width:${Math.round((g.score / max) * 100)}%"></u></i></div>`).join('') || '<p class="pf-empty">Not enough yet.</p>'}
+          ${t.avoid?.length ? `<h4 class="tz-sub">Less your thing</h4><div class="tz-chips dim">${chips(t.avoid)}</div>` : ''}</div>
+        <div><h4>Themes that pull you in</h4><div class="tz-chips">${chips(t.themes || [])}</div>
+          <h4 class="tz-sub">People you follow</h4><div class="tz-chips">${chips(t.people || [])}</div>
+          ${t.languages?.length ? `<h4 class="tz-sub">Languages</h4><div class="tz-chips">${chips(t.languages)}</div>` : ''}
+          ${t.decades?.length ? `<h4 class="tz-sub">Eras</h4><div class="tz-chips">${chips(t.decades)}</div>` : ''}</div>
+      </div>
+      ${t.favourites?.length ? `<h4 class="tz-sub">Shaping your picks most</h4><div class="tz-favs">${t.favourites.map((f) => `<a href="#/title/${f.type}/${f.imdbId}"><i style="background-image:url('${esc(f.poster)}')"></i><span>${esc(f.title)}</span>${f.rating ? `<em>${'★'.repeat(f.rating)}</em>` : ''}</a>`).join('')}</div>` : ''}`;
+  }).catch(() => {});
   // release dates and genres come from the catalog, so they arrive a moment later
   (fid ? Promise.resolve({ upcoming: data.upcoming || [], genres: data.genres || [] }) : api('/api/profile/meta')).then((m) => {
     const next = $('#pfNext', el), g = $('#pfGenres', el); if (!next) return;
