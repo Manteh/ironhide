@@ -1,11 +1,11 @@
 #!/bin/bash
 # Install or update IronHide in one line:
-#   curl -fsSL https://raw.githubusercontent.com/Manteh/ironhide/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Manteh/ironhide-app/HEAD/install.sh | bash
 # Downloads the latest release from GitHub, puts IronHide.app in /Applications (or ~/Applications), and opens it.
 # Everything it needs (Node, the mpv player, ffmpeg) is inside the app: nothing else gets installed.
 set -euo pipefail
 
-REPO="Manteh/ironhide"
+REPO="Manteh/ironhide-app"
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() { printf '\033[31m%s\033[0m\n' "$*" >&2; exit 1; }
 

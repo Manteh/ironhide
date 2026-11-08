@@ -231,10 +231,10 @@ flowchart LR
 One line in Terminal. Everything it needs (Node, the mpv player, ffmpeg) is inside the app, so nothing else gets installed:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Manteh/ironhide/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Manteh/ironhide-app/HEAD/install.sh | bash
 ```
 
-Or download `IronHide-…-arm64.zip` from [Releases](https://github.com/Manteh/ironhide/releases/latest), unzip it and drag **IronHide** into Applications. Run the same line again to update.
+Or download `IronHide-…-arm64.zip` from [Releases](https://github.com/Manteh/ironhide-app/releases/latest), unzip it and drag **IronHide** into Applications. Run the same line again to update.
 
 Then add two keys in **Settings → Connectors**: a debrid account (TorBox recommended) for instant streams, and a free [TMDB key](https://www.themoviedb.org/settings/api) for recommendations, search and charts.
 
@@ -247,7 +247,7 @@ Then add two keys in **Settings → Connectors**: a debrid account (TorBox recom
 You need Node 20+, Rust with `tauri-cli`, and Homebrew `mpv` and `ffmpeg` (only on the Mac that builds).
 
 ```bash
-git clone https://github.com/Manteh/ironhide && cd ironhide
+git clone https://github.com/Manteh/ironhide-app && cd ironhide-app
 npm install
 cd mac && cargo tauri dev       # run from source
 ./scripts/release.sh            # self-contained app + zip in dist/
