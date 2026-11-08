@@ -1,0 +1,14 @@
+# Hosts only the relay: friends, rooms, chat and sync messages. No video, no accounts, no ffmpeg.
+# Everyone runs IronHide on their own Mac with their own TorBox key.
+services:
+  - type: web
+    name: ironhide-relay
+    runtime: node
+    rootDir: relay
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: RELAY_DIRECTORY   # "People here" list so members add each other by name
+        value: "1"

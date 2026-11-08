@@ -25,6 +25,10 @@ When the user says "play on TV", "cast to TV", "put on the big screen", use `iro
 
 The IronHide TizenBrew app (`~/ironhide-tv/`) runs on the Samsung TV and plays streams natively via AVPlayer. The MCP server runs a WebSocket bridge on port 8787 that the TV app connects to. When connected, `ironhide_cast_tv` sends the RD direct URL to the TV — no proxy, no DLNA, full codec support including HEVC/DTS-HD/DV, and real seeking.
 
+## Daemon and web app
+
+One local daemon (`src/daemon.js`, http://localhost:7676) owns the web app, tool handlers (`src/tools.js`), mpv monitor and TV bridge. The MCP server is a thin client that auto-starts it. Debrid is **TorBox** (key in `~/.config/ironhide/config.json`, imported from nitrate); streams come from Torrentio + Comet. Web UI lives in `web/` (vanilla ES modules, no build step): Home, Library, Search, Title, and Settings (profile, appearance, playback, connectors, nodes).
+
 ## Rules
 
 ### Never assume playback state

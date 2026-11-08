@@ -51,6 +51,9 @@ async function setProperty(name, value) {
   return sendCommand(['set_property', name, value]);
 }
 
+export const getProp = (name) => getProperty(name);
+export const setProp = (name, value) => setProperty(name, value);
+
 // ── Status ──
 
 export async function getNowPlaying() {
@@ -208,7 +211,7 @@ export function isMpvRunning() {
   try {
     const client = connect(SOCKET_PATH);
     return new Promise((resolve) => {
-      client.setTimeout(500);
+      client.setTimeout(2000); // mpv is slow to answer while it decodes 4K
       client.on('connect', () => { client.end(); resolve(true); });
       client.on('error', () => { resolve(false); });
       client.on('timeout', () => { client.end(); resolve(false); });

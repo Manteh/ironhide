@@ -1,5 +1,5 @@
 {
-  "name": "IronHide",
+  "name": "ironhide",
   "version": "1.0.0",
   "type": "module",
   "bin": {
@@ -13,5 +13,9 @@
     "ws": "^8.20.0",
     "yargs": "^17.7.2",
     "zod": "^3.25.76"
+  },
+  "scripts": {
+    "start": "node src/daemon.js",
+    "relay": "node relay/server.js"
   }
 }

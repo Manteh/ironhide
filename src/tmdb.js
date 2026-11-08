@@ -1,9 +1,10 @@
-import { TMDB_API_KEY as API_KEY } from './config.js';
+import { getConfig } from './config.js';
+const key = () => getConfig().tmdb_api_key;
 const BASE = 'https://api.themoviedb.org/3';
 
 export async function searchMedia(query, type = 'movie') {
   const endpoint = type === 'tv' ? 'search/tv' : 'search/movie';
-  const res = await fetch(`${BASE}/${endpoint}?api_key=${API_KEY}&query=${encodeURIComponent(query)}`);
+  const res = await fetch(`${BASE}/${endpoint}?api_key=${key()}&query=${encodeURIComponent(query)}`);
   const data = await res.json();
 
   if (!data.results || data.results.length === 0) return [];
@@ -19,13 +20,13 @@ export async function searchMedia(query, type = 'movie') {
 
 export async function getImdbId(tmdbId, type = 'movie') {
   const mediaType = type === 'tv' ? 'tv' : 'movie';
-  const res = await fetch(`${BASE}/${mediaType}/${tmdbId}/external_ids?api_key=${API_KEY}`);
+  const res = await fetch(`${BASE}/${mediaType}/${tmdbId}/external_ids?api_key=${key()}`);
   const data = await res.json();
   return data.imdb_id || null;
 }
 
 export async function getLatestEpisode(tmdbId) {
-  const res = await fetch(`${BASE}/tv/${tmdbId}?api_key=${API_KEY}`);
+  const res = await fetch(`${BASE}/tv/${tmdbId}?api_key=${key()}`);
   const data = await res.json();
   const ep = data.last_episode_to_air;
   if (!ep) return null;

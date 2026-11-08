@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>IronHide</title>
+<style>
+  html,body{margin:0;height:100%;background:#0d0d0e;color:#e9e9ea;font:14px -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+  main{height:100%;display:grid;place-content:center;justify-items:center;gap:18px}
+  h1{margin:0;font-size:22px;font-weight:600;letter-spacing:.02em}
+  .bar{width:140px;height:2px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}
+  .bar i{display:block;width:40%;height:100%;background:#e9e9ea;border-radius:2px;animation:slide 1.1s cubic-bezier(.45,0,.25,1) infinite}
+  @keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(350%)}}
+  p{margin:0;color:#8c8c90;max-width:420px;text-align:center;line-height:1.5}
+  .err .bar{display:none} .err h1{color:#ff8a80}
+</style></head>
+<body><main id="m"><h1>IronHide</h1><div class="bar"><i></i></div><p id="s">Starting…</p></main>
+<script>
+  window.__ihStatus = (t) => { document.getElementById('s').textContent = t; };
+  window.__ihError = (t) => { document.getElementById('m').classList.add('err'); document.querySelector('h1').textContent = 'IronHide could not start'; document.getElementById('s').textContent = t; };
+</script></body></html>

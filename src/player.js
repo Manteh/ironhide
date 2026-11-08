@@ -1,11 +1,47 @@
 import { spawn } from 'child_process';
 import { readFile, unlink } from 'fs/promises';
+import { unlinkSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { tmpdir } from 'os';
+import net from 'net';
 import { fileURLToPath } from 'url';
+import { getProp, setProp, isMpvRunning as ipcRunning } from './mpv-ipc.js';
+import { getSettings, STREAM_LANGS } from './settings.js';
+import { setPlayState, getPlayState } from './playstate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LUA_SCRIPT = join(__dirname, 'mpv-progress.lua');
+const MPV_BIN = '/Applications/mpv.app/Contents/MacOS/mpv';
+
+// When the IronHide Mac app is open it plays in its own window (libmpv). Same mpv options, progress script and
+// IPC socket as the external player; falls through to the external mpv when the app is not running.
+const APP_SOCK = '/tmp/ironhide-app.sock';
+function appRunning() {
+  return new Promise((resolve) => {
+    const s = net.createConnection(APP_SOCK);
+    s.once('connect', () => { s.destroy(); resolve(true); });
+    s.once('error', () => resolve(false));
+  });
+}
+function playInApp(url, args, env) {
+  return new Promise((resolve) => {
+    const sock = net.createConnection(APP_SOCK);
+    let started = false, buf = '';
+    sock.once('error', () => resolve(started ? { status: 'done', progress: null } : null));
+    sock.on('connect', () => sock.write(JSON.stringify({ url, args, env }) + '\n'));
+    sock.on('data', (d) => {
+      buf += d;
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        let ev; try { ev = JSON.parse(line); } catch { continue; }
+        if (ev.event === 'started') started = true;
+        if (ev.event === 'exit') { sock.destroy(); resolve({ status: 'done', progress: undefined }); }
+      }
+    });
+    sock.on('close', () => resolve(started ? { status: 'done', progress: undefined } : null));
+  });
+}
 
 async function resolveUrl(url) {
   const res = await fetch(url, { redirect: 'manual' });
@@ -39,11 +75,20 @@ function formatTime(seconds) {
   return `${m}m ${s}s`;
 }
 
+// The person's audio and subtitle languages, for mpv
+async function langArgs() {
+  const pb = (await getSettings()).playback, codes = (pb.audioLangs || []).flatMap((c) => STREAM_LANGS[c]?.iso || []);
+  const out = [`--alang=${[...new Set([...codes, 'eng', 'en', 'lit', 'lt', 'swe', 'sv'])].join(',')}`];
+  if (pb.subLang === 'off') out.push('--sid=no');
+  else if (STREAM_LANGS[pb.subLang]) out.push(`--slang=${STREAM_LANGS[pb.subLang].iso.join(',')}`);
+  return out;
+}
+
 export async function play(stream, subs = []) {
   const progressFile = PROGRESS_FILE;
   const subArgs = subs.flatMap(s => [`--sub-file=${s.path}`]);
   const ipcSocket = '/tmp/ironhide-mpv.sock';
-  const mpvArgs = ['--really-quiet', `--script=${LUA_SCRIPT}`, '--alang=eng,en,lit,lt,swe,sv', '--fullscreen=yes', `--input-ipc-server=${ipcSocket}`, ...subArgs];
+  const mpvArgs = ['--really-quiet', `--script=${LUA_SCRIPT}`, ...(await langArgs()), '--fullscreen=yes', `--input-ipc-server=${ipcSocket}`, ...subArgs];
 
   let proc;
 
@@ -51,7 +96,10 @@ export async function play(stream, subs = []) {
     const resolved = await resolveUrl(stream.url);
     if (!resolved.ready) return { status: 'not_cached' };
 
-    proc = spawn('/opt/homebrew/bin/mpv', [...mpvArgs, resolved.url], {
+    const viaApp = await playInApp(resolved.url, mpvArgs, { IRONHIDE_PROGRESS_FILE: progressFile });
+    if (viaApp) return { status: 'done', progress: await readProgress(progressFile) };
+
+    proc = spawn(MPV_BIN, [...mpvArgs, resolved.url], {
       stdio: 'inherit',
       env: { ...process.env, IRONHIDE_PROGRESS_FILE: progressFile },
     });
@@ -83,49 +131,150 @@ export async function play(stream, subs = []) {
   });
 }
 
-const PROGRESS_FILE = join(tmpdir(), 'ironhide-progress.json');
+const PROGRESS_FILE = '/tmp/ironhide-progress.json';
 
-export async function playDetached(stream, subs = [], onFinish, resumeFrom) {
+export function isMpvRunning() {
+  return new Promise(resolve => {
+    const p = spawn('pgrep', ['-x', 'mpv'], { stdio: 'ignore' });
+    p.on('exit', code => resolve(code === 0));
+    p.on('error', () => resolve(false));
+  });
+}
+
+function watchMpvProcess(progressFile, onFinish) {
+  let wasRunning = false;
+  const interval = setInterval(async () => {
+    const running = await isMpvRunning();
+    if (running && !wasRunning) wasRunning = true;
+    if (!running && wasRunning) {
+      clearInterval(interval);
+      await new Promise(r => setTimeout(r, 400));
+      const progress = await readProgress(progressFile);
+      if (onFinish) onFinish(progress);
+    }
+  }, 2000);
+  return interval;
+}
+
+// Write a shell script and run via osascript so mpv/webtorrent get macOS GUI session access.
+// Sets PATH so webtorrent can find mpv internally.
+// Uses 'sh scriptPath' to avoid needing chmod +x.
+function launchScript(lines) {
+  const scriptPath = '/tmp/ironhide-launch.sh';
+  writeFileSync(scriptPath, [
+    '#!/bin/sh',
+    'export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH',
+    ...lines,
+  ].join('\n') + '\n');
+  spawn('osascript', ['-e', `do shell script "sh '${scriptPath}'"`], { stdio: 'ignore' });
+}
+
+function sh(s) {
+  return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
+export async function playDetached(stream, subs = [], onFinish, resumeFrom, title) {
   const progressFile = PROGRESS_FILE;
-  const subArgs = subs.flatMap(s => [`--sub-file=${s.path}`]);
-  const resumeArgs = resumeFrom > 0 ? [`--start=${Math.floor(resumeFrom)}`] : [];
   const ipcSocket = '/tmp/ironhide-mpv.sock';
-  const mpvArgs = ['--really-quiet', `--script=${LUA_SCRIPT}`, '--alang=eng,en,lit,lt,swe,sv', '--fullscreen=yes', `--input-ipc-server=${ipcSocket}`, ...resumeArgs, ...subArgs];
-
-  let proc;
+  try { unlinkSync(ipcSocket); } catch {}
 
   if (stream.isRD && stream.url) {
     const res = await fetch(stream.url, { redirect: 'manual' });
-    const location = res.headers.get('location');
-    if (!location) return { status: 'not_cached', progressFile: null };
+    const location = res.headers.get('location') || (res.status < 300 ? stream.url : null);
+    if (!location) { setPlayState({ phase: 'error', detail: 'Stream is not available' }); return { status: 'not_cached', progressFile: null }; }
+    if (/failed_|error|denied/i.test(location)) { setPlayState({ phase: 'error', detail: 'Stream is not cached' }); return { status: 'not_cached', progressFile: null }; }
+    setPlayState({ phase: 'launching', detail: 'Starting the player' });
 
-    proc = spawn('/opt/homebrew/bin/mpv', [...mpvArgs, location], {
-      stdio: 'ignore',
-      env: { ...process.env, IRONHIDE_PROGRESS_FILE: progressFile },
-    });
+    const mpvArgs = [
+      '--really-quiet', `--script=${LUA_SCRIPT}`, ...(await langArgs()),
+      // open behind everything, paused, until the stream is buffered; then we reveal it
+      '--focus-on=never', '--pause', '--fullscreen=no',
+      // buffer far ahead and keep one connection for seeks (the in-app player sets the same; this is for the external mpv)
+      '--cache=yes', '--demuxer-seekable-cache=yes', '--demuxer-readahead-secs=120', '--demuxer-max-back-bytes=512MiB', '--cache-pause-wait=0.6',
+      '--stream-buffer-size=4MiB', '--demuxer-lavf-o=multiple_requests=1,reconnect=1,reconnect_streamed=1',
+      `--input-ipc-server=${ipcSocket}`,
+      ...(title ? [`--force-media-title=${title}`] : []),
+      ...(resumeFrom > 0 ? [`--start=${Math.floor(resumeFrom)}`] : []),
+      ...subs.map(x => `--sub-file=${x.path}`),
+      location,
+    ];
+    // The Mac app plays in its own window: hand the stream over instead of starting an external mpv.
+    if (await appRunning()) {
+      playInApp(location, mpvArgs.slice(0, -1), { IRONHIDE_PROGRESS_FILE: progressFile }).then(async () => {
+        await sleep(400);
+        if (onFinish) onFinish(await readProgress(progressFile));
+      });
+      presentWhenReady(getPlayState().token).catch((e) => { console.error('[player] showing mpv failed:', e.message); setPlayState({ phase: 'error', detail: 'The player did not start' }); });
+      return { status: 'playing', progressFile, cancel: () => {} };
+    }
+    launchScript([
+      `export IRONHIDE_PROGRESS_FILE=${sh(progressFile)}`,
+      `nohup /opt/homebrew/bin/mpv ${mpvArgs.map(sh).join(' ')} > /dev/null 2>&1 &`,
+    ]);
+
+    const interval = watchMpvProcess(progressFile, onFinish);
+    presentWhenReady(getPlayState().token).catch((e) => { console.error('[player] showing mpv failed:', e.message); setPlayState({ phase: 'error', detail: 'The player did not start' }); });
+    return { status: 'playing', progressFile, cancel: () => clearInterval(interval) };
+
   } else if (stream.magnet) {
-    proc = spawn('/opt/homebrew/bin/webtorrent', [stream.magnet, '--mpv'], {
-      stdio: 'ignore',
-    });
-    return { status: 'playing', progressFile: null };
+    const wtArgs = [stream.magnet, '--mpv'];
+    if (stream.fileIdx != null) wtArgs.push('--select', String(stream.fileIdx));
+    if (resumeFrom > 0) wtArgs.push('--player-args', `--start=${Math.floor(resumeFrom)}`);
+
+    launchScript([
+      `nohup /opt/homebrew/bin/webtorrent ${wtArgs.map(sh).join(' ')} > /dev/null 2>&1 &`,
+    ]);
+
+    const interval = watchMpvProcess(progressFile, onFinish);
+    return { status: 'playing', progressFile, cancel: () => clearInterval(interval) };
+
   } else if (stream.torrentLink) {
-    proc = spawn('/opt/homebrew/bin/webtorrent', [stream.torrentLink, '--mpv'], {
-      stdio: 'ignore',
-    });
-    return { status: 'playing', progressFile: null };
+    const tlArgs = [stream.torrentLink, '--mpv'];
+    if (stream.fileIdx != null) tlArgs.push('--select', String(stream.fileIdx));
+    if (resumeFrom > 0) tlArgs.push('--player-args', `--start=${Math.floor(resumeFrom)}`);
+
+    launchScript([
+      `nohup /opt/homebrew/bin/webtorrent ${tlArgs.map(sh).join(' ')} > /dev/null 2>&1 &`,
+    ]);
+
+    const interval = watchMpvProcess(progressFile, onFinish);
+    return { status: 'playing', progressFile, cancel: () => clearInterval(interval) };
+
   } else {
     return { status: 'error', progressFile: null };
   }
-
-  // Monitor exit — fires when user closes mpv
-  proc.on('exit', async () => {
-    // Small delay to let Lua script finish writing
-    await new Promise(r => setTimeout(r, 200));
-    const progress = await readProgress(progressFile);
-    if (onFinish) onFinish(progress);
-  });
-
-  return { status: 'playing', progressFile };
 }
 
 export { readProgress, formatTime };
+
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Wait until mpv has the file open and a few seconds buffered, then unpause,
+// go fullscreen and raise the window so the hand-over is seamless.
+export async function presentWhenReady(token) {
+  const t0 = Date.now();
+  const stale = () => getPlayState().token !== token || getPlayState().phase === 'idle';
+  let seenWindow = false;
+  while (Date.now() - t0 < 60000) {
+    await sleep(500);
+    if (stale()) return;
+    if (!ipcRunning()) { if (Date.now() - t0 > 12000) break; continue; }
+    seenWindow = true;
+    const dur = await getProp('duration').catch(() => null);
+    if (!(dur > 0)) continue;
+    setPlayState({ phase: 'buffering', detail: 'Buffering' });
+    const [cache, pos] = await Promise.all([getProp('demuxer-cache-time').catch(() => 0), getProp('time-pos').catch(() => 0)]);
+    if ((cache || 0) - (pos || 0) >= 3 || Date.now() - t0 > 35000) break;
+  }
+  if (stale()) return;
+  if (!seenWindow || !ipcRunning()) { setPlayState({ phase: 'error', detail: 'The player did not start' }); return; }
+  setPlayState({ phase: 'playing', detail: 'Opening fullscreen' });
+  await setProp('fullscreen', true).catch(() => {});
+  await setProp('pause', false).catch(() => {});
+  // bring to front: toggling ontop raises the window without needing extra permissions
+  await setProp('ontop', true).catch(() => {});
+  await sleep(250);
+  await setProp('ontop', false).catch(() => {});
+  setTimeout(() => { if (getPlayState().token === token && getPlayState().phase === 'playing') setPlayState({ detail: 'Playing' }); }, 1200);
+}

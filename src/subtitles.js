@@ -1,6 +1,7 @@
 import { writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { getSettings, STREAM_LANGS } from './settings.js';
 
 const BASE = 'https://opensubtitles-v3.strem.io';
 const LANGS = ['lit', 'eng', 'swe'];
@@ -21,7 +22,8 @@ export async function fetchSubtitles(imdbId, season, episode) {
 
   // Download first available subtitle for each preferred language
   const subPaths = [];
-  for (const lang of LANGS) {
+  const mine = STREAM_LANGS[(await getSettings()).playback.subLang]?.iso[0];
+  for (const lang of mine ? [mine, ...LANGS.filter((l) => l !== mine)] : LANGS) {
     const sub = data.subtitles.find(s => s.lang === lang);
     if (!sub?.url) continue;
 

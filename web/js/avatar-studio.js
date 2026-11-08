@@ -1,0 +1,90 @@
+// Avatar studio: photo upload, shapes, gradient faces, frames, one-click looks. Edits `av` in place and calls onChange().
+import { DECOS } from './decorations.js';
+import { $, $$, esc, icon, avatar, AVATAR_ICONS, AVATAR_COLORS, AV_SHAPES, AV_FRAMES, toast } from './ui.js';
+
+const LOOKS = [
+  // Decoration looks: a circle face with a matching gradient, so the whole thing reads as one piece
+  { n: 'Heaven', deco: 'halo', shape: 'circle', frame: 'none', custom: true, ga: '#c7d2fe', gb: '#818cf8', angle: 160, fa: '#fde68a', fb: '#f59e0b' },
+  { n: 'Inferno', deco: 'flame', shape: 'circle', frame: 'none', custom: true, ga: '#7f1d1d', gb: '#1c0a0a', angle: 160, fa: '#ef4444', fb: '#fde047' },
+  { n: 'Glacier', deco: 'ice', shape: 'circle', frame: 'none', custom: true, ga: '#0c4a6e', gb: '#082f49', angle: 150, fa: '#7dd3fc', fb: '#e0f2fe' },
+  { n: 'Sakura', deco: 'blossom', shape: 'circle', frame: 'none', custom: true, ga: '#fbcfe8', gb: '#f472b6', angle: 140, fa: '#f9a8d4', fb: '#f472b6' },
+  { n: 'Grid', deco: 'cyber', shape: 'circle', frame: 'none', custom: true, ga: '#0f172a', gb: '#312e81', angle: 135, fa: '#22d3ee', fb: '#e879f9' },
+  { n: 'Majesty', deco: 'royal', shape: 'circle', frame: 'none', custom: true, ga: '#451a03', gb: '#1c1917', angle: 170, fa: '#fde68a', fb: '#b45309' },
+  { n: 'Tempest', deco: 'storm', shape: 'circle', frame: 'none', custom: true, ga: '#1e3a8a', gb: '#0f172a', angle: 160, fa: '#60a5fa', fb: '#fef08a' },
+  { n: 'Borealis', deco: 'aurora', shape: 'circle', frame: 'none', custom: true, ga: '#064e3b', gb: '#1e1b4b', angle: 150, fa: '#34d399', fb: '#a78bfa' },
+  // Shape looks: no decoration, a shaped face with a frame
+  { n: 'Gem', deco: null, shape: 'gem', facet: true, custom: true, ga: '#38bdf8', gb: '#4f46e5', angle: 150, frame: 'bevel', fa: '#e0f2fe', fb: '#0ea5e9' },
+  { n: 'Crystal', deco: null, shape: 'crystal', facet: true, custom: true, ga: '#a78bfa', gb: '#581c87', angle: 140, frame: 'bevel', fa: '#f5d0fe', fb: '#a855f7' },
+  { n: 'Crest', deco: null, shape: 'crest', facet: false, custom: true, ga: '#78350f', gb: '#1c1917', angle: 180, frame: 'bevel', fa: '#fde68a', fb: '#b45309' },
+  { n: 'Burst', deco: null, shape: 'starburst', facet: false, custom: true, ga: '#f97316', gb: '#be123c', angle: 150, frame: 'bevel', fa: '#fde047', fb: '#f97316' },
+  { n: 'Seal', deco: null, shape: 'seal', facet: false, custom: true, ga: '#34d399', gb: '#065f46', angle: 150, frame: 'bevel', fa: '#d1fae5', fb: '#10b981' },
+  { n: 'Bloom', deco: null, shape: 'flower', facet: false, custom: true, ga: '#f9a8d4', gb: '#be185d', angle: 150, frame: 'bevel', fa: '#ffe4f1', fb: '#ec4899' },
+];
+
+// center-crop to a square, shrink, and keep lowering quality until it fits the relay's size cap
+async function toDataUrl(file) {
+  const bmp = await createImageBitmap(file);
+  const side = Math.min(bmp.width, bmp.height), c = document.createElement('canvas'); c.width = c.height = 256;
+  c.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, 256, 256);
+  for (const q of [0.86, 0.74, 0.62, 0.5, 0.4]) { const u = c.toDataURL('image/jpeg', q); if (u.length <= 46000) return u; }
+  const small = document.createElement('canvas'); small.width = small.height = 160; small.getContext('2d').drawImage(c, 0, 0, 160, 160);
+  return small.toDataURL('image/jpeg', 0.6);
+}
+
+// preview each shape in the user's own colours, with the bevel, so the choice is easy to judge
+const shapeMini = (s, av = {}) => avatar({ avatar: { shape: s, icon: av.icon || 'user', custom: true, ga: av.ga || '#6366f1', gb: av.gb || '#312e81', angle: 150, frame: 'bevel', fa: av.fa && !av.deco ? av.fa : '#e0e7ff', fb: av.fb && !av.deco ? av.fb : '#818cf8', facet: !!av.facet } }, 40);
+
+export function mountStudio(el, av, onChange, name = '') {
+  let saveT = 0;
+  const changed = () => { paint(); clearTimeout(saveT); saveT = setTimeout(onChange, 350); };
+  const cust = () => av.custom && av.ga && av.gb;
+
+  function paint() {
+    const frame = (a) => avatar({ avatar: a }, 0 || 0); void frame;
+    el.innerHTML = `<div class="av-studio">
+      <div class="av-prev"><div id="avBig">${avatar({ avatar: av }, 120)}</div><div class="row">${avatar({ avatar: av }, 44)}${avatar({ avatar: av }, 28)}</div>
+        <button class="btn sm" id="avUp">Upload photo</button>${av.image ? '<button class="btn ghost sm" id="avRm">Remove photo</button>' : ''}
+        <input type="file" id="avFile" accept="image/*" hidden></div>
+      <div class="av-ctl">
+        <div class="av-sec"><b>Looks</b><div class="av-presets">${LOOKS.map((l, i) => `<button class="av-pre" data-look="${i}">${avatar({ avatar: { ...l, icon: av.icon, image: av.image } }, 48)}<span>${l.n}</span></button>`).join('')}</div></div>
+        <div class="av-sec"><b>Decoration</b><div class="deco-grid">
+          <button class="deco-card ${av.deco ? '' : 'on'}" data-deco="">${avatar({ avatar: { ...av, deco: '' } }, 52)}None</button>
+          ${Object.entries(DECOS).map(([k, d]) => `<button class="deco-card ${av.deco === k ? 'on' : ''}" data-deco="${k}">${avatar({ avatar: { ...av, deco: k, fa: d.fa, fb: d.fb } }, 52)}${d.name}</button>`).join('')}</div>
+          ${av.deco && !DECOS[av.deco]?.fixed ? `<div class="av-colors"><label><input type="color" id="fa" value="${av.fa || '#8f8cff'}">Main</label><label><input type="color" id="fb" value="${av.fb || '#ff7ad9'}">Accent</label><button class="btn ghost sm" id="decoReset">Reset colours</button></div>` : ''}</div>
+        <div class="av-sec"><b>Shape <span class="av-hint">replaces the decoration</span></b><div class="av-chips">${AV_SHAPES.map((s) => `<button class="av-chip sq ${av.shape === s || (!av.shape && s === 'circle') ? 'on' : ''}" data-shape="${s}" aria-label="${s}" title="${s}">${shapeMini(s, av)}</button>`).join('')}</div>
+          <div class="av-chips"><button class="av-chip ${av.facet ? 'on' : ''}" data-facet="1" title="Low-poly shading across the face">Faceted shading</button></div></div>
+        <div class="av-sec"><b>Simple frame <span class="av-hint">replaces the decoration</span></b><div class="av-chips">${AV_FRAMES.map(([k, l]) => `<button class="av-chip ${((av.frame || 'none') === k) ? 'on' : ''}" data-frame="${k}">${avatar({ avatar: { frame: k, icon: 'user', color: 'slate', fa: av.fa, fb: av.fb }, }, 26)}${l}</button>`).join('')}</div>
+          ${(av.frame && av.frame !== 'none' && !av.deco) ? `<div class="av-colors"><label><input type="color" id="fa" value="${av.fa || '#8f8cff'}">Border</label>${av.frame !== 'ring' ? `<label><input type="color" id="fb" value="${av.fb || '#ff7ad9'}">Second</label>` : ''}</div>` : ''}</div>
+        ${av.image ? '' : `<div class="av-sec"><b>Icon</b><div class="avatar-picker">${AVATAR_ICONS.map((i) => `<button class="av-opt ${av.icon === i ? 'on' : ''}" data-i="${i}" aria-label="${i}">${icon(i)}</button>`).join('')}</div></div>
+        <div class="av-sec"><b>Background</b>
+          <div class="swatches">${AVATAR_COLORS.map((c) => `<button class="color-opt av-${c} ${!cust() && av.color === c ? 'on' : ''}" data-c="${c}" aria-label="${c}"></button>`).join('')}</div>
+          <div class="av-colors"><label><input type="color" id="ga" value="${av.ga || '#8f8cff'}">From</label><label><input type="color" id="gb" value="${av.gb || '#4b48d6'}">To</label>
+            <label>Angle <input type="range" id="ang" min="0" max="360" value="${av.angle ?? 135}"></label></div></div>`}
+      </div></div>`;
+    bind();
+  }
+
+  function bind() {
+    const file = $('#avFile', el);
+    $('#avUp', el).onclick = () => file.click();
+    file.onchange = async () => {
+      const f = file.files[0]; if (!f) return;
+      try { av.image = await toDataUrl(f); changed(); } catch { toast('That image could not be read', 'err'); }
+    };
+    $('#avRm', el)?.addEventListener('click', () => { av.image = null; changed(); });
+    $$('[data-look]', el).forEach((b) => (b.onclick = () => { Object.assign(av, LOOKS[+b.dataset.look]); delete av.n; changed(); }));
+    $$('[data-deco]', el).forEach((b) => (b.onclick = () => { const k = b.dataset.deco; av.deco = k || null; if (k) { av.fa = DECOS[k].fa; av.fb = DECOS[k].fb; av.shape = 'circle'; av.frame = 'none'; } changed(); }));
+    $('#decoReset', el)?.addEventListener('click', () => { const d = DECOS[av.deco]; if (d) { av.fa = d.fa; av.fb = d.fb; changed(); } });
+    $('[data-facet]', el)?.addEventListener('click', () => { av.facet = !av.facet; if (av.facet) av.deco = null; changed(); });
+    $$('[data-shape]', el).forEach((b) => (b.onclick = () => { av.shape = b.dataset.shape; av.deco = null; changed(); }));
+    $$('[data-frame]', el).forEach((b) => (b.onclick = () => { av.frame = b.dataset.frame; av.deco = null; if (av.frame !== 'none') { av.fa ||= '#8f8cff'; av.fb ||= '#ff7ad9'; } changed(); }));
+    $$('[data-i]', el).forEach((b) => (b.onclick = () => { av.icon = b.dataset.i; changed(); }));
+    $$('[data-c]', el).forEach((b) => (b.onclick = () => { av.color = b.dataset.c; av.custom = false; changed(); }));
+    // colour pickers update the live preview without rebuilding (rebuilding would close the picker)
+    const live = () => { $('#avBig', el).innerHTML = avatar({ avatar: av }, 120); $$('.av-prev .row', el).forEach((r) => (r.innerHTML = avatar({ avatar: av }, 44) + avatar({ avatar: av }, 28))); clearTimeout(saveT); saveT = setTimeout(() => { onChange(); paint(); }, 600); };
+    const col = (id, k, custom) => { const i = $('#' + id, el); if (i) i.oninput = () => { av[k] = i.value; if (custom) { av.custom = true; av.ga ||= '#8f8cff'; av.gb ||= '#4b48d6'; } live(); }; };
+    col('fa', 'fa'); col('fb', 'fb'); col('ga', 'ga', true); col('gb', 'gb', true);
+    const ang = $('#ang', el); if (ang) ang.oninput = () => { av.angle = +ang.value; av.custom = true; av.ga ||= '#8f8cff'; av.gb ||= '#4b48d6'; live(); };
+  }
+  paint();
+}

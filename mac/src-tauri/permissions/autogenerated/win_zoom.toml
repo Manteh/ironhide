@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-win-zoom"
+description = "Enables the win_zoom command without any pre-configured scope."
+commands.allow = ["win_zoom"]
+
+[[permission]]
+identifier = "deny-win-zoom"
+description = "Denies the win_zoom command without any pre-configured scope."
+commands.deny = ["win_zoom"]

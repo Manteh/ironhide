@@ -1,0 +1,5 @@
+/* Accent colours that fit the app: "ember" (warm copper) and "auto" (follows the artwork you point at, see js/accent-auto.js).
+   The accent switches instantly: only the ambient background glides, which keeps the page from restyling every frame. */
+/* No transition on :root. The ambient colours cross-fade in js/ambient.js (opacity only); transitioning inherited custom properties on the root re-styles the whole page every frame. */
+
+[data-accent="ember"], [data-accent="auto"] { --accent: #ff9d4d; --accent-2: #f0701f; --on-accent: #1a0e04; }

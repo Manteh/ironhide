@@ -1,0 +1,132 @@
+/* Polish for poster cards and the Continue watching row. Kept apart from browse.css. */
+
+/* progress: a rounded pill inset in the poster, over a soft scrim so it reads on any artwork */
+.bposter::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46%; background: linear-gradient(transparent, rgba(0,0,0,.58)); opacity: 0; pointer-events: none; transition: opacity .4s var(--ease); }
+.bc:has(.bprog) .bposter::after { opacity: 1; }
+.bprog { z-index: 2; left: 11px; right: 11px; bottom: 11px; height: 6px; border-radius: 99px; overflow: hidden; background: rgba(255,255,255,.24); box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); transition: height .35s cubic-bezier(.34,1.5,.64,1), bottom .35s cubic-bezier(.34,1.5,.64,1); }
+.bprog i { border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 65%, #fff), var(--accent)); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent); transition: width .6s var(--ease); }
+.bc:hover .bprog, .bc:focus-visible .bprog { height: 8px; bottom: 10px; }
+
+/* Continue watching */
+.cont-row { gap: 20px; }
+.cont-row .bc { flex-basis: clamp(160px, 15.5vw, 224px); }
+.cont-row .bposter { border-radius: 18px; box-shadow: 0 16px 32px -20px rgba(0,0,0,.85), 0 0 0 1px var(--border); }
+.cont-row .binfo { padding: 12px 3px 0; }
+.cont-row .binfo h3 { font-size: 15px; font-weight: 650; letter-spacing: -.012em; }
+/* timing and episode sit directly under the title, left aligned, whether it is a resume or an "up next" card */
+.cont-row .bmeta { justify-content: flex-start; gap: 7px; margin-top: 4px; font-size: 12.5px; }
+.cont-row .bmeta span:empty { display: none; }
+.cont-row .bmeta span { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.cont-row .bmeta em { color: var(--muted); font-weight: 600; }
+.cont-row .bmeta span + em::before { content: '·'; margin-right: 7px; color: var(--muted); }
+.cont > header { margin-bottom: 12px; }
+.cont h2 { font-size: 20px; }
+.cont-row .bmeta span:empty + em::before { content: none; }
+.cont-row .bmeta span:empty + em { color: var(--text-2); }
+
+/* Primary buttons: tonal glass. A dark translucent fill tinted with the accent, a hairline accent border and light accent text.
+   It reads as the main action through colour and glow, like the rest of the UI, instead of a white block. */
+.btn.primary, .pill:not(.ghost2):not(.sq) {
+  background: color-mix(in srgb, var(--accent) 26%, rgba(18,18,22,.86)); color: color-mix(in srgb, var(--accent) 30%, #fff);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent); font-weight: 650; letter-spacing: -.005em;
+  box-shadow: 0 12px 32px -16px color-mix(in srgb, var(--accent) 80%, transparent), inset 0 1px 0 rgba(255,255,255,.1);
+  transition: transform .4s cubic-bezier(.34,1.5,.64,1), box-shadow .35s var(--ease), background .3s, border-color .3s;
+}
+.btn.primary:hover, .pill:not(.ghost2):not(.sq):hover { background: color-mix(in srgb, var(--accent) 38%, rgba(18,18,22,.84)); border-color: color-mix(in srgb, var(--accent) 62%, transparent); filter: none; transform: translateY(-1px); box-shadow: 0 16px 38px -16px color-mix(in srgb, var(--accent) 95%, transparent), inset 0 1px 0 rgba(255,255,255,.14); }
+.btn.primary:active, .pill:not(.ghost2):not(.sq):active { transform: scale(.97); }
+.btn.primary svg, .pill:not(.ghost2):not(.sq) svg { color: inherit; }
+
+/* the logo shield used a fixed indigo gradient: follow the accent */
+#lg stop:nth-child(1) { stop-color: color-mix(in srgb, var(--accent) 86%, #fff); }
+#lg stop:nth-child(2) { stop-color: var(--accent-2); }
+
+/* 3D cards: transform comes from js/cards3d.js (spring-smoothed --c3d), so no CSS transition may fight it.
+   Kept deliberately cheap: static shadow, no blend modes, compositing layers only on the card being animated. */
+.bc:not(.sk) .bposter { transform: var(--c3d, none); isolation: isolate; transition: box-shadow .4s var(--ease); }
+.bc:not(.sk) .bposter[style*="--c3d"] { will-change: transform; }
+.bc:not(.sk):hover .bposter, .bc:not(.sk):focus-visible .bposter { transition: box-shadow .4s var(--ease); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, rgba(255,255,255,.45)), 0 30px 46px -24px rgba(0,0,0,.92); }
+.bc:not(.sk) .bimg { transition: none; }
+.bc:not(.sk) .bposter[style*="--c3d"] .bimg { will-change: transform; }
+.bc:not(.sk) .bposter::before { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit; background: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), rgba(255,255,255,.2), rgba(255,255,255,.05) 40%, transparent 64%); opacity: var(--ga, 0); }
+
+/* ---- ambient background (js/ambient.js): cheap, composited ---- */
+.amb { display: none !important; }
+#ihamb { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; contain: strict; }
+#ihamb .sc { position: absolute; inset: 0; opacity: 0; transition: opacity 1.5s cubic-bezier(.4,0,.2,1); will-change: opacity; }
+#ihamb .sc.on { opacity: 1; }
+#ihamb i { position: absolute; border-radius: 50%; width: 80vmax; height: 80vmax; translate: -50% -50%; will-change: transform; }
+#ihamb .b1 { animation: drift1 24s ease-in-out infinite alternate; } #ihamb .b2 { animation: drift2 31s ease-in-out infinite alternate; } #ihamb .b3 { animation: drift3 37s ease-in-out infinite alternate; }
+#ihamb::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--bg) 78%, transparent) 100%); }
+#ihspot { left: 0; top: 0; width: 560px !important; height: 560px !important; margin: -280px 0 0 -280px; translate: none !important; opacity: 0; will-change: transform; background: radial-gradient(closest-side, color-mix(in srgb, var(--spc, #4a5a8a) 26%, transparent), transparent) !important; }
+[data-theme="light"] #ihamb { opacity: .55; }
+html.ihp-on #ihamb { display: none; }
+
+/* ---- scrolling rows: room for lifted cards, no mask (a masked scroller re-composites every frame while cards animate inside it) ---- */
+.cont-row { padding: 36px 30px 30px; margin: -28px -30px -20px; scroll-padding: 0 30px; -webkit-mask-image: none; mask-image: none; }
+.bc:not(.sk):hover { z-index: 5; }
+/* the header's backdrop blur is recomputed whenever anything moves behind it: keep it light */
+#ihbar { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+
+/* browse.css transitions --c1..--y3 on :root (inherited, so every element re-styles each frame). The ambient cross-fade lives in js/ambient.js now. */
+:root { transition: none !important; }
+
+/* ---- smooth scrolling ---- */
+/* one GPU layer per card made WebKit run out of tile memory on long grids (cards went blank while scrolling):
+   only the card being tilted gets its own layer (polish.css above, via [style*="--c3d"]) */
+.bposter { will-change: auto; }
+/* entrance without blur: a filter on dozens of cards at once is repainted every frame */
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.bc { animation-duration: .45s; }
+.bgrid.leaving, #hero.leaving { filter: none; }
+.bgrid, .hero2 { transition: opacity .17s var(--ease), transform .17s var(--ease); }
+/* poster image: an <img> that fades in once it has decoded */
+img.bimg { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .35s var(--ease); -webkit-user-drag: none; user-select: none; }
+img.bimg.ld { opacity: 1; }
+.bc:not(.sk) img.bimg { transition: opacity .35s var(--ease); }
+/* the ambient scene that has faded out stops being composited (two scenes of 80vmax blobs are a lot of GPU memory) */
+#ihamb .sc { visibility: hidden; transition: opacity 1.5s cubic-bezier(.4,0,.2,1), visibility 0s linear 1.5s; }
+#ihamb .sc.on { visibility: visible; transition: opacity 1.5s cubic-bezier(.4,0,.2,1), visibility 0s; }
+
+/* ---- Continue watching: full-bleed row whose ends curve away (js/edgeflow.js) ---- */
+body { overflow-x: clip; }
+.cont-row { --g: clamp(48px, 9vw, 170px); position: relative; margin: -28px calc(-1 * var(--g)) -20px; padding: 36px var(--g) 30px; scroll-padding: 0 var(--g); }
+.cont-row .bc { will-change: auto; backface-visibility: hidden; }
+
+/* ---- smooth navigation everywhere ----
+   Entrance animations used filter: blur(), which repaints the whole page (or every card) on every frame and stutters in
+   WebKit. Same motion, no blur: opacity + transform only, which the GPU composites for free. These redefine the earlier
+   keyframes (the last definition of a name wins). */
+@keyframes fadeup { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes blurin { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes hposter { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes railin { from { opacity: 0; transform: translate(-16px, -50%) scale(.96); } to { opacity: 1; transform: translateY(-50%); } }
+@keyframes railin-m { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translateX(-50%); } }
+@keyframes wppulse { 0% { opacity: 0; transform: scale(.7); } 25% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.25); } }
+.page { animation-duration: .32s; }
+.ninfo > * { filter: none !important; }
+.epsec.collapsed .epwrap { filter: none; }
+/* no sideways jump when a sheet opens and the page stops scrolling */
+html { scrollbar-gutter: stable; }
+
+/* ---- type: the Mac's own typeface ----
+   SF Pro (system-ui) switches between its Text and Display cuts by size and is drawn by the OS, so it looks native and crisp
+   in the app window. Inter with very tight tracking made big titles look squashed. Headlines get gentler tracking. */
+:root { --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Helvetica Neue", "Inter", sans-serif; }
+body { font-family: var(--sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; font-feature-settings: "kern"; }
+h1, h2, h3, .hero2 h2, .ninfo h2, .greet h1, .pf-who h1, .dtitle h2, .lbody h3, .cd-title { letter-spacing: -.022em; }
+h1.title, .pf-st b, .welcome h1 { letter-spacing: -.018em; }
+
+/* The ambient colours live on <html>. As inherited properties, every change restyled every element on the page (on each
+   hover tint, and on opening/closing a title). Not inherited: only <html> restyles; js/ambient.js reads them from there. */
+@property --c1 { syntax: '<color>'; inherits: false; initial-value: #3a3f5a; }
+@property --c2 { syntax: '<color>'; inherits: false; initial-value: #4a3a5a; }
+@property --c3 { syntax: '<color>'; inherits: false; initial-value: #2f4a55; }
+@property --x1 { syntax: '<percentage>'; inherits: false; initial-value: 30%; } @property --y1 { syntax: '<percentage>'; inherits: false; initial-value: 32%; }
+@property --x2 { syntax: '<percentage>'; inherits: false; initial-value: 72%; } @property --y2 { syntax: '<percentage>'; inherits: false; initial-value: 64%; }
+@property --x3 { syntax: '<percentage>'; inherits: false; initial-value: 55%; } @property --y3 { syntax: '<percentage>'; inherits: false; initial-value: 88%; }
+
+/* tilt is written straight to the poster's transform (js/cards3d.js); the card being tilted gets its own layer */
+.bc:not(.sk) .bposter { transform: none; }
+.bc:not(.sk) .bposter.tilt, .bc:not(.sk) .bposter.tilt .bimg { will-change: transform; }
+.bc:not(.sk):hover .bposter, .bc:not(.sk):focus-visible .bposter { transition: box-shadow .18s ease-out; }

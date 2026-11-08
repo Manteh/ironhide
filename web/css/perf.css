@@ -1,0 +1,161 @@
+/* Performance pass (loaded last).
+   1. Fixed/sticky chrome no longer blurs what scrolls behind it: a backdrop blur over moving content is recomputed by the GPU
+      every frame of every scroll. Same look from a richer, slightly more opaque tint.
+   2. The ambient light is lighter (smaller layers) and freezes while you scroll; only the visible scene drifts.
+   3. While scrolling, cards ignore the pointer, so hover tilts and colour changes don't fire under a still mouse. */
+#ihbar { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(12,12,16,.9) !important; }
+.rail { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: linear-gradient(180deg, rgba(34,34,42,.96), rgba(22,22,28,.97)) !important; }
+.mini { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: color-mix(in srgb, var(--bg) 94%, transparent) !important; }
+.rd.plus, .rail2 * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.rd.plus { background: rgba(40,40,48,.95) !important; }
+.toast { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: color-mix(in srgb, var(--bg-elev) 97%, transparent) !important; }
+#ihmenu, .dd-m, .ctx { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(24,24,30,.97) !important; }
+
+#ihamb i { width: 64vmax !important; height: 64vmax !important; }
+#ihamb .sc:not(.on) i { animation-play-state: paused; }
+html.scrolling #ihamb i, html.scrolling #ihspot { animation-play-state: paused; }
+html.scrolling .bgrid, html.scrolling .hero2 { pointer-events: none; } /* not .cont-row: it is a scroller itself and must keep receiving the wheel */
+
+/* skeleton shimmer and other loops stop when you've asked for less motion */
+html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation-iteration-count: 1 !important; }
+
+/* ---- ambient light: morphs toward what you point at (js/ambient.js) ---- */
+#ihamb i { left: 0 !important; top: 0 !important; transition: translate .75s cubic-bezier(.22, .8, .24, 1); }
+#ihamb .sc { transition: opacity .7s cubic-bezier(.4, 0, .2, 1) !important; }
+
+/* ---- neutral interface: no artwork-coloured buttons, labels or glows; hovering changes no UI colour ---- */
+.dx .btn.primary, .lx .btn.primary, .dx-vers .rec .btn.primary { background: #f4f4f5 !important; color: #0b0b0d !important; border-color: transparent !important; box-shadow: 0 8px 24px -14px rgba(0,0,0,.8) !important; filter: none !important; }
+.dx .btn.primary:hover, .dx-vers .rec .btn.primary:hover { background: #fff !important; }
+.dx .btn.primary .i { fill: currentColor; }
+.dx-vers .rec.vx3-best { background: var(--surface) !important; border-color: var(--border-strong) !important; }
+.vx3-k, .vx-pl, .vx2-rec-k { color: var(--text) !important; }
+.vx3-alt:hover .vx3-al { color: var(--text) !important; }
+.dx-best .i, .lx-steps li.done::after { color: var(--text) !important; background: rgba(255,255,255,.85); }
+.dx-best .i { background: none; }
+.badge.mine, .vx2-lang.mine { background: rgba(255,255,255,.1) !important; color: var(--text) !important; }
+.vx2-lang.mine { background: none !important; font-weight: 650; }
+.dx-ep.on { background: rgba(255,255,255,.07) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16) !important; }
+.dx-prog u, .dx-resume u, .lx-steps li.done::after { background: rgba(255,255,255,.9) !important; }
+.dx-thp:hover, .vx2-row:hover .vx2-go, .vx-pick:hover .vx-pp { background: #fff !important; color: #0b0b0d !important; }
+.dx-person[data-pid]:hover b { color: var(--text) !important; }
+.dx-sim:hover i { box-shadow: 0 0 0 1.5px rgba(255,255,255,.5), 0 20px 34px -18px #000 !important; }
+.vx2-q.q4k, .vx2-q.qhd { background: rgba(255,255,255,.1) !important; color: #fff !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16) !important; }
+/* cards: the hover outline is neutral (it used to take the artwork colour) */
+.bc:not(.sk):hover .bposter, .bc:not(.sk):focus-visible .bposter { box-shadow: 0 0 0 1.5px rgba(255,255,255,.55), 0 26px 40px -22px rgba(0,0,0,.9) !important; }
+/* primary buttons and pills everywhere: neutral white, no coloured glow */
+.btn.primary, .pill:not(.ghost2):not(.sq) { background: #f4f4f5 !important; color: #0b0b0d !important; border-color: transparent !important; box-shadow: 0 8px 24px -14px rgba(0,0,0,.8) !important; filter: none !important; }
+.btn.primary:hover, .pill:not(.ghost2):not(.sq):hover { background: #fff !important; transform: translateY(-1px); }
+.btn.primary .i, .pill:not(.ghost2):not(.sq) .i { fill: currentColor; color: currentColor; }
+
+/* Continue watching: edge to edge of the window (the first card still lines up with the content), cards sized by the
+   window so wider windows show more */
+.cont-row .bc { flex-basis: clamp(150px, 12vw, 240px) !important; }
+
+/* artwork glass: the pointed-at poster, tiny and stretched (naturally soft), very dark, drifting under the colour light */
+#ihamb .art { position: absolute; inset: -12%; }
+#ihamb .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(16px) saturate(1.2) brightness(.62); opacity: 0; transform: scale(1.08); transition: opacity .8s cubic-bezier(.4, 0, .2, 1); animation: artdrift 26s ease-in-out infinite alternate; }
+#ihamb .art img.on { opacity: .62; }
+/* the colour light sits a little softer over the artwork so the picture reads through it */
+#ihamb .sc.on { opacity: .75; }
+#ihamb::after { background: linear-gradient(180deg, rgba(8,8,12,.25) 0%, rgba(8,8,12,.35) 45%, color-mix(in srgb, var(--bg) 82%, transparent) 100%) !important; }
+@keyframes artdrift { to { transform: scale(1.16) translate(-2%, 1.5%); } }
+html.scrolling #ihamb .art img { animation-play-state: paused; }
+[data-theme="light"] #ihamb .art { display: none; }
+
+/* the blurred-artwork layer is off: the background is the designed colour light alone */
+#ihamb .art { display: none; }
+#ihamb .sc.on { opacity: 1; }
+/* depth-of-field blur lives on the poster image, on its own layer so the blurred copy is cached while the card moves */
+.cont-row .bimg { will-change: transform; backface-visibility: hidden; }
+.cont-row .bc { filter: none !important; }
+.cont-row .binfo { transition: opacity .25s ease; }
+.cont-row .bc[data-dof]:not([data-dof="0"]) .bimg { scale: 1.06; } /* hides the soft rim a blur leaves at the poster edges */
+
+/* ---- mesh-gradient background (js/ambient.js) ---- */
+#ihamb .mesh { position: absolute; inset: -6%; width: 112%; height: 112%; opacity: 0; filter: blur(18px) saturate(1.1); transform: scale(1.04); transition: opacity .7s cubic-bezier(.4, 0, .2, 1); animation: meshbreathe 22s ease-in-out infinite alternate; }
+#ihamb .mesh.on { opacity: .68; }
+@keyframes meshbreathe { 0% { transform: scale(1.04) translate(0, 0); } 100% { transform: scale(1.12) translate(-1.5%, 1%); } }
+html.scrolling #ihamb .mesh { animation-play-state: paused; }
+/* readability: a gentle darkening toward the bottom only, no hard vignette */
+#ihamb::after { background: linear-gradient(180deg, rgba(6,6,9,.12) 0%, rgba(6,6,9,.32) 50%, color-mix(in srgb, var(--bg) 78%, transparent) 100%) !important; }
+[data-theme="light"] #ihamb .mesh.on { opacity: .45; }
+.cont-row .bimg { transition: filter .35s ease, scale .35s ease; }
+/* Continue watching: no CSS hover lift either; the focused card pops forward via the carousel itself */
+.cont-row .bc:not(.sk):hover .bposter { transform: none !important; }
+/* Continue watching: each card is its own GPU layer (moving it re-positions, never redraws); no blur anywhere in the row */
+.cont-row .bc { will-change: transform, opacity !important; }
+.cont-row .bimg { filter: none !important; scale: 1 !important; transition: none !important; will-change: auto !important; }
+.cont-row .binfo { opacity: 1 !important; }
+
+/* ---- your rating (title sheet) ---- */
+.dx-rate { margin-top: 14px; display: grid; gap: 10px; }
+.rt-row, .rt-asp { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.rt-k { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.rt-stars { display: inline-flex; gap: 2px; }
+.rt-s { all: unset; cursor: pointer; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: rgba(255,255,255,.28); transition: color .12s, transform .12s; }
+.rt-s .i { width: 20px; height: 20px; fill: currentColor; stroke: none; }
+.rt-s.on, .rt-s.hov { color: #f5c518; } .rt-stars:hover .rt-s.on:not(.hov) { color: rgba(255,255,255,.28); }
+.rt-s:hover { transform: scale(1.12); } .rt-s:focus-visible { outline: 2px solid #fff; }
+.rt-l { font-size: 13px; color: var(--text-2); }
+.rt-no { all: unset; cursor: pointer; margin-left: 4px; height: 28px; padding: 0 11px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); border: 1px solid rgba(255,255,255,.12); transition: background .15s, color .15s; }
+.rt-no:hover { background: rgba(255,255,255,.08); color: var(--text); } .rt-no.on { color: #fbbf24; border-color: rgba(251,191,36,.35); }
+.rt-a { all: unset; cursor: pointer; height: 28px; padding: 0 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--text-2); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); transition: background .15s, color .15s; }
+.rt-a:hover { background: rgba(255,255,255,.12); } .rt-a.on { background: #f4f4f5; color: #0b0b0d; border-color: transparent; }
+/* ---- match % on For You cards ---- */
+.bmatch { position: absolute; left: 10px; top: 10px; z-index: 2; height: 22px; padding: 0 8px; display: inline-flex; align-items: center; border-radius: 7px; font-size: 11.5px; font-weight: 750; color: #6ee7a0; background: rgba(8,10,12,.78); box-shadow: inset 0 0 0 1px rgba(110,231,160,.22); font-variant-numeric: tabular-nums; pointer-events: none; }
+/* ---- your taste (profile) ---- */
+.tz-top { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; margin-bottom: 22px; }
+.tz-top p { flex: 1; min-width: 260px; color: var(--text-2); font-size: 14px; line-height: 1.6; margin: 0; }
+.tz-meter { width: 150px; } .tz-meter b { font-size: 30px; font-weight: 750; letter-spacing: -.02em; } .tz-meter small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.tz-meter i, .tz-bar i { display: block; height: 6px; border-radius: 6px; background: rgba(255,255,255,.08); overflow: hidden; } .tz-meter u, .tz-bar u { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, rgba(255,255,255,.55), #fff); }
+.tz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px; }
+.tz h4 { font-size: 13px; font-weight: 700; color: var(--text); margin: 0 0 12px; } .tz h4.tz-sub { margin-top: 20px; }
+.tz-bar { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 12px; margin-bottom: 9px; font-size: 13.5px; color: var(--text-2); }
+.tz-chips { display: flex; flex-wrap: wrap; gap: 6px; } .tz-chips span { padding: 6px 11px; border-radius: 999px; font-size: 12.5px; background: rgba(255,255,255,.07); color: var(--text-2); }
+.tz-chips.dim span { opacity: .65; text-decoration: line-through; text-decoration-color: rgba(255,255,255,.3); }
+.tz-favs { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+.tz-favs a { flex: 0 0 110px; text-decoration: none; color: inherit; } .tz-favs i { display: block; aspect-ratio: 2/3; border-radius: 12px; background: var(--surface-2) center/cover; margin-bottom: 7px; }
+.tz-favs span { display: block; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .tz-favs em { font-style: normal; font-size: 11px; color: #f5c518; }
+
+/* ---- Continue watching, settled: a flat row; the hovered card lifts toward you, nothing else moves ---- */
+.cont-row .bc { will-change: auto !important; transform: none !important; }
+.cont-row .bc:not(.sk) .bposter { transform: translateY(0) scale(1) !important; transition: transform .32s cubic-bezier(.2, .8, .2, 1), box-shadow .32s cubic-bezier(.2, .8, .2, 1) !important; will-change: transform; }
+.cont-row .bc:not(.sk):hover .bposter, .cont-row .bc:not(.sk):focus-visible .bposter { transform: translateY(-8px) scale(1.035) !important; box-shadow: 0 0 0 1.5px rgba(255,255,255,.5), 0 28px 44px -20px rgba(0,0,0,.9) !important; }
+.cont-row .bc:not(.sk) .binfo { transition: transform .32s cubic-bezier(.2, .8, .2, 1); }
+.cont-row .bc:not(.sk):hover .binfo { transform: translateY(-4px); }
+/* recommendation reason: its own line under the title, so the title it refers to is never cut off */
+.bwhy { margin-top: 3px; font-size: 12.5px; font-weight: 560; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the trailer and the web player start below the app's top bar (which sits above everything), so their controls are reachable */
+html:not(.ihp-on) .wp:not(:fullscreen) { top: var(--bar-h, 38px); }
+/* the top bar's Resume is a quiet glass button, not the big white primary */
+#ihbar .pill[data-a="resume"] { background: rgba(255,255,255,.08) !important; color: var(--text) !important; border: 1px solid rgba(255,255,255,.1) !important; box-shadow: none !important; transform: none !important; }
+#ihbar .pill[data-a="resume"]:hover { background: rgba(255,255,255,.15) !important; }
+
+/* ---- For You rows ---- */
+.fy-rows:empty { display: none; }
+.fy-row { margin: 8px 0 30px; }
+.fy-row header, .fy-more { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.fy-row h3, .fy-more h3 { margin: 0; font-size: 19px; font-weight: 680; letter-spacing: -.015em; }
+.fy-row header span { font-size: 13px; color: var(--muted); }
+.fy-scroll { display: flex; gap: 18px; overflow-x: auto; overflow-y: hidden; padding: 10px 6px 14px; margin: -10px -6px 0; scrollbar-width: none; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
+.fy-scroll::-webkit-scrollbar { display: none; }
+.fy-scroll .bc { flex: 0 0 clamp(150px, 12.5vw, 205px); scroll-snap-align: start; animation: none; }
+.fy-more { margin-top: 6px; }
+/* rows: every card the same width; long titles and reasons are trimmed instead of stretching the card */
+.fy-scroll .bc { width: clamp(150px, 12.5vw, 205px); min-width: 0; max-width: clamp(150px, 12.5vw, 205px); }
+.fy-scroll .bc .binfo, .fy-scroll .bc .bmeta, .fy-scroll .bc .bwhy { min-width: 0; max-width: 100%; }
+.fy-scroll .bc .binfo h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* rows: room for the hovered card to lift and grow without being clipped by the scroller (offset so nothing shifts) */
+/* vertical room for the hover lift; the sides are set by js/edgeflow.js (edge to edge, like Continue watching) */
+.fy-scroll { padding-top: 30px !important; padding-bottom: 26px !important; margin-top: -30px !important; margin-bottom: -12px !important; }
+.fy-scroll { position: relative; } /* card positions are measured from the row itself */
+.fy-rows { margin-top: 18px; } .fy-more { margin: 10px 0 4px; } .fy-more span { font-size: 13px; color: var(--muted); }
+
+/* ranked charts: a big outlined number on the poster, like a top-10 shelf */
+.brank { position: absolute; left: 8px; bottom: 2px; z-index: 2; font: 900 64px/1 var(--sans); letter-spacing: -.06em; color: rgba(10,10,12,.55); -webkit-text-stroke: 2px rgba(255,255,255,.92); text-shadow: 0 6px 18px rgba(0,0,0,.6); pointer-events: none; }
+.brank.top { -webkit-text-stroke-color: #fff; color: rgba(10,10,12,.7); }
+.bc:has(.brank) .bposter::after { opacity: 1; }
+/* Continue watching: every card the same width (long titles are trimmed, they never stretch a card) */
+.cont-row .bc { width: clamp(150px, 12vw, 240px) !important; min-width: 0 !important; max-width: clamp(150px, 12vw, 240px) !important; flex: 0 0 auto !important; }
+.cont-row .bc .binfo, .cont-row .bc .bmeta { min-width: 0; max-width: 100%; }
+.cont-row .bc .binfo h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

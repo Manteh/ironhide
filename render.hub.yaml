@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: ironhide
+    runtime: docker
+    plan: starter            # a persistent disk needs a paid plan; free works but forgets users on restart
+    healthCheckPath: /hub/health
+    disk:
+      name: ironhide-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: HUB_CODE        # optional access code visitors must type. Leave empty to be open.
+        sync: false
+      - key: HUB_MAX_ACTIVE
+        value: "6"

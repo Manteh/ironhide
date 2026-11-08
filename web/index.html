@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-accent="indigo">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IronHide</title>
+  <script>
+    // Apply cached appearance before first paint to avoid a theme flash.
+    try {
+      var a = JSON.parse(localStorage.getItem('ih-appearance') || 'null');
+      if (a) {
+        var r = document.documentElement, t = a.theme;
+        if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        r.dataset.theme = t; r.dataset.accent = a.accent; r.dataset.density = a.density;
+        r.dataset.radius = a.radius; r.dataset.motion = a.motion; r.dataset.poster = a.posterSize; r.dataset.layout = a.layout || 'grid'; r.dataset.hero = a.showHero === false ? 'off' : 'on';
+      }
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="/css/tokens.css" />
+  <link rel="stylesheet" href="/css/app.css" />
+  <link rel="stylesheet" href="/css/browse.css" />
+  <link rel="stylesheet" href="/css/player.css" />
+  <link rel="stylesheet" href="/css/together.css" />
+  <link rel="stylesheet" href="/css/avatar.css" />
+  <link rel="stylesheet" href="/css/profile.css" />
+  <link rel="stylesheet" href="/css/polish.css" />
+  <link rel="stylesheet" href="/css/accent.css" />
+</head>
+<body>
+  <div id="gate"></div>
+  <div id="app"></div>
+  <div class="toasts" id="toasts"></div>
+  <script type="module" src="/js/main.js"></script>
+  <script type="module" src="/js/accent-auto.js"></script>
+  <script type="module" src="/js/cards3d.js"></script>
+  <script type="module" src="/js/edgeflow.js"></script>
+  <link rel="stylesheet" href="/css/dossier.css" />
+  <link rel="stylesheet" href="/css/search.css" />
+  <link rel="stylesheet" href="/css/lab.css" />
+  <link rel="stylesheet" href="/css/perf.css" />
+  <script type="module" src="/js/ambient.js"></script>
+</body>
+</html>
