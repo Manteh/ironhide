@@ -226,18 +226,36 @@ flowchart LR
 
 <br>
 
-## Quick start
+## Install
 
-You need macOS 12+, Node 20+, [mpv](https://mpv.io) (`brew install mpv`), ffmpeg, a debrid account (TorBox recommended) and a free [TMDB](https://www.themoviedb.org/settings/api) API key.
+One line in Terminal. Everything it needs (Node, the mpv player, ffmpeg) is inside the app, so nothing else gets installed:
 
 ```bash
-git clone <this repo> && cd ironhide
-npm install
-./setup.sh                 # mpv + MoltenVK and a tuned mpv.conf
-cd mac && cargo tauri dev  # the Mac app (or `npm start` for the web app on :7676)
+curl -fsSL https://raw.githubusercontent.com/Manteh/ironhide/main/install.sh | bash
 ```
 
-Pick a name, then add your keys in **Settings → Connectors**. To build the app: `cd mac && cargo tauri build --bundles app`.
+Or download `IronHide-…-arm64.zip` from [Releases](https://github.com/Manteh/ironhide/releases/latest), unzip it and drag **IronHide** into Applications. Run the same line again to update.
+
+Then add two keys in **Settings → Connectors**: a debrid account (TorBox recommended) for instant streams, and a free [TMDB key](https://www.themoviedb.org/settings/api) for recommendations, search and charts.
+
+<sub>Apple Silicon (M1 and later), macOS 12+. The app is ad-hoc signed; the installer clears macOS's download quarantine for you. If you install from the zip by hand, right-click the app → Open the first time.</sub>
+
+<details>
+<summary><b>Build it yourself</b></summary>
+<br>
+
+You need Node 20+, Rust with `tauri-cli`, and Homebrew `mpv` and `ffmpeg` (only on the Mac that builds).
+
+```bash
+git clone https://github.com/Manteh/ironhide && cd ironhide
+npm install
+cd mac && cargo tauri dev       # run from source
+./scripts/release.sh            # self-contained app + zip in dist/
+```
+
+`release.sh` builds the app, bundles Node, ffmpeg, ffprobe and libmpv with its ~50 libraries into it, rewires them to load from inside the app, signs it and zips it. The web app alone runs with `npm start` on `localhost:7676`.
+
+</details>
 
 <details>
 <summary><b>Watch with friends: deploy the relay</b></summary>

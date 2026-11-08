@@ -136,14 +136,20 @@ fn start_daemon(app: &AppHandle) -> Result<(), String> {
         return Ok(()); // attach to the daemon that is already running
     }
     let root = find_root(app).ok_or("Cannot find the IronHide files (src/ and web/). Set IRONHIDE_ROOT.")?;
-    let node = find_node().ok_or("Node.js was not found. Install it (brew install node) or set IRONHIDE_NODE.")?;
+    // the release build carries its own Node, ffmpeg and ffprobe in <root>/bin (see mac/scripts/release.sh)
+    let bundled_bin = root.join("bin");
+    let bundled_node = bundled_bin.join("node");
+    let node = if std::env::var("IRONHIDE_NODE").is_err() && bundled_node.exists() { bundled_node } else {
+        find_node().ok_or("Node.js was not found. Install it (brew install node) or set IRONHIDE_NODE.")?
+    };
     let log = OpenOptions::new().create(true).append(true).open(log_path()).map_err(|e| e.to_string())?;
     let log2 = log.try_clone().map_err(|e| e.to_string())?;
-    let path = format!("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:{}", std::env::var("PATH").unwrap_or_default());
+    let path = format!("{}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:{}", bundled_bin.display(), std::env::var("PATH").unwrap_or_default());
     let mut cmd = Command::new(&node);
     cmd.arg("src/daemon.js")
         .current_dir(&root)
         .env("PATH", path)
+        .env("IRONHIDE_BIN", &bundled_bin)
         // The Samsung TV bridge stays off unless you opt in with IRONHIDE_TV_BRIDGE=1.
         .env("IRONHIDE_NO_BRIDGE", if std::env::var("IRONHIDE_TV_BRIDGE").as_deref() == Ok("1") { "" } else { "1" })
         .stdin(Stdio::null())

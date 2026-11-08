@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 .hub-data
 .gstack/
+
+# release builds (mac/scripts/release.sh)
+dist/

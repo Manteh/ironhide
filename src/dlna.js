@@ -1,3 +1,4 @@
+import { existsSync as existsSyncFs } from 'fs';
 import http from 'http';
 
 const TV_IP = '192.168.1.209';
@@ -254,7 +255,7 @@ export async function tvSeekViaProxy(seekSeconds) {
         }
 
         // Use ffmpeg to seek and transcode to a TV-friendly format
-        const ffmpeg = spawnProcess('/opt/homebrew/bin/ffmpeg', [
+        const ffmpeg = spawnProcess([process.env.IRONHIDE_BIN && `${process.env.IRONHIDE_BIN}/ffmpeg`, '/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'].find((p) => p && existsSyncFs(p)) || 'ffmpeg', [
           '-ss', String(seekSeconds),
           '-i', currentDirectUrl,
           '-c:v', 'copy',        // don't re-encode video

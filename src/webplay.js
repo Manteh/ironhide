@@ -8,8 +8,9 @@ import { join } from 'path';
 import { readFile } from 'fs/promises';
 import { randomUUID } from 'crypto';
 
-const FFMPEG = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'].find(existsSync);
-const FFPROBE = ['/opt/homebrew/bin/ffprobe', '/usr/local/bin/ffprobe', '/usr/bin/ffprobe'].find(existsSync);
+const BIN = process.env.IRONHIDE_BIN || ''; // the Mac app's own tools come first
+const FFMPEG = [BIN && `${BIN}/ffmpeg`, '/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'].filter(Boolean).find(existsSync);
+const FFPROBE = [BIN && `${BIN}/ffprobe`, '/opt/homebrew/bin/ffprobe', '/usr/local/bin/ffprobe', '/usr/bin/ffprobe'].find(existsSync);
 const sessions = new Map();
 
 // A built-in test clip for checking sync: the picture flashes and a beep sounds together every 2 s, with a running clock on screen.
