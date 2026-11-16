@@ -383,7 +383,7 @@ async function handleApi(req, res, urlPath) {
       if (method === 'GET' && urlPath === '/api/membership') return jsonResponse(res, mem.status());
       const body = method === 'POST' ? await parseBody(req) : {};
       if (method === 'POST' && urlPath === '/api/membership/peek') return jsonResponse(res, mem.peek(body.code));
-      if (method === 'POST' && urlPath === '/api/membership/redeem') { const out = mem.redeem(body.code); return out.ok ? jsonResponse(res, out) : errorResponse(res, out.error, 400); }
+      if (method === 'POST' && urlPath === '/api/membership/redeem') { const out = mem.redeem(body.code); if (out.ok) social.askInviter(); return out.ok ? jsonResponse(res, out) : errorResponse(res, out.error, 400); }
       if (method === 'POST' && urlPath === '/api/membership/invite') {
         const out = mem.makeInvite({ note: body.note, name: (await getSettings()).profile?.name || '' });
         return out.error ? errorResponse(res, out.error, 400) : jsonResponse(res, out);

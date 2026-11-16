@@ -8,7 +8,7 @@
 // Every Orbie already has an Ed25519 key (friend codes come from it); the same key signs invites and acceptances.
 // Limits are kept by each member's own app (3 invites each, the owner has no limit). That keeps strangers out; it is
 // not DRM: someone who rewrites the app could skip the check.
-import { createPrivateKey, createPublicKey, sign, verify, randomBytes } from 'crypto';
+import { createPrivateKey, createPublicKey, createHash, sign, verify, randomBytes } from 'crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { CONFIG_DIR } from './config.js';
@@ -24,6 +24,14 @@ const unb64u = (s) => Buffer.from(String(s || ''), 'base64url');
 const SPKI = Buffer.from('302a300506032b6570032100', 'hex'); // DER prefix of an Ed25519 public key
 const pubKey = (raw) => createPublicKey({ key: Buffer.concat([SPKI, unb64u(raw)]), format: 'der', type: 'spki' });
 const rawPub = (spkiB64) => b64u(Buffer.from(spkiB64, 'base64').subarray(12));
+// the friend code someone has on the relay, from their raw key (same formula as relay/server.js idOf)
+const B32 = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export function friendIdOf(raw) {
+  const h = createHash('sha256').update(Buffer.concat([SPKI, unb64u(raw)])).digest();
+  let out = '', bits = 0, v = 0;
+  for (const b of h) { v = (v << 8) | b; bits += 8; while (bits >= 5) { out += B32[(v >>> (bits - 5)) & 31]; bits -= 5; } }
+  return out.slice(0, 10);
+}
 const ok = (raw, msg, sig) => { try { return unb64u(raw).length === 32 && verify(null, Buffer.from(msg), pubKey(raw), unb64u(sig)); } catch { return false; } };
 const ticketMsg = (t) => `orbie-invite|1|${t.by}|${t.n}|${t.at}`;
 const acceptMsg = (t, id) => `orbie-accept|1|${t.n}|${id}`;
@@ -82,7 +90,7 @@ export function status() {
   const member = root || (validProof(d.proof) && d.proof.id === id);
   const made = d.made || [];
   return { member, root, invitedBy: member && !root ? giver(d.proof.t) : '', since: d.since || null,
-    quota: root ? null : QUOTA, left: root ? null : Math.max(0, QUOTA - made.length), made: made.map(({ n, at, note }) => ({ n, at, note })) };
+    quota: root ? null : QUOTA, left: root ? null : Math.max(0, QUOTA - made.length), made: made.map(({ n, at, note, joined }) => ({ n, at, note, joined: joined ? { name: joined.name, at: joined.at } : null })) };
 }
 
 // check an invite without using it (the onboarding shows who it is from)
@@ -98,7 +106,10 @@ export function redeem(code) {
   const t = decode(code), { id, key } = me();
   if (t.by === id) return { ok: false, error: "That's an invite you made. Send it to a friend instead." };
   const proof = { t, id, a: b64u(sign(null, Buffer.from(acceptMsg(t, id)), key)) };
-  const d = load(); d.proof = proof; d.since = Date.now(); save(d);
+  const d = load(); d.proof = proof; d.since = Date.now();
+  // whoever invited you becomes a friend: social.js sends them a request tagged with this invite until they accept
+  d.inviter = { id: friendIdOf(t.by), n: t.n, name: giver(t) };
+  save(d);
   return { ok: true, from: p.from };
 }
 
@@ -112,4 +123,15 @@ export function makeInvite({ note = '', name = '' } = {}) {
   if (id !== ROOT) t.up = d.proof;
   (d.made ||= []).push({ n: t.n, at: Date.now(), note: String(note || '').slice(0, 60) }); save(d);
   return { code: encode(t), left: st.root ? null : st.left - 1 };
+}
+
+// ---- friends from invites (used by social.js) ----
+// who invited this Orbie, while they aren't a friend yet: { id: friend code, n: the invite's id, name }
+export function inviter() { return load().inviter || null; }
+// a friend request carried this invite id: is it one this Orbie gave out? If so, remember who joined with it.
+export function claimInvite(n, who) {
+  const d = load(), x = (d.made || []).find((m) => m.n === String(n || ''));
+  if (!x) return false;
+  if (!x.joined) { x.joined = { id: who.id, name: String(who.name || '').slice(0, 40), at: Date.now() }; save(d); }
+  return true;
 }

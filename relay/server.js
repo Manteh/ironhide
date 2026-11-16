@@ -186,6 +186,7 @@ wss.on('connection', (ws) => {
       case 'friend.req': {
         const to = clean(m.to, 12).toUpperCase(); if (to === u.id) return;
         const f = users.get(to), payload = profile(u);
+        if (m.inv) payload.inv = clean(m.inv, 24); // joined with this person's invite: their Orbie accepts it by itself
         if (!f) { send(ws, { t: 'friend.unknown', to }); break; }
         if (f.ws) send(f.ws, { t: 'friend.req', from: payload }); else offlineReq.set(to, [...(offlineReq.get(to) || []).filter((r) => r.id !== u.id), payload].slice(-20));
         send(ws, { t: 'friend.sent', to, name: f.name });

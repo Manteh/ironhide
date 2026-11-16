@@ -332,7 +332,7 @@ async function invites(body) {
   const when = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   const left = m.root ? 'You can invite as many people as you like.' : m.left ? `${m.left} of ${m.quota} left.` : `You've used all ${m.quota}.`;
   const list = () => (m.made.length
-    ? `<div class="inv-list">${m.made.slice().reverse().map((x) => `<div class="inv-row"><b>${esc(x.note || 'Invite')}</b><span>${when(x.at)}</span></div>`).join('')}</div>`
+    ? `<div class="inv-list">${m.made.slice().reverse().map((x) => `<div class="inv-row"><b>${esc(x.note || 'Invite')}</b>${x.joined ? `<em class="inv-joined">Joined as ${esc(x.joined.name)}</em>` : '<em class="inv-wait">Not used yet</em>'}<span>${when(x.at)}</span></div>`).join('')}</div>`
     : '<p class="desc">No invites yet.</p>');
   body.innerHTML =
     card({ title: 'Invite someone', desc: `Each invite carries your name. ${esc(left)}`,

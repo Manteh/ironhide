@@ -305,3 +305,5 @@ a.bc.pc { display: block; color: inherit; text-decoration: none; }
 /* first run: the header keeps only the window controls (the profile and buttons belong to members) */
 html.onboarding #ihbar .l, html.onboarding #ihbar .r { visibility: hidden; }
 html.onboarding #ihbar .c { font-size: 0; } html.onboarding #ihbar .c::after { content: 'Welcome to Orbie'; font-size: 13px; opacity: .6; }
+.inv-row em { font-style: normal; font-size: 12.5px; padding: 2px 9px; border-radius: 99px; }
+.inv-joined { color: #5ee39b; background: rgba(52, 199, 120, .14); } .inv-wait { color: var(--muted); background: rgba(255, 255, 255, .05); }
