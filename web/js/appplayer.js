@@ -622,13 +622,21 @@
   const ambCv = q('.ihp-amb'), ambCtx = ambCv.getContext('2d');
   let ambOn = (() => { try { return localStorage.getItem('ihp.amb') === '1'; } catch { return false; } })(); // the setting from the server replaces this when the player opens
   // your light settings (Picture panel), kept on this Mac
-  const AMBS = (() => { try { return { strength: 1, reach: 1, crowd: 1, ...JSON.parse(localStorage.getItem('ihp.ambs') || '{}') }; } catch { return { strength: 1, reach: 1, crowd: 1 }; } })();
+  const AMBS = (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem('ihp.ambs') || '{}');
+      if (localStorage.getItem('ihp.crowd_set') !== '1') v.crowd = 0;
+      return { strength: 1, reach: 1, crowd: 0, ...v };
+    } catch { return { strength: 1, reach: 1, crowd: 0 }; }
+  })();
   function paintAmbSliders() {
     for (const k of ['strength', 'reach', 'crowd']) { const i = q(`[data-amb=${k}]`), o = q(`[data-ambo=${k}]`); if (i) i.value = AMBS[k]; if (o) o.textContent = Math.round(AMBS[k] * 100) + '%'; }
   }
   root.addEventListener('input', (e) => {
     const k = e.target.dataset?.amb; if (!k) return;
-    AMBS[k] = +e.target.value; try { localStorage.setItem('ihp.ambs', JSON.stringify(AMBS)); } catch {}
+    AMBS[k] = +e.target.value;
+    if (k === 'crowd') { try { localStorage.setItem('ihp.crowd_set', '1'); } catch {} }
+    try { localStorage.setItem('ihp.ambs', JSON.stringify(AMBS)); } catch {}
     paintAmbSliders(); ambBuild(true); audKick(true);
   });
   const A = { dim: 1, src: null, sw: 0, sh: 0, tgt: null, cur: null, LW: 0, LH: 0, img: null, raf: 0, last: 0, cut: false, geo: null, bars: { t: 0, b: 0 }, barCount: {}, barScenes: {}, scene: 0, barSamples: 0, barLocked: false, hole: null, holeTgt: null };
@@ -722,13 +730,11 @@
     if (A.LW !== LW || A.LH !== LH) { A.LW = LW; A.LH = LH; ambCv.width = LW; ambCv.height = LH; A.img = ambCtx.createImageData(LW, LH); A.cur = null; }
     const tgt = new Float32Array(LW * LH * 3);
     const M = Math.max(W, H), RE = AMBS.reach, D = Math.max(60, 0.1 * M * RE), far = 0.3 * M * RE, cutoff = 0.32 * M * RE; // how far the light carries (screen px)
-    // auto-exposure: a dark scene lifts its light (up to ~2x), so the glow doesn't vanish; bright scenes are left alone
+    // auto-exposure: gently lifts medium-dim scenes without amplifying pure blacks; drops to 0 on black scenes
     let sceneL = 0, avg = [0, 0, 0]; for (let i = 0; i < src.length; i += 3) { sceneL += 0.2126 * src[i] + 0.7152 * src[i + 1] + 0.0722 * src[i + 2]; avg[0] += src[i]; avg[1] += src[i + 1]; avg[2] += src[i + 2]; }
     const npx = src.length / 3; sceneL /= npx; avg = avg.map((v) => v / npx);
-    const expo = Math.min(2.1, Math.max(1, 1 + (42 - sceneL) / 50)) * AMBS.strength;
-    // the picture's edge must read even in a black scene: a faint glow in the picture's own tint hugs the border
-    const aL = Math.max(1, 0.2126 * avg[0] + 0.7152 * avg[1] + 0.0722 * avg[2]), floorK = Math.max(0, 16 - aL) / aL;
-    const floorCol = avg.map((v) => Math.min(40, v + v * floorK + 4)), floorR = Math.max(14, 0.018 * M);
+    const darkCut = Math.min(1, Math.max(0, (sceneL - 1) / 3)); // 0 when sceneL <= 1, 1 when sceneL >= 4
+    const expo = darkCut * Math.min(1.5, Math.max(1, 1 + (28 - sceneL) / 60)) * AMBS.strength;
     for (let py = 0; py < LH; py++) {
       const Y = (py + 0.5) / k;
       for (let px = 0; px < LW; px++) {
@@ -749,9 +755,11 @@
           col = [a1[0] * (1 - m) + a2[0] * m, a1[1] * (1 - m) + a2[1] * m, a1[2] * (1 - m) + a2[2] * m];
         } else col = ay ? pick(dy < 0 ? 'top' : 'bottom', u, dw) : pick(dx < 0 ? 'left' : 'right', vv, dw);
         // inverse-square falloff, a touch of saturation (glows read richer than the source), gentle gain
-        const fall = Math.exp(-dist / cutoff) / (1 + (dist / D) ** 2), lum = 0.2126 * col[0] + 0.7152 * col[1] + 0.0722 * col[2], gain = 1.1 * fall * expo;
-        const fl = Math.exp(-dist / floorR), o = (py * LW + px) * 3;
-        for (let c = 0; c < 3; c++) tgt[o + c] = Math.min(255, Math.max((lum + (col[c] - lum) * 1.3) * gain, floorCol[c] * fl));
+        const fall = Math.exp(-dist / cutoff) / (1 + (dist / D) ** 2), lum = 0.2126 * col[0] + 0.7152 * col[1] + 0.0722 * col[2];
+        const effLum = Math.max(0, lum - 1.8);
+        const gain = effLum > 0 ? 1.1 * fall * expo * (effLum / Math.max(0.1, lum)) : 0;
+        const o = (py * LW + px) * 3;
+        for (let c = 0; c < 3; c++) tgt[o + c] = Math.min(255, Math.max(0, (lum + (col[c] - lum) * 1.3) * gain));
       }
     }
     A.tgt = tgt;
