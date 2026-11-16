@@ -290,9 +290,10 @@ html body .toasts { top: auto !important; bottom: 28px; left: 50%; transform: tr
 @keyframes toast-time { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
 /* Poster rows outside Home (Profile, Taste) use Home's card and Home's row spacing, so every poster is the same size */
-.pf-row { display: flex; gap: 18px; overflow-x: auto; overflow-y: hidden; padding: 30px 6px 22px; margin: -30px -6px -8px; scrollbar-width: none; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
+.pf-row { position: relative; display: flex; gap: 18px; overflow-x: auto; overflow-y: hidden; padding: 30px 6px 22px; margin: -30px -6px -8px; scrollbar-width: none; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
 .pf-row::-webkit-scrollbar { display: none; }
-.pf-row > .bc { flex: 0 0 clamp(150px, 12.5vw, 205px); width: clamp(150px, 12.5vw, 205px); min-width: 0; scroll-snap-align: start; animation: none; }
+.pf-row > .bc { flex: 0 0 clamp(150px, 12.5vw, 205px); width: clamp(150px, 12.5vw, 205px); min-width: 0; max-width: clamp(150px, 12.5vw, 205px); scroll-snap-align: start; animation: none; }
+.pf-row > .bc .binfo, .pf-row > .bc .bmeta { min-width: 0; max-width: 100%; }
 a.bc.pc { display: block; color: inherit; text-decoration: none; }
 .pc .binfo { min-width: 0; } .pc .binfo h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc .pc-stars { font-style: normal; color: #ffc247; letter-spacing: 1px; }

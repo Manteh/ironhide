@@ -1,7 +1,7 @@
 // Horizontal rows (Continue watching): instead of being sliced by the row's edge, cards near either end turn away,
 // shrink and fade into the distance, like a carousel. Transform + opacity only (composited), recomputed once per frame
 // while the row scrolls, from layout positions (offsetLeft), so it never forces extra layout.
-const SEL = '.cont-row, .fy-scroll';
+const SEL = '.cont-row, .fy-scroll, .pf-row';
 const reduce = matchMedia('(prefers-reduced-motion: reduce)');
 const pending = new Set(); let raf = 0;
 // Cards sit on the outside of a cylinder centred on the row: the middle is nearly flat, and towards the ends each card turns

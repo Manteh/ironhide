@@ -1,7 +1,8 @@
 // Your profile: what you watched, your favourites, numbers, medals and friends. All of it from your own Orbie.
-import { $, esc, icon, avatar, ask, posterCard } from '../ui.js';
+import { $, $$, esc, icon, avatar, ask, posterCard } from '../ui.js';
 import { api } from '../api.js';
 import { store } from '../main.js';
+import { edgeflow } from '../edgeflow.js';
 
 const poster = (id) => `https://images.metahub.space/poster/small/${id}/img`;
 const route = (x) => `#/title/${x.type === 'tv' || x.type === 'series' ? 'series' : 'movie'}/${x.imdbId}`;
@@ -143,6 +144,8 @@ export default async function profile(el, params = {}) {
     ${fid ? '' : section('Friends', friends.length ? `${friends.filter((f) => f.online).length} online` : '', friends.length ? `<div class="pf-fr">${friends.map((f) => `<a href="#/profile/${esc(f.id)}" class="${f.online ? 'on' : ''}"><span>${avatar(f, 44)}</span><div><b>${esc(f.name)}</b><small>${presence(f)}</small></div></a>`).join('')}</div>` : `<p class="pf-empty">No friends yet. <a href="#/friends">Add one here</a>.</p>`)}
     <p class="pf-note">${fid ? 'Hours count how far they got in each film or episode once.' : "Hours count how far you got in each film or episode once, so rewatches don't add up. Until now Orbie only kept your last 100 plays, so older watching isn't counted. From here on it keeps 5,000. Friends can see this page: you can turn that off in Settings, Together."}</p>`;
 
+  $$('.pf-row', el).forEach(edgeflow);
+
   $('#pfRm', el)?.addEventListener('click', async () => { if (!(await ask(`Remove ${buddy.name} from your friends?`, { ok: 'Remove', danger: true }))) return; await fetch(`/api/social/friends/${encodeURIComponent(fid)}`, { method: 'DELETE' }); location.hash = '#/friends'; });
   // taste profile (from what you watch and rate): computed by the recommendation engine
   if (!fid) api('/api/taste').then((t) => {
@@ -162,6 +165,7 @@ export default async function profile(el, params = {}) {
           ${t.decades?.length ? `<h4 class="tz-sub">Eras</h4><div class="tz-chips">${chips(t.decades)}</div>` : ''}</div>
       </div>
       ${t.favourites?.length ? `<h4 class="tz-sub">Shaping your picks most</h4><div class="pf-row tz-favs">${t.favourites.map((f, i) => posterCard(f, { sub: f.rating ? `<em class="pc-stars">${'★'.repeat(f.rating)}</em>` : '', i })).join('')}</div>` : ''}`;
+    $$('.pf-row', tz).forEach(edgeflow);
   }).catch(() => {});
   // release dates and genres come from the catalog, so they arrive a moment later
   (fid ? Promise.resolve({ upcoming: data.upcoming || [], genres: data.genres || [] }) : api('/api/profile/meta')).then((m) => {
