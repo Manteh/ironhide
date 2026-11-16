@@ -330,25 +330,36 @@ async function invites(body) {
   const m = await api('/api/membership').catch(() => null);
   if (!m) { body.innerHTML = card({ title: 'Invites', desc: "Couldn't reach the Orbie service.", body: '' }); return; }
   const when = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  const left = m.root ? 'You can invite as many people as you like.' : `${m.left} of ${m.quota} invites left.`;
+  const left = m.root ? 'You can invite as many people as you like.' : m.left ? `${m.left} of ${m.quota} left.` : `You've used all ${m.quota}.`;
+  const list = () => (m.made.length
+    ? `<div class="inv-list">${m.made.slice().reverse().map((x) => `<div class="inv-row"><b>${esc(x.note || 'Invite')}</b><span>${when(x.at)}</span></div>`).join('')}</div>`
+    : '<p class="desc">No invites yet.</p>');
   body.innerHTML =
-    card({ title: 'Invite someone', desc: `Each invite carries your name and works for one person. ${esc(left)}`,
-      body: `<div class="field"><label for="inote">Who is it for? <span style="opacity:.6">(only you see this)</span></label>
-        <input id="inote" class="input" maxlength="60" placeholder="e.g. Alex" style="max-width:340px"></div>
-        <button class="btn primary" id="imake" ${!m.root && !m.left ? 'disabled' : ''}>${icon('key')} Create invite</button>
+    card({ title: 'Invite someone', desc: `Each invite carries your name. ${esc(left)}`,
+      body: `<form class="inv-make" autocomplete="off">
+          <input id="inote" class="input" maxlength="60" placeholder="Who is it for? (only you see this)" aria-label="Who is it for">
+          <button class="btn primary" id="imake" ${!m.root && !m.left ? 'disabled' : ''}>Create invite</button></form>
         <div id="iout"></div>` }) +
-    card({ title: 'Your membership', desc: m.root ? 'You own this Orbie: every invite traces back to you.' : `Invited by ${esc(m.invitedBy || 'a member')}${m.since ? `, ${when(m.since)}` : ''}.`,
-      body: m.made.length ? `<div class="inv-list">${m.made.slice().reverse().map((x) => `<div class="inv-row">${icon('key')}<b>${esc(x.note || 'Invite')}</b><span>${when(x.at)}</span></div>`).join('')}</div>` : '<p class="desc">No invites created yet.</p>' });
-  $('#imake', body).onclick = async (e) => {
-    const b = e.currentTarget; b.disabled = true;
+    card({ title: m.root ? 'You own this Orbie' : 'Your membership', desc: m.root ? 'Every invite traces back to you.' : `Invited by ${esc(m.invitedBy || 'a member')}${m.since ? ` on ${when(m.since)}` : ''}.`,
+      body: `<h4 class="inv-h">Invites you've made</h4><div id="ilist">${list()}</div>` });
+  $('.inv-make', body).onsubmit = async (e) => {
+    e.preventDefault();
+    const b = $('#imake', body), note = $('#inote', body).value.trim(); b.disabled = true; b.textContent = 'Creating…';
     try {
-      const { code } = await post('/api/membership/invite', { note: $('#inote', body).value.trim() });
+      const { code, left: nowLeft } = await post('/api/membership/invite', { note });
       const msg = `You're invited to Orbie, a private cinema for the people I trust.\nDownload: https://github.com/Manteh/orbie-app\nYour invite: ${code}`;
-      $('#iout', body).innerHTML = `<textarea class="input inv-code" readonly rows="5">${esc(msg)}</textarea><button class="btn" id="icopy">${icon('check')} Copy invite</button>`;
-      const copy = () => navigator.clipboard.writeText(msg).then(() => toast('Invite copied. Send it to them however you like.', 'ok'));
-      $('#icopy', body).onclick = copy; copy();
-      setTimeout(() => invites(body).then(() => { $('#iout', body).innerHTML = `<textarea class="input inv-code" readonly rows="5">${esc(msg)}</textarea>`; }), 50);
-    } catch (err) { toast(err.message, 'err'); b.disabled = false; }
+      const short = `${code.slice(0, 14)}…${code.slice(-8)}`;
+      $('#iout', body).innerHTML = `<div class="inv-ready">
+          <div class="inv-msg"><p>You're invited to Orbie, a private cinema for the people I trust.</p>
+            <p><span>Download</span> github.com/Manteh/orbie-app</p><p><span>Your invite</span> <code>${esc(short)}</code></p></div>
+          <div class="inv-acts"><button class="btn primary" id="icopy">Copy invite</button><small>${note ? `For ${esc(note)} · ` : ''}send it however you like</small></div></div>`;
+      const copyBtn = $('#icopy', body);
+      const copy = () => navigator.clipboard.writeText(msg).then(() => { copyBtn.textContent = 'Copied'; copyBtn.classList.add('done'); setTimeout(() => { copyBtn.textContent = 'Copy invite'; copyBtn.classList.remove('done'); }, 2200); });
+      copyBtn.onclick = copy; copy();
+      m.made.push({ note, at: Date.now() }); if (!m.root) m.left = nowLeft;
+      $('#ilist', body).innerHTML = list(); $('#inote', body).value = '';
+      b.disabled = !m.root && !m.left; b.textContent = 'Create invite';
+    } catch (err) { toast(err.message, 'err'); b.disabled = false; b.textContent = 'Create invite'; }
   };
 }
 
