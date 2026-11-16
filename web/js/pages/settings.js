@@ -40,8 +40,11 @@ function profile(body) {
   const p = JSON.parse(JSON.stringify(store.settings.profile));
   const draw = () => {
     body.innerHTML =
-      card({ title: 'Discord', desc: 'Use your Discord name and picture. Only those two change: your history, taste, friends and settings stay as they are.',
-        body: `<button class="btn" id="linkDc" style="background:#5865f2;color:#fff;border:0">Link Discord</button>`,
+      card({ title: 'Discord', desc: p.discord ? 'Your name and picture come from this Discord account. Update them any time, or unlink: your current name and picture stay.' : 'Use your Discord name and picture. Only those two change: your history, taste, friends and settings stay as they are.',
+        body: p.discord
+          ? `<div class="dc-linked">${avatar(p, 52)}<div><b>Linked as ${esc(p.name)}</b><span>@${esc(p.discord.username || 'discord')} · since ${new Date(p.discord.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span></div>
+             <div class="dc-acts"><button class="btn" id="linkDc">Update from Discord</button><button class="btn ghost" id="unlinkDc">Unlink</button></div></div>`
+          : `<button class="btn dc-btn" id="linkDc">Link Discord</button>`,
         foot: '<span>Reads your public profile only. Nothing is posted.</span>' }) +
       card({ title: 'Display name', desc: 'Shown in the menu and the welcome screen.',
         body: `<div class="field"><label for="pname">Name</label><input id="pname" class="input" maxlength="40" value="${esc(p.name)}" style="max-width:340px"></div>`,
@@ -52,7 +55,7 @@ function profile(body) {
     const saveName = debounce(() => saveSettings({ profile: { name: p.name } }).then(() => flash(body, 's1')).catch((e) => toast(e.message, 'err')));
     $('#pname', body).oninput = (e) => { p.name = e.target.value; if (p.name.trim()) saveName(); };
     $('#linkDc', body).onclick = async (e) => { // opens Discord in the browser, then picks up the name and picture
-      const b = e.currentTarget; b.disabled = true; b.textContent = 'Waiting for Discord…';
+      const b = e.currentTarget, label = b.textContent; b.disabled = true; b.textContent = 'Waiting for Discord…';
       try {
         const { url, state } = await post('/api/auth/discord/start', {});
         window.open(url, '_blank');
@@ -60,9 +63,14 @@ function profile(body) {
         const tick = setInterval(async () => {
           const st = await api(`/api/auth/discord/status?state=${state}`).catch(() => ({}));
           if (st.done) { clearInterval(tick); store.settings = await api('/api/settings'); toast(`Linked as ${st.name}`, 'ok'); window.refreshNav?.(); profile(body); }
-          else if ((st.error && st.error !== 'expired') || Date.now() > until || !body.isConnected) { clearInterval(tick); b.disabled = false; b.textContent = 'Link Discord'; if (st.error) toast(st.error, 'err'); }
+          else if ((st.error && st.error !== 'expired') || Date.now() > until || !body.isConnected) { clearInterval(tick); b.disabled = false; b.textContent = label; if (st.error) toast(st.error, 'err'); }
         }, 1200);
-      } catch (err) { b.disabled = false; b.textContent = 'Link Discord'; toast(err.message, 'err'); }
+      } catch (err) { b.disabled = false; b.textContent = label; toast(err.message, 'err'); }
+    };
+    const un = $('#unlinkDc', body);
+    if (un) un.onclick = async () => {
+      await saveSettings({ profile: { discord: null } }).catch((e) => toast(e.message, 'err'));
+      toast('Discord unlinked. Your name and picture stay.', 'ok'); profile(body);
     };
     const saveAv = () => saveSettings({ profile: { avatar: p.avatar } }).then(() => flash(body, 's2')).catch((e) => toast(e.message, 'err'));
     import('../avatar-studio.js').then((m) => m.mountStudio($('#avStudio', body), p.avatar, saveAv, p.name));

@@ -132,7 +132,10 @@ fn activity<'a>(m: &'a Meta, mpv_title: &'a str, duration: f64, position: f64, p
         .state(state);
 
     let imdb_ok = m.imdb.starts_with("tt") && m.imdb[2..].chars().all(|c| c.is_ascii_digit()) && m.imdb.len() > 2;
-    let mut assets = Assets::new().large_text(clip(&large_text, 128));
+    // the little Orbie orb on the corner of the poster (hosted on the public download page so Discord can fetch it)
+    let mut assets = Assets::new().large_text(clip(&large_text, 128))
+        .small_image("https://raw.githubusercontent.com/Manteh/orbie-app/main/docs/orb.png".to_string())
+        .small_text("Orbie".to_string());
     if imdb_ok {
         assets = assets.large_image(format!("https://images.metahub.space/poster/medium/{}/img", m.imdb));
         a = a.details_url(format!("https://www.imdb.com/title/{}/", m.imdb))

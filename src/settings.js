@@ -80,6 +80,11 @@ export function updateSettings(patch) {
       cur.profile.name = n || cur.profile.name;
       if (patch.profile.name != null) cur.profile.named = true;
       if (patch.profile.avatar) cur.profile.avatar = cleanAvatar(patch.profile.avatar, cur.profile.avatar);
+      // the Discord account the name and picture came from (null = unlinked; the name and picture stay)
+      if ('discord' in patch.profile) {
+        const d = patch.profile.discord;
+        cur.profile.discord = d && /^\d{5,25}$/.test(String(d.id)) ? { id: String(d.id), username: String(d.username || '').slice(0, 40), at: Number(d.at) || Date.now() } : null;
+      }
     }
     for (const section of ['appearance', 'playback']) {
       for (const [k, v] of Object.entries(patch[section] || {})) {

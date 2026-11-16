@@ -33,11 +33,11 @@ export async function complete({ token, state }) {
     const u = await me.json();
     const name = String(u.global_name || u.username || '').slice(0, 40);
     let image = '';
-    if (u.avatar) { // 128px WebP keeps the picture under the profile size limit
-      const r = await fetch(`https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.webp?size=128`, { signal: AbortSignal.timeout(10000) });
-      if (r.ok) image = `data:image/webp;base64,${Buffer.from(await r.arrayBuffer()).toString('base64')}`;
+    if (u.avatar) { // a 256px WebP stays well under the profile picture limit
+      const r = await fetch(`https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.webp?size=256`, { signal: AbortSignal.timeout(10000) });
+      if (r.ok) { const b = Buffer.from(await r.arrayBuffer()); if (b.length < 34000) image = `data:image/webp;base64,${b.toString('base64')}`; }
     }
-    await updateSettings({ profile: { ...(name ? { name } : {}), ...(image ? { avatar: { image } } : {}) } });
+    await updateSettings({ profile: { ...(name ? { name } : {}), ...(image ? { avatar: { image } } : {}), discord: { id: u.id, username: u.username, at: Date.now() } } });
     Object.assign(p, { done: true, name });
     return { ok: true, name };
   } catch (e) {
