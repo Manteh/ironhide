@@ -207,11 +207,15 @@ void main() {
     let ringA = wave > 0 && wave < 1 ? Math.sin(Math.PI * Math.min(1, wave * 1.15)) * (1 - wave) * 1.6 : 0;
     let fade = 1;
 
-    if (dive) { // into the orb, through the light, out into the app
-      const k = clamp((now - dive) / 900), e = inCubic(k);
-      R = lerp(fr, Math.hypot(W, H) * 1.6, e);
-      ringA = 0; glow = lerp(glow, 2, e);
-      fade = 1 - span(k, 0.72, 1);
+    if (dive) {
+      const k = clamp((now - dive) / 450);
+      // Keep the orb crisp at its native slot size (no ballooning or blown-up textures)
+      R = fr;
+      // Soft energetic pulse of light from within
+      glow = lerp(glow, 2.0, Math.sin(k * Math.PI));
+      ringA = 0;
+      // Clean dissolve into the app background
+      fade = 1 - span(k, 0.12, 1);
     }
     if (!lettersShown && t > 1.72) { lettersShown = true; if ((window.__freeze ?? FREEZE) != null) letters.forEach((l, i) => { const k = clamp((t - 1.72 - i * 0.085) / 0.5); l.style.opacity = k; l.style.transform = `translateY(${(1 - k) * 0.18}em)`; }); else showLetters(); }
 
@@ -227,7 +231,7 @@ void main() {
       gl.uniform1f(U.uFade, fade);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
-    if (!(dive && now - dive > 950)) requestAnimationFrame(frame);
+    if (!(dive && now - dive > 480)) requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
   window.__frame = frame; // for checking frames: __freeze = 1.6; __frame(performance.now())
@@ -251,10 +255,13 @@ void main() {
       const t = begun ? performance.now() - begun : 0;
       if (t < INTRO) return setTimeout(go, INTRO - t);
       clearTimeout(slow); m.classList.remove('slow');
-      $('lockup').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: 'forwards', easing: 'ease-in' });
       dive = performance.now();
-      if (!prog) document.body.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 600, fill: 'forwards' });
-      setTimeout(() => location.replace(url), 940);
+      $('lockup').animate([
+        { opacity: 1, transform: 'none' },
+        { opacity: 0, transform: 'translateY(-8px) scale(0.98)' }
+      ], { duration: 420, fill: 'forwards', easing: 'cubic-bezier(.22, 1, .36, 1)' });
+      if (!prog) document.body.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
+      setTimeout(() => location.replace(url), 450);
     };
     go();
   };

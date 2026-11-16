@@ -113,7 +113,7 @@
   const sld = (attrs, trk, cls = '') => `<div class="ihp-sld ${cls}" ${attrs} data-val="0" style="--trk:${trk || 'rgba(255,255,255,.16)'}"><i class="ihp-s-trk"></i><i class="ihp-s-fill"></i><b class="ihp-s-thumb"><em></em></b></div>`;
   const slider = (id, label, min, max, step, icon, trk, def = 0) => `<div class="sl" data-id="${id}"><label title="Double-click to reset">${icon ? I[icon] : ''}${label}<output></output></label>${sld(`data-min="${min}" data-max="${max}" data-step="${step}" data-def="${def}"`, trk)}</div>`;
   root.innerHTML = `
-    <canvas class="ihp-amb" aria-hidden="true"></canvas><canvas class="ihp-aud" aria-hidden="true" hidden></canvas>
+    <canvas class="ihp-amb" aria-hidden="true"></canvas>
     <div class="ihp-hit"></div><div class="ihp-shade t"></div><div class="ihp-shade b"></div>
     <div class="ihp-skip l"><b>${I.b10}<span>10 seconds</span></b></div><div class="ihp-skip r"><b>${I.f10}<span>10 seconds</span></b></div>
     <div class="ihp-top"><button class="ihp-round ihp-glass" data-a="close" title="Back (Esc)">${I.back}</button></div>
@@ -152,7 +152,6 @@
           <div class="chips" data-frames><button data-frame="cinema">Cinema</button><button data-frame="lying">Lying down</button><button data-frame="smaller">Smaller</button><button data-frame="bigger">Bigger</button><button data-frame="up">Up</button><button data-frame="down">Down</button></div>
           <div class="amb-sl"><label>Light strength<output data-ambo="strength"></output></label><input type="range" min="0.3" max="2" step="0.05" data-amb="strength" aria-label="Light strength"></div>
           <div class="amb-sl"><label>Light reach<output data-ambo="reach"></output></label><input type="range" min="0.5" max="2" step="0.05" data-amb="reach" aria-label="Light reach"></div>
-          <div class="amb-sl"><label>Audience<output data-ambo="crowd"></output></label><input type="range" min="0" max="1" step="0.05" data-amb="crowd" aria-label="Audience"></div>
           <div class="tg"><div>Ambient mode<small>Smaller, movable picture with the film's light around it (G). Off: normal full screen</small></div><button data-tg="amb"></button></div>
           <div class="ihp-note">Shrink and move the picture inside the black screen. Option+arrows move it, Option+− and Option+= resize, Option+drag places it, Option+0 resets. Kept for your next films.</div>
           <h4>Render quality</h4><div class="chips" data-render>${Object.keys(RENDER).map((k) => `<button data-render="${k}">${k}</button>`).join('')}</div><div class="ihp-note" data-rnote></div>
@@ -224,7 +223,7 @@
   function paintStatic() {
     const paused = b('pause');
     if (paused !== root.classList.contains('paused')) { if (paused) { buildPaused(); showPaused(); } else hidePaused(); }
-    root.classList.toggle('paused', paused); audKick();
+    root.classList.toggle('paused', paused);
     root.classList.toggle('buf', b('paused-for-cache'));
     const v = n('volume', 100), muted = b('mute') || v === 0;
     const mi = muted ? I.mute : v < 50 ? I.vol1 : I.vol; if (mi !== lastMi) { lastMi = mi; q('[data-a=mute]').innerHTML = mi; }
@@ -624,20 +623,17 @@
   // your light settings (Picture panel), kept on this Mac
   const AMBS = (() => {
     try {
-      const v = JSON.parse(localStorage.getItem('ihp.ambs') || '{}');
-      if (localStorage.getItem('ihp.crowd_set') !== '1') v.crowd = 0;
-      return { strength: 1, reach: 1, crowd: 0, ...v };
-    } catch { return { strength: 1, reach: 1, crowd: 0 }; }
+      return { strength: 1, reach: 1, ...JSON.parse(localStorage.getItem('ihp.ambs') || '{}') };
+    } catch { return { strength: 1, reach: 1 }; }
   })();
   function paintAmbSliders() {
-    for (const k of ['strength', 'reach', 'crowd']) { const i = q(`[data-amb=${k}]`), o = q(`[data-ambo=${k}]`); if (i) i.value = AMBS[k]; if (o) o.textContent = Math.round(AMBS[k] * 100) + '%'; }
+    for (const k of ['strength', 'reach']) { const i = q(`[data-amb=${k}]`), o = q(`[data-ambo=${k}]`); if (i) i.value = AMBS[k]; if (o) o.textContent = Math.round(AMBS[k] * 100) + '%'; }
   }
   root.addEventListener('input', (e) => {
     const k = e.target.dataset?.amb; if (!k) return;
     AMBS[k] = +e.target.value;
-    if (k === 'crowd') { try { localStorage.setItem('ihp.crowd_set', '1'); } catch {} }
     try { localStorage.setItem('ihp.ambs', JSON.stringify(AMBS)); } catch {}
-    paintAmbSliders(); ambBuild(true); audKick(true);
+    paintAmbSliders(); ambBuild(true);
   });
   const A = { dim: 1, src: null, sw: 0, sh: 0, tgt: null, cur: null, LW: 0, LH: 0, img: null, raf: 0, last: 0, cut: false, geo: null, bars: { t: 0, b: 0 }, barCount: {}, barScenes: {}, scene: 0, barSamples: 0, barLocked: false, hole: null, holeTgt: null };
   // a film whose bars we already know: crop from the first frame, nothing to measure
@@ -665,7 +661,7 @@
   function ambSync() {
     const v = visRect(), on = ambActive();
     call('player_ambient', { on, rect: [v.x / v.W, v.y / v.H, v.w / v.W, v.h / v.H] });
-    ambCv.hidden = !on; audKick(true);
+    ambCv.hidden = !on;
     if (on) ambBuild(true); else { cancelAnimationFrame(A.raf); A.raf = 0; }
   }
   // ambient mode on or off: the frame and the light together. save = remember it (Settings → Playback → Ambient mode)
@@ -802,81 +798,6 @@
     if (moving > 0.6 || holeMoving > 0.3 || Math.abs(dimTo - A.dim) > 0.01) A.raf = requestAnimationFrame(ambTick); else A.cut = false;
   }
 
-  // ---------- the audience: silhouettes in the dark below the picture, lit by the screen ----------
-  // Three rows of seats seen from behind (far row small and hazy, near row big and nearly black). Their outlines catch the
-  // colour of the film as it changes; pausing brings the house lights up (warm, everyone visible). Drawn only in the space
-  // the picture leaves free, ~20 fps while playing, and not at all once the lights have settled on a pause.
-  const audCv = q('.ihp-aud'), audCtx = audCv.getContext('2d');
-  const AUD = { raf: 0, last: 0, col: [70, 70, 80], tgt: [70, 70, 80], house: 0, key: '', people: null, G: 0, colAt: 0, ev: null, evAt: 0 };
-  const audGap = () => { const v = visRect(); return Math.max(0, v.H - (v.y + v.h)); };
-  const audActive = () => ambActive() && AMBS.crowd > 0.02 && audGap() >= 0.07 * innerHeight;
-  function audLayout(W, G) {
-    let s = 20260511; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    const u = G / 6.6, rows = [];
-    // far -> near: scale, where the seat-back top sits (fraction of the free height), haze (how much screen light veils it)
-    [[0.5, 0.34, 0.2], [0.72, 0.62, 0.1], [1, 0.98, 0]].forEach(([sc, yb, hz], ri) => {
-      const r = u * sc, step = r * 3.1, ppl = []; let x = -step * (0.2 + 0.5 * ri) + rnd() * step * 0.3;
-      for (; x < W + step; x += step * (0.92 + rnd() * 0.2)) {
-        if (rnd() < 0.1) continue; // an empty seat
-        ppl.push({ x, r: r * (0.9 + rnd() * 0.2), up: r * (rnd() * 0.3 - 0.1), bun: rnd() < 0.12, ph: rnd() * 6.28, sw: 0.02 + rnd() * 0.035 });
-      }
-      rows.push({ sc, yb: yb * G, hz, ppl, r });
-    });
-    return rows;
-  }
-  function audDraw(now) {
-    const v = visRect(), W = v.W, G = Math.round(audGap()), sc = 0.75, t = now / 1000;
-    const key = W + '|' + G; if (key !== AUD.key) { AUD.key = key; AUD.people = audLayout(W, G); AUD.G = G; audCv.width = Math.round(W * sc); audCv.height = Math.max(1, Math.round(G * sc)); audCv.style.height = G + 'px'; }
-    const g = audCtx, h = AUD.house, [cr, cg, cb] = AUD.col;
-    g.setTransform(sc, 0, 0, sc, 0, 0); g.clearRect(0, 0, W, G);
-    // an idle moment now and then: one person leans toward their neighbour and back
-    if (!AUD.ev || t > AUD.evAt + AUD.ev.dur) { const row = AUD.people[(Math.random() * 3) | 0], i = (Math.random() * row.ppl.length) | 0; AUD.ev = { row, i, dur: 2.2, amp: (Math.random() < 0.5 ? -1 : 1) * 0.5 }; AUD.evAt = t + 4 + Math.random() * 9; }
-    const evk = t > AUD.evAt ? Math.sin(Math.min(1, (t - AUD.evAt) / AUD.ev.dur) * Math.PI) : 0;
-    const lift = (c) => Math.min(255, c * 1.5 + 22);
-    AUD.people.forEach((row, ri) => {
-      // lit side: screen colour when dark, warm white when the house lights are up
-      const rim = [lift(cr) * (1 - h) + 255 * h, lift(cg) * (1 - h) + 196 * h, lift(cb) * (1 - h) + 140 * h];
-      const ra = (0.62 - ri * 0.2) * (1 - h) + (0.5 - ri * 0.08) * h;
-      const fill = [4 + cr * row.hz * 0.35 + 30 * h, 4 + cg * row.hz * 0.35 + 24 * h, 6 + cb * row.hz * 0.35 + 22 * h].map((c) => Math.round(Math.min(90, c)));
-      const rimS = `rgba(${rim.map(Math.round)},${ra.toFixed(3)})`, fillS = `rgb(${fill})`, lw = 1.2 + ri * 0.6;
-      for (let i = 0; i < row.ppl.length; i++) {
-        const p = row.ppl[i], r = p.r, yb = row.yb;
-        const lean = (row === AUD.ev?.row && i === AUD.ev.i ? AUD.ev.amp * r * evk : 0) + Math.sin(t * 0.35 + p.ph) * p.sw * r * 6;
-        const tilt = Math.sin(t * 0.27 + p.ph * 1.7) * p.sw * 2 + lean / r * 0.12;
-        const hx = p.x + lean, hy = yb - r * 2.25 - p.up;
-        const body = () => { g.beginPath(); g.moveTo(p.x - r * 2.2, yb + r); g.bezierCurveTo(p.x - r * 2.2, yb - r * 0.4, p.x - r * 1.35, yb - r * 1.3, p.x - r * 0.5 + lean * 0.4, yb - r * 1.55); g.lineTo(p.x + r * 0.5 + lean * 0.4, yb - r * 1.55); g.bezierCurveTo(p.x + r * 1.35, yb - r * 1.3, p.x + r * 2.2, yb - r * 0.4, p.x + r * 2.2, yb + r); g.closePath(); };
-        const head = () => { g.beginPath(); g.ellipse(hx, hy, r * 0.92, r * 1.05, tilt, 0, 6.2832); if (p.bun) g.arc(hx - r * 0.1, hy - r * 1.15, r * 0.4, 0, 6.2832); };
-        // rim: the same shape nudged up behind itself, then the dark shape over it
-        g.fillStyle = rimS; g.save(); g.translate(0, -lw); body(); g.fill(); head(); g.fill(); g.restore();
-        g.fillStyle = fillS; body(); g.fill(); head(); g.fill();
-      }
-      // the seat-back in front of this row's shoulders
-      const top = row.yb - row.r * 1.05;
-      g.fillStyle = rimS; g.fillRect(0, top - lw, W, lw + 0.5);
-      g.fillStyle = `rgb(${fill.map((c) => Math.round(c * 0.8))})`; g.fillRect(0, top, W, G - top + 4);
-    });
-    audCv.style.opacity = Math.min(1, AMBS.crowd);
-  }
-  function audTick(now) {
-    AUD.raf = 0;
-    if (!audActive()) { audCv.hidden = true; return; }
-    if (now - AUD.last < 48) { AUD.raf = requestAnimationFrame(audTick); return; }
-    const dt = Math.min(0.2, (now - (AUD.last || now - 50)) / 1000); AUD.last = now;
-    audCv.hidden = false;
-    // the film's colour: the bottom of the picture (nearest the seats) mixed with the whole scene
-    if (A.src && now - AUD.colAt > 250) {
-      AUD.colAt = now; const { src, sw, sh } = A, rows = Math.max(2, (sh * 0.15) | 0); let bt = [0, 0, 0], all = [0, 0, 0];
-      for (let i = 0; i < src.length; i += 3) { const y = ((i / 3) / sw) | 0; for (let c = 0; c < 3; c++) { all[c] += src[i + c]; if (y >= sh - rows) bt[c] += src[i + c]; } }
-      const na = src.length / 3, nb = rows * sw;
-      AUD.tgt = [0, 1, 2].map((c) => (bt[c] / nb) * 0.6 + (all[c] / na) * 0.4);
-    }
-    const k = 1 - Math.exp(-dt / 0.6); let d = 0;
-    for (let c = 0; c < 3; c++) { AUD.col[c] += (AUD.tgt[c] - AUD.col[c]) * k; d = Math.max(d, Math.abs(AUD.tgt[c] - AUD.col[c])); }
-    const hT = b('pause') ? 1 : 0, hOld = AUD.house; AUD.house += (hT - AUD.house) * (1 - Math.exp(-dt / 0.7));
-    audDraw(now);
-    if (!(hT === 1 && Math.abs(1 - AUD.house) < 0.01 && d < 1 && Math.abs(AUD.house - hOld) < 0.002)) AUD.raf = requestAnimationFrame(audTick); // settled on a pause: stop drawing
-  }
-  function audKick(relayout = false) { if (relayout) AUD.key = ''; if (!audActive()) { audCv.hidden = true; return; } if (!AUD.raf) { AUD.last = 0; AUD.raf = requestAnimationFrame(audTick); } }
   const drawAmb = () => ambSync(); // geometry changed (frame, full screen, window size)
   addEventListener('resize', () => ambSync());
 
@@ -964,7 +885,7 @@
     close(error) {
       root.classList.remove('pip'); playing = false; root.hidden = true; document.documentElement.classList.remove('ihp-on'); root.classList.remove('pn', 'ui');
       keysEl?.remove(); keysEl = null;
-      A.src = null; A.cur = null; A.tgt = null; cancelAnimationFrame(A.raf); A.raf = 0; ambCtx.clearRect(0, 0, ambCv.width, ambCv.height); cancelAnimationFrame(AUD.raf); AUD.raf = 0; audCv.hidden = true; call('player_ambient', { on: false });
+      A.src = null; A.cur = null; A.tgt = null; cancelAnimationFrame(A.raf); A.raf = 0; ambCtx.clearRect(0, 0, ambCv.width, ambCv.height); call('player_ambient', { on: false });
       if (error) import('/js/ui.js').then(({ toast }) => toast?.(error, 'err')).catch(() => {});
       // finished an episode? offer the next one (the daemon saves the position a moment after the player closes)
       else for (const ms of [1500, 4000]) setTimeout(() => import('/js/nextup.js').then((m) => m.offerAfterMpv()).catch(() => {}), ms);

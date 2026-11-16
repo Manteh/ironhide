@@ -338,7 +338,4 @@ details.ft[open] { padding-bottom: 8px; }
 /* ambient light: the picture's edge colours, stretched outward and blurred; the picture itself is cut out (clip-path) */
 .ihp-amb { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; filter: blur(16px); opacity: 1; image-rendering: auto; }
 .ihp-amb[hidden], #ihp.pip .ihp-amb { display: none; }
-/* the audience: seats and silhouettes in the dark below the picture (above the light, under every control) */
-.ihp-aud { position: absolute; left: 0; bottom: 0; width: 100%; pointer-events: none; }
-.ihp-aud[hidden], #ihp.pip .ihp-aud { display: none; }
 @media (prefers-reduced-transparency: reduce) { .ihp-amb { opacity: .6; } }
