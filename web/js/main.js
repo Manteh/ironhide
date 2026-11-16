@@ -248,10 +248,23 @@ window.refreshNodes = refreshNodes;
 
 function splash() {
   const g = $('#gate');
+  if (!g) return;
   if (sessionStorage.getItem('ih-in')) return g.remove();
   sessionStorage.setItem('ih-in', '1');
-  g.innerHTML = `${LOGO}<b>Welcome back, ${esc(store.settings.profile.name)}</b><span>Private access</span>`;
-  setTimeout(() => { g.classList.add('out'); setTimeout(() => g.remove(), 700); }, 900);
+  const name = esc(store.settings?.profile?.name || 'SHIMARA');
+  g.innerHTML = `
+    <div class="gate-content">
+      <div class="gate-orb-wrap">
+        <img class="gate-orb" src="/img/orbie-orb.png" alt="" width="68" height="68" decoding="async">
+      </div>
+      <b>Welcome back, ${name}</b>
+      <span>Private access</span>
+    </div>
+  `;
+  setTimeout(() => {
+    g.classList.add('out');
+    setTimeout(() => g.remove(), 700);
+  }, 1300);
 }
 
 route('/', 'browse', 'home');
@@ -267,6 +280,8 @@ route('/profile', 'page', 'profile');
 route('/profile/:id', 'page', 'profile');
 route('/settings', 'page', 'settings');
 route('/settings/:section', 'page', 'settings');
+route('/manifesto', 'page', 'manifesto');
+route('/sanctuary', 'page', 'manifesto');
 
 document.addEventListener('keydown', (e) => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);

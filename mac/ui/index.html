@@ -130,7 +130,7 @@ void main() {
   }
 
   col = 1.0 - exp(-col * 1.3);                       // filmic roll-off: bright stays bright without clipping
-  col = mix(vec3(0.051, 0.051, 0.055), col, uFade);  // fade to the app's own background
+  col = mix(vec3(0.027, 0.027, 0.051), col, uFade);  // fade to the cosmic midnight background
   col += (hash2(p + fract(uT)) - 0.5) / 255.0;       // dither: no banding in the dark gradients
   gl_FragColor = vec4(col, 1.0);
 }

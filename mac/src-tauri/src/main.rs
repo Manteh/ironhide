@@ -353,7 +353,7 @@ fn main() {
                 .inner_size(1440.0, 900.0)
                 .min_inner_size(960.0, 600.0)
                 .center()
-                .background_color(Color(13, 13, 14, 255))
+                .background_color(Color(7, 7, 13, 255))
                 // title bar takes the window colour and the title is hidden, like Discord
                 .title_bar_style(TitleBarStyle::Overlay)
                 .traffic_light_position(tauri::LogicalPosition::new(16.0, 12.0))
