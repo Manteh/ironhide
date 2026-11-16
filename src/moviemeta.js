@@ -9,7 +9,7 @@ import { getPlayState } from './playstate.js';
 
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = 'https://image.tmdb.org/t/p';
-const UA = 'IronHide/1.0 (personal media hub)';
+const UA = 'Orbie/1.0 (personal media hub)';
 const cache = new Map();
 
 const cfg = () => { try { return JSON.parse(readFileSync(join(CONFIG_DIR, 'config.json'), 'utf8')); } catch { return {}; } };
@@ -164,4 +164,53 @@ export async function tmdbToImdb(kind, tid) {
   const out = { imdbId: x.imdb_id || '', type: kind === 'tv' ? 'series' : 'movie' };
   idMap.set(k, out);
   return out;
+}
+
+// ---------- what people say under the trailer (YouTube Data API: youtube_api_key, free at console.cloud.google.com) ----------
+const ytCache = new Map();
+const ago = (iso) => {
+  const s = (Date.now() - Date.parse(iso)) / 1000;
+  for (const [n, u] of [[31536000, 'y'], [2592000, 'mo'], [604800, 'w'], [86400, 'd'], [3600, 'h'], [60, 'm']]) if (s >= n) return `${Math.floor(s / n)}${u} ago`;
+  return 'just now';
+};
+const unescapeHtml = (s) => String(s || '').replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+// ids: the title's trailer video ids, best first; the first one with comments wins
+export async function getTrailerComments(ids) {
+  const key = cfg().youtube_api_key;
+  if (!key) return { needsKey: true, comments: [] };
+  const list = ids.filter((x) => /^[\w-]{11}$/.test(x)).slice(0, 3);
+  const ck = list.join(',');
+  const hit = ytCache.get(ck);
+  if (hit && Date.now() - hit.at < 6 * 3600e3) return hit.value;
+  let value = { comments: [] };
+  for (const v of list) {
+    try {
+      const d = await getJson(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${v}&order=relevance&maxResults=30&textFormat=plainText&key=${encodeURIComponent(key)}`);
+      const comments = (d.items || []).map((it) => {
+        const s = it.snippet.topLevelComment.snippet;
+        return { author: (s.authorDisplayName || '').replace(/^@/, ''), avatar: s.authorProfileImageUrl || '', text: clip(unescapeHtml(s.textDisplay || s.textOriginal), 900), likes: s.likeCount || 0, replies: it.snippet.totalReplyCount || 0, when: ago(s.publishedAt), url: `https://www.youtube.com/watch?v=${v}&lc=${it.id}` };
+      }).filter((c) => c.text.length > 2);
+      if (comments.length) { value = { videoId: v, comments }; break; }
+    } catch (e) {
+      // 403 commentsDisabled: try the next trailer; a bad key or spent quota is worth saying once
+      if (/answered 400|answered 401/.test(e.message)) { value = { error: 'YouTube rejected the key', comments: [] }; break; }
+    }
+  }
+  ytCache.set(ck, { at: Date.now(), value });
+  return value;
+}
+
+// the episode that's playing: its name, synopsis, still and score (TMDB), for the paused screen
+const epCache = new Map();
+export async function getEpisode(imdbId, season, episode) {
+  const c = cfg(); if (!c.tmdb_api_key || !/^tt\d+$/.test(imdbId || '') || !season || !episode) return null;
+  const k = `${imdbId}:${season}:${episode}`; const hit = epCache.get(k); if (hit) return hit;
+  const key = `api_key=${c.tmdb_api_key}`;
+  const f = await getJson(`${TMDB}/find/${imdbId}?${key}&external_source=imdb_id`);
+  const tv = f.tv_results?.[0]; if (!tv) return null;
+  const e = await getJson(`${TMDB}/tv/${tv.id}/season/${season}/episode/${episode}?${key}`).catch(() => null); if (!e) return null;
+  const out = { season, episode, name: e.name || '', overview: e.overview || '', still: e.still_path ? `${IMG}/w780${e.still_path}` : '', aired: e.air_date || '', runtime: e.runtime || 0, rating: e.vote_average ? +e.vote_average.toFixed(1) : null,
+    directors: (e.crew || []).filter((x) => x.job === 'Director').map((x) => x.name).slice(0, 2), guests: (e.guest_stars || []).slice(0, 4).map((g) => g.name) };
+  epCache.set(k, out); return out;
 }

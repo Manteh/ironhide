@@ -1,5 +1,5 @@
-// Your profile: what you watched, your favourites, numbers, medals and friends. All of it from your own IronHide.
-import { $, esc, icon, avatar } from '../ui.js';
+// Your profile: what you watched, your favourites, numbers, medals and friends. All of it from your own Orbie.
+import { $, esc, icon, avatar, ask } from '../ui.js';
 import { api } from '../api.js';
 import { store } from '../main.js';
 
@@ -115,7 +115,7 @@ export default async function profile(el, params = {}) {
   $('.pf', el).innerHTML = `
     <header class="pf-hero">
       <span class="pf-av">${avatar(me, 112)}</span>
-      <div class="pf-who"><h1>${esc(me.name)}</h1><p>${fid ? `${buddy.online ? 'Online' : 'Offline'}${got.live ? '' : ` · last updated ${esc(ago(got.at).toLowerCase())}`} · ` : ''}Watching with IronHide since ${new Date(x.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} · ${earned} of ${MEDALS.length} medals · ${friends.length} friend${friends.length === 1 ? '' : 's'}</p></div>
+      <div class="pf-who"><h1>${esc(me.name)}</h1><p>${fid ? `${buddy.online ? 'Online' : 'Offline'}${got.live ? '' : ` · last updated ${esc(ago(got.at).toLowerCase())}`} · ` : ''}Watching with Orbie since ${new Date(x.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} · ${earned} of ${MEDALS.length} medals · ${friends.length} friend${friends.length === 1 ? '' : 's'}</p></div>
       <div class="pf-acts">${fid ? `<a class="btn sm" href="#/friends">${icon('users')} Friends</a><button class="btn sm" id="pfRm">Remove friend</button>` : `<a class="btn sm" href="#/settings/profile">${icon('user')} Edit profile</a>`}</div>
     </header>
     <div class="pf-stats">${stat(hoursTxt, 'hours watched')}${stat(num(x.films.length), x.films.length === 1 ? 'film' : 'films')}${stat(num(x.shows.length), x.shows.length === 1 ? 'show' : 'shows', `${num(x.episodes.length)} episodes`)}${stat(num(x.finished.length), 'finished')}${stat(num(x.streak), 'day streak', `best ${x.best}`)}${stat(num(data.watchlist.length), fid ? 'on their list' : 'on your list')}</div>
@@ -140,9 +140,9 @@ export default async function profile(el, params = {}) {
     ${section('Medals', `${earned} of ${MEDALS.length} earned`, `<div class="pf-medals">${MEDALS.map((m) => medalHtml(m, x)).join('')}</div>`)}
 
     ${fid ? '' : section('Friends', friends.length ? `${friends.filter((f) => f.online).length} online` : '', friends.length ? `<div class="pf-fr">${friends.map((f) => `<a href="#/profile/${esc(f.id)}" class="${f.online ? 'on' : ''}"><span>${avatar(f, 44)}</span><div><b>${esc(f.name)}</b><small>${presence(f)}</small></div></a>`).join('')}</div>` : `<p class="pf-empty">No friends yet. <a href="#/friends">Add one here</a>.</p>`)}
-    <p class="pf-note">${fid ? 'Hours count how far they got in each film or episode once.' : "Hours count how far you got in each film or episode once, so rewatches don't add up. Until now IronHide only kept your last 100 plays, so older watching isn't counted. From here on it keeps 5,000. Friends can see this page: you can turn that off in Settings, Together."}</p>`;
+    <p class="pf-note">${fid ? 'Hours count how far they got in each film or episode once.' : "Hours count how far you got in each film or episode once, so rewatches don't add up. Until now Orbie only kept your last 100 plays, so older watching isn't counted. From here on it keeps 5,000. Friends can see this page: you can turn that off in Settings, Together."}</p>`;
 
-  $('#pfRm', el)?.addEventListener('click', async () => { if (!confirm(`Remove ${buddy.name} from your friends?`)) return; await fetch(`/api/social/friends/${encodeURIComponent(fid)}`, { method: 'DELETE' }); location.hash = '#/friends'; });
+  $('#pfRm', el)?.addEventListener('click', async () => { if (!(await ask(`Remove ${buddy.name} from your friends?`, { ok: 'Remove', danger: true }))) return; await fetch(`/api/social/friends/${encodeURIComponent(fid)}`, { method: 'DELETE' }); location.hash = '#/friends'; });
   // taste profile (from what you watch and rate): computed by the recommendation engine
   if (!fid) api('/api/taste').then((t) => {
     const tz = $('#pfTaste', el); if (!tz) return;

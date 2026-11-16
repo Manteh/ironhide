@@ -13,7 +13,7 @@ const WATCHLIST = join(CONFIG_DIR, 'watchlist.json');
 const defaults = () => ({
   profile: { name: cap(userInfo().username), avatar: { icon: 'film', color: 'indigo' } },
   appearance: { theme: 'dark', accent: 'indigo', density: 'comfortable', radius: 'round', motion: 'full', posterSize: 'm', layout: 'grid', showHero: true },
-  playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true, player: 'mpv', webMaxHeight: '1080', forceTranscode: false, audioLangs: ['en'], subLang: '', hideKinds: ['threed', 'cam', 'scr'], sortBy: 'qualitysize', resultCount: 60 },
+  playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true, autoNext: true, autoSkipIntro: false, notifyNewEpisodes: true, discordPresence: true, ambientMode: false, player: 'mpv', webMaxHeight: '1080', forceTranscode: false, audioLangs: ['en'], subLang: '', hideKinds: ['threed', 'cam', 'scr'], sortBy: 'qualitysize', resultCount: 60 },
 });
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : 'You');
 
@@ -89,7 +89,7 @@ export function updateSettings(patch) {
         const allowed = ALLOWED[section][k];
         if (allowed ? allowed.includes(v) : k in cur[section]) {
           if (k === 'maxSizeGb') cur[section][k] = Math.max(0, Math.min(500, Number(v) || 0));
-          else if (k === 'cachedOnly' || k === 'forceTranscode' || k === 'showHero') cur[section][k] = !!v;
+          else if (['cachedOnly', 'forceTranscode', 'showHero', 'autoNext', 'autoSkipIntro', 'notifyNewEpisodes', 'discordPresence', 'ambientMode'].includes(k)) cur[section][k] = !!v;
           else cur[section][k] = v;
         }
       }
@@ -120,7 +120,8 @@ export const CONNECTORS = [
   { id: 'torbox', label: 'TorBox', kind: 'debrid', field: 'torbox_api_key', help: 'Instant cached streams. Key from torbox.app/settings.' },
   { id: 'realdebrid', label: 'Real-Debrid', kind: 'debrid', field: 'rd_api_key', help: 'Alternative debrid. Key from real-debrid.com/apitoken.' },
   { id: 'alldebrid', label: 'AllDebrid', kind: 'debrid', field: 'ad_api_key', help: 'Alternative debrid.' },
-  { id: 'tmdb', label: 'TMDB', kind: 'metadata', field: 'tmdb_api_key', help: 'Used for search in MCP tools. Free key at themoviedb.org.' },
+  { id: 'tmdb', label: 'TMDB', kind: 'metadata', field: 'tmdb_api_key', help: 'Posters, details, recommendations, search and charts. Free key at themoviedb.org.' },
+  { id: 'youtube', label: 'YouTube', kind: 'metadata', field: 'youtube_api_key', help: 'Shows what people say under the trailer on title pages. Free key: console.cloud.google.com, enable "YouTube Data API v3".' },
   { id: 'harvester', label: 'Trakt harvester', kind: 'metadata', field: 'harvester_url', url: true, help: 'Your Trakt catalog service. Powers trending, popular, box office and genres.' },
 ];
 
@@ -184,6 +185,11 @@ const TESTS = {
     if (!key) return { status: 'unconfigured', detail: 'No key' };
     const r = await get(`https://api.themoviedb.org/3/configuration?api_key=${encodeURIComponent(key)}`);
     return r.ok ? { status: 'online', detail: 'Key valid' } : { status: 'error', detail: 'Invalid key' };
+  },
+  async youtube(key) {
+    if (!key) return { status: 'unconfigured', detail: 'No key' };
+    const r = await get(`https://www.googleapis.com/youtube/v3/videos?part=id&id=dQw4w9WgXcQ&key=${encodeURIComponent(key)}`);
+    return r.ok ? { status: 'online', detail: 'Key valid' } : { status: 'error', detail: r.status === 403 ? 'Enable YouTube Data API v3 for this key' : 'Invalid key' };
   },
   async harvester(url) {
     const r = await get(`${(url || getConfig().harvester_url).replace(/\/+$/, '')}/manifest.json`, {}, 45000);

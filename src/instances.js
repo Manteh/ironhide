@@ -1,4 +1,4 @@
-// "Another person on this Mac": extra IronHide daemons, each with its own folder (profile, friend code, history)
+// "Another person on this Mac": extra Orbie daemons, each with its own folder (profile, friend code, history)
 // and its own port. Handy for trying Together with yourself, or for sharing one computer.
 import { spawn } from 'child_process';
 import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, chmodSync, rmSync } from 'fs';

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Thin MCP client. All logic lives in the IronHide daemon (src/daemon.js);
+// Thin MCP client. All logic lives in the Orbie daemon (src/daemon.js);
 // this process mirrors the tool schemas and forwards each call over HTTP.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -19,7 +19,7 @@ async function ensureDaemon() {
     await new Promise((r) => setTimeout(r, 250));
     if (await isDaemonRunning()) return;
   }
-  throw new Error("IronHide daemon did not start (is something else on port " + WEB_PORT + "?)");
+  throw new Error("Orbie daemon did not start (is something else on port " + WEB_PORT + "?)");
 }
 
 const server = new McpServer({ name: "ironhide", version: "2.0.0" });
@@ -37,10 +37,10 @@ for (const [name, { handler, ...def }] of Object.entries(tools)) {
       if (!r.ok) throw new Error(data.error || r.statusText);
       return data;
     } catch (err) {
-      return { content: [{ type: "text", text: `IronHide error: ${err.message}` }] };
+      return { content: [{ type: "text", text: `Orbie error: ${err.message}` }] };
     }
   });
 }
 
 await server.connect(new StdioServerTransport());
-console.error("IronHide MCP client running");
+console.error("Orbie MCP client running");

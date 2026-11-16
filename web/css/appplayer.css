@@ -1,4 +1,4 @@
-/* Player overlay for the IronHide Mac app (loaded by the app only). The video is drawn natively underneath;
+/* Player overlay for the Orbie Mac app (loaded by the app only). The video is drawn natively underneath;
    while it plays the page turns transparent and only this overlay is visible. */
 html.ihp-on, html.ihp-on body { background: transparent !important; }
 html.ihp-on body > *:not(#ihp) { visibility: hidden !important; }
@@ -270,3 +270,75 @@ details.ft[open] { padding-bottom: 8px; }
 .pi-q { margin: 24px 0 0; padding-left: 14px; border-left: 2px solid rgba(255,255,255,.3); font-size: 14px; line-height: 1.55; color: rgba(255,255,255,.75); }
 .pi-q cite { display: block; margin-top: 6px; font-style: normal; font-size: 12.5px; color: rgba(255,255,255,.5); }
 @media (max-width: 760px) { .pi-cast { display: none; } }
+
+/* ---- paused screen, redesigned: a cinematic lower-left card over the dimmed frame ---- */
+.ihp-pinfo { background: radial-gradient(120% 90% at 0% 100%, rgba(0,0,0,.88) 0%, rgba(0,0,0,.62) 38%, rgba(0,0,0,.18) 70%, transparent 100%), linear-gradient(0deg, rgba(0,0,0,.55), transparent 45%) !important;
+  padding: 0 clamp(36px, 6vw, 110px) clamp(56px, 10vh, 120px) !important; }
+.pi-wrap { max-width: 640px; }
+.pi-k { display: flex; align-items: center; gap: 10px; font-size: 11.5px; font-weight: 700; letter-spacing: .16em; color: rgba(255,255,255,.7); }
+.pi-pz { display: inline-flex; gap: 3px; } .pi-pz i { width: 3px; height: 11px; border-radius: 1px; background: currentColor; }
+.pi-wrap h2 { margin: 14px 0 0; font-size: clamp(38px, 4.4vw, 64px); line-height: .98; letter-spacing: -.035em; text-wrap: balance; text-shadow: 0 2px 30px rgba(0,0,0,.4); }
+.pi-ep { display: flex; align-items: baseline; gap: 12px; margin-top: 14px; font-size: 19px; color: #fff; }
+.pi-ep em { font-style: normal; font-size: 13px; font-weight: 750; letter-spacing: .06em; color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; }
+.pi-ep b { font-weight: 640; letter-spacing: -.01em; } .pi-ep .pi-tag { font-weight: 500; font-style: italic; color: rgba(255,255,255,.82); font-size: 17px; }
+.pi-m { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 14px; font-size: 14px; color: rgba(255,255,255,.66); }
+.pi-m > span:not(.pi-cert):not(.pi-sc) + span:not(.pi-cert):not(.pi-sc)::before { content: '·'; margin-right: 14px; color: rgba(255,255,255,.35); }
+.pi-cert { height: 20px; padding: 0 6px; display: inline-flex; align-items: center; border: 1px solid rgba(255,255,255,.35); border-radius: 5px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.8); }
+.pi-sc { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 8px; border-radius: 8px; background: rgba(255,255,255,.1); color: #fff; }
+.pi-sc svg { width: 13px; height: 13px; fill: #f5c518; color: #f5c518; } .pi-sc b { font-weight: 700; font-size: 13.5px; } .pi-sc small { font-size: 11.5px; color: rgba(255,255,255,.55); font-weight: 560; }
+.pi-sc.rt { padding-left: 10px; }
+.pi-prog { display: flex; align-items: center; gap: 12px; margin-top: 20px; font-size: 12.5px; color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; }
+.pi-bar { width: min(260px, 40%); height: 4px; border-radius: 4px; background: rgba(255,255,255,.18); overflow: hidden; } .pi-bar u { display: block; height: 100%; border-radius: 4px; background: #fff; }
+.pi-left { color: #fff; font-weight: 600; }
+.pi-wrap .pi-o { margin-top: 18px; font-size: 15.5px; line-height: 1.6; color: rgba(255,255,255,.82); -webkit-line-clamp: 3; max-width: 600px; }
+.pi-wrap .pi-cast { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.pi-p { display: flex; align-items: center; gap: 9px; height: 44px; padding: 0 14px 0 4px; border-radius: 999px; background: rgba(255,255,255,.08); width: auto !important; }
+.pi-p img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: none; }
+.pi-p span { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; } .pi-p b { font-size: 12.5px; font-weight: 650; color: #fff; white-space: nowrap; } .pi-p small { font-size: 11px; color: rgba(255,255,255,.55); white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.pi-q { margin: 24px 0 0; max-width: 560px; }
+.pi-q blockquote { margin: 0; font-size: 15px; line-height: 1.55; font-style: italic; color: rgba(255,255,255,.86); }
+.pi-q blockquote::before { content: '“'; } .pi-q blockquote::after { content: '”'; }
+.pi-q figcaption { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12.5px; color: rgba(255,255,255,.55); } .pi-stars { color: #f5c518; letter-spacing: 1px; }
+.pi-hint { position: absolute; right: clamp(36px, 6vw, 110px); bottom: clamp(56px, 10vh, 120px); font-size: 12.5px; color: rgba(255,255,255,.45); }
+.pi-hint kbd { font: inherit; font-weight: 650; color: rgba(255,255,255,.8); padding: 3px 8px; margin-right: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,.22); }
+#ihp.pinfo .pi-wrap > * { animation: piIn .7s cubic-bezier(.2,.8,.2,1) both; }
+#ihp.pinfo .pi-wrap > :nth-child(2) { animation-delay: .05s; } #ihp.pinfo .pi-wrap > :nth-child(3) { animation-delay: .1s; } #ihp.pinfo .pi-wrap > :nth-child(4) { animation-delay: .15s; }
+#ihp.pinfo .pi-wrap > :nth-child(5) { animation-delay: .2s; } #ihp.pinfo .pi-wrap > :nth-child(6) { animation-delay: .25s; } #ihp.pinfo .pi-wrap > :nth-child(7) { animation-delay: .3s; } #ihp.pinfo .pi-wrap > :nth-child(n+8) { animation-delay: .35s; }
+@keyframes piIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { #ihp.pinfo .pi-wrap > * { animation: none; } }
+@media (max-width: 760px) { .pi-hint { display: none; } }
+.pi-sc svg, .pi-sc svg * { fill: #f5c518 !important; stroke: none !important; }
+/* windowed, the macOS window buttons sit top-left: start the top bar below them; full screen has none */
+#ihp:not(.fs) .ihp-top { top: 46px; }
+
+/* Skip intro / recap / credits, bottom right above the controls */
+.ihp-skipbtn { position: absolute; right: 32px; bottom: 150px; z-index: 6; padding: 12px 22px; border-radius: 12px; border: 1px solid rgba(255,255,255,.28);
+  background: rgba(16,16,20,.78); color: #fff; font: 600 15px/1 -apple-system, BlinkMacSystemFont, sans-serif; cursor: pointer; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  animation: ihpSkipIn .25s ease both; }
+.ihp-skipbtn:hover, .ihp-skipbtn:focus-visible { background: #fff; color: #111; outline: none; }
+#ihp.pip .ihp-skipbtn { right: 10px; bottom: 54px; padding: 7px 12px; font-size: 12px; }
+@keyframes ihpSkipIn { from { opacity: 0; transform: translateY(8px); } }
+
+/* ? : the player's keys */
+.ihp-keys { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 20; width: min(520px, 90vw); max-height: 80vh; overflow: auto; padding: 22px 26px;
+  border-radius: 18px; background: rgba(18,18,22,.94); border: 1px solid rgba(255,255,255,.1); color: #eee; font: 14px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.ihp-keys h4 { margin: 0 0 12px; font-size: 16px; }
+.ihp-keys dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; margin: 0; } .ihp-keys dt { white-space: nowrap; } .ihp-keys dd { margin: 0; color: #bbb; }
+.ihp-keys kbd { display: inline-block; min-width: 22px; padding: 2px 7px; margin-right: 3px; border-radius: 6px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.14); font: 12px/1.5 ui-monospace, SFMono-Regular, monospace; text-align: center; }
+.ihp-keys small { display: block; margin-top: 14px; color: #888; }
+/* language flags on audio and subtitle tracks */
+.tr .lang.flag { background: none; font-size: 22px; line-height: 1; letter-spacing: 0; font-weight: 400; font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif; }
+
+/* light strength / reach sliders in the Frame section */
+.amb-sl { display: grid; gap: 6px; margin: 10px 0 4px; }
+.amb-sl label { display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,.75); }
+.amb-sl output { color: rgba(255,255,255,.5); font-variant-numeric: tabular-nums; }
+.amb-sl input[type=range] { width: 100%; accent-color: #f2f2f3; height: 18px; }
+
+/* ambient light: the picture's edge colours, stretched outward and blurred; the picture itself is cut out (clip-path) */
+.ihp-amb { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; filter: blur(16px); opacity: 1; image-rendering: auto; }
+.ihp-amb[hidden], #ihp.pip .ihp-amb { display: none; }
+/* the audience: seats and silhouettes in the dark below the picture (above the light, under every control) */
+.ihp-aud { position: absolute; left: 0; bottom: 0; width: 100%; pointer-events: none; }
+.ihp-aud[hidden], #ihp.pip .ihp-aud { display: none; }
+@media (prefers-reduced-transparency: reduce) { .ihp-amb { opacity: .6; } }

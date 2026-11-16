@@ -157,7 +157,7 @@ export function declineFriend(id) { S.incoming = S.incoming.filter((r) => r.id !
 export function removeFriend(id) { tx({ t: 'friend.remove', to: id }); dropFriend(id); }
 // forget someone locally (and refresh what the relay knows)
 // ---------- friend profiles ----------
-// Ask the friend's own IronHide. The last copy stays on this Mac, so the page still opens when they are offline.
+// Ask the friend's own Orbie. The last copy stays on this Mac, so the page still opens when they are offline.
 const profileWaits = new Map();
 const copyPath = (id) => join(CONFIG_DIR, 'friend-profiles', `${String(id).replace(/[^A-Z0-9]/gi, '')}.json`);
 export async function friendProfile(id) {

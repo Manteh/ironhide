@@ -60,12 +60,12 @@ export async function startProxy(streamUrl) {
       try {
         // Landing page — TV browser hits this and gets a video player
         if (req.url === '/' && req.method === 'GET' && !req.headers.range) {
-          const title = currentTitle || 'IronHide';
+          const title = currentTitle || 'Orbie';
           const html = `<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title} — IronHide</title>
+<title>${title} — Orbie</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #000; color: #fff; font-family: sans-serif; }
@@ -175,7 +175,7 @@ export function isProxyRunning() {
 export async function castToTV(url, title) {
   const ct = currentContentType || 'video/mp4';
   const sizeAttr = currentFileSize ? ` size="${currentFileSize}"` : '';
-  const metadata = `&lt;DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:sec="http://www.sec.co.kr/dlna"&gt;&lt;item id="1" parentID="0" restricted="1"&gt;&lt;dc:title&gt;${escapeXml(title || 'IronHide')}&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.videoItem.movie&lt;/upnp:class&gt;&lt;res protocolInfo="http-get:*:${ct}:DLNA.ORG_OP=11;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000"${sizeAttr}&gt;${escapeXml(url)}&lt;/res&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;`;
+  const metadata = `&lt;DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:sec="http://www.sec.co.kr/dlna"&gt;&lt;item id="1" parentID="0" restricted="1"&gt;&lt;dc:title&gt;${escapeXml(title || 'Orbie')}&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.videoItem.movie&lt;/upnp:class&gt;&lt;res protocolInfo="http-get:*:${ct}:DLNA.ORG_OP=11;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000"${sizeAttr}&gt;${escapeXml(url)}&lt;/res&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;`;
 
   const setRes = await soapRequest(TRANSPORT_URL, 'SetAVTransportURI', `
     <InstanceID>0</InstanceID>
@@ -284,7 +284,7 @@ export async function tvSeekViaProxy(seekSeconds) {
     proxyServer.listen(PROXY_PORT, '0.0.0.0', async () => {
       try {
         const proxyUrl = `http://${localIP}:${PROXY_PORT}/`;
-        await castToTV(proxyUrl, currentTitle || 'IronHide');
+        await castToTV(proxyUrl, currentTitle || 'Orbie');
         resolve();
       } catch (err) {
         reject(err);

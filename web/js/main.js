@@ -1,5 +1,5 @@
 import { api, post } from './api.js';
-import { $, esc, icon, avatar, LOGO, applyAppearance, fmtTime, toast, wl, posterOf } from './ui.js';
+import { $, esc, icon, avatar, LOGO, applyAppearance, fmtTime, toast, friendly, wl, posterOf } from './ui.js';
 import { connectSocial, onEvent, onState } from './social.js';
 
 export const store = { settings: null, nodes: [], history: [], watchlist: [], socialCount: 0 };
@@ -34,25 +34,25 @@ export async function playWeb(body, opts = {}) {
     if (info.swapped) toast(`That version isn't working, so we picked another: ${info.size || 'next best'}`, 'info');
     setTimeout(() => refreshHistory(), 3000);
     return true;
-  } catch (e) { if (!opts.quiet) hideLaunch(); toast(e.message, 'err'); return false; }
+  } catch (e) { if (!opts.quiet) hideLaunch(); toast(e.message, 'err', { action: { label: 'Try again', run: () => playWeb(body, opts) } }); return false; }
 }
 
 // play a specific stream row from the version picker
 export async function playIndex(index, info) {
   if (usingWeb()) return playWeb({ index, ...info });
   watchLaunch(info);
-  try { await post('/api/play', { index }); return true; } catch (e) { hideLaunch(); toast(e.message, 'err'); return false; }
+  try { await post('/api/play', { index }); return true; } catch (e) { launchFailed(e.message); return false; }
 }
 window.playIndex = playIndex;
 
 export async function quickPlay(item, opts = {}) {
   if (opts.player === 'web' || (opts.player !== 'mpv' && usingWeb())) return playWeb(item);
-  watchLaunch({ title: item.title, imdbId: item.imdbId, poster: item.poster, backdrop: item.backdrop, season: item.season, episode: item.episode, version: 'Picking the best version' });
+  watchLaunch({ title: item.title, imdbId: item.imdbId, type: item.type, poster: item.poster, backdrop: item.backdrop, season: item.season, episode: item.episode, version: item.startOver ? 'From the beginning' : 'Picking the best version' });
   try {
     await post('/api/quickplay', item);
     setTimeout(() => refreshHistory(), 4000);
     return true;
-  } catch (e) { hideLaunch(); toast(e.message, 'err'); return false; }
+  } catch (e) { launchFailed(e.message, { retry: !/no streams/i.test(e.message) }); return false; }
 }
 
 // ---------- Launch overlay: between "Play" and mpv taking over ----------
@@ -84,9 +84,9 @@ export function watchLaunch(info, mode = 'mpv') {
   document.body.appendChild(el);
   requestAnimationFrame(() => el.classList.add('in'));
   const startedAt = Date.now();
-  launch = { el, startedAt, done: false, timer: null };
+  launch = { el, startedAt, done: false, timer: null, info, mode };
   const apply = (st) => {
-    if (st.phase === 'error') { toast(st.detail || 'Could not start playback', 'err'); hideLaunch(); return; }
+    if (st.phase === 'error') { launchFailed(st.detail || 'Could not start playback', { retry: st.retry !== false }); return; }
     const idx = STEPS_.findIndex(([k]) => k === st.phase);
     if (idx < 0) return;
     $$li(el).forEach((li, i) => { li.classList.toggle('done', i < idx || (i === idx && st.phase === 'playing')); li.classList.toggle('now', i === idx && st.phase !== 'playing'); });
@@ -101,13 +101,37 @@ export function watchLaunch(info, mode = 'mpv') {
   };
   const poll = async () => {
     if (!launch || launch.el !== el) return;
+    if (launch.failed) return;
     try { const st = await api('/api/playstate'); if (st.at >= startedAt - 400) apply(st); } catch {}
-    if (Date.now() - startedAt > 90000) { toast('Starting took too long', 'err'); hideLaunch(); }
+    if (launch && !launch.failed && Date.now() - startedAt > 90000) launchFailed('Starting took too long. This version may be slow right now.');
   };
   launch.timer = setInterval(() => { poll(); const t = Math.floor((Date.now() - startedAt) / 1000), te = el.querySelector('#lTime'); if (te) te.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; }, 350); poll();
   $('#lCancel', el).onclick = async () => { hideLaunch(); await post('/api/play/cancel').catch(() => {}); toast('Cancelled'); };
 }
 const $$li = (el) => [...el.querySelectorAll('.lsteps li')];
+
+// Playback didn't start: keep the card up and offer a way forward instead of a toast that vanishes.
+function launchFailed(message, { retry = true } = {}) {
+  if (!launch) { toast(message, 'err'); return; }
+  const { el, info, mode } = launch;
+  launch.failed = true; clearInterval(launch.timer);
+  el.classList.add('failed');
+  el.querySelector('.lkick').textContent = "Couldn't start";
+  const now = el.querySelector('.lx-now'); if (now) now.innerHTML = `<span class="ldetail lx-err">${esc(friendly(message))}</span>`;
+  const canPick = info?.imdbId && info?.type;
+  const acts = document.createElement('div'); acts.className = 'lx-acts';
+  acts.innerHTML = `${retry && mode !== 'web' ? `<button class="btn primary" data-f="next">${icon('play')} Try another version</button>` : ''}
+    ${canPick ? `<button class="btn" data-f="pick">${icon('sliders')} Pick a version</button>` : ''}<button class="btn ghost" data-f="close">Close</button>`;
+  el.querySelector('#lCancel')?.replaceWith(acts);
+  acts.onclick = async (e) => {
+    const f = e.target.closest('[data-f]')?.dataset.f; if (!f) return;
+    if (f === 'close') return hideLaunch();
+    if (f === 'pick') { hideLaunch(); location.hash = `#/title/${info.type === 'tv' ? 'series' : info.type}/${info.imdbId}?versions=1`; return; }
+    watchLaunch({ ...info, version: 'Trying another version' }, mode);
+    try { await post('/api/play/next'); setTimeout(() => refreshHistory(), 4000); } catch (err) { launchFailed(err.message, { retry: false }); }
+  };
+  acts.querySelector('button')?.focus();
+}
 
 export function hideLaunch(instant = false) {
   if (!launch) return;
@@ -138,7 +162,7 @@ export function renderNav() {
   const online = store.friendsOnline || 0; // friends online right now (from the relay)
   const on = (re) => (re.test(hash) ? 'on' : '');
   $('#nav').innerHTML = `
-    <a class="rlogo" href="#/" aria-label="IronHide home" data-tip="IronHide"><span class="tile">${LOGO}</span></a>
+    <a class="rlogo" href="#/" aria-label="Orbie home" data-tip="Orbie"><span class="tile">${LOGO}</span></a>
     <i class="rsep"></i>
     <a href="#/" class="ri ${on(/^#\/?$|^#\/feed|^#\/title/)}" aria-label="Home" data-tip="Home">${icon('home')}<span>Home</span></a>
     <button id="nSearch" class="ri" aria-label="Search" data-tip="Search  /">${icon('search')}<span>Search</span></button>
@@ -147,6 +171,7 @@ export function renderNav() {
     <a href="#/taste" class="ri ${on(/^#\/taste/)}" aria-label="Taste Lab" data-tip="Taste Lab">${icon('heart')}<span>Taste</span></a>
     <a href="#/friends" class="ri ${on(/^#\/(friends|together)/)}" aria-label="Friends, ${online} online" data-tip="Friends">${icon('users')}<span>Friends</span>${store.socialCount ? `<i class="rbadge">${store.socialCount}</i>` : online ? `<i class="rbadge on">${online}</i>` : ''}</a>
     <i class="rsep"></i>
+    <a href="#/settings" class="ri ${on(/^#\/settings/)}" aria-label="Settings" data-tip="Settings  ⌘,">${icon('gear')}<span>Settings</span></a>
     <a class="rme ${on(/^#\/profile/)}" href="#/profile" aria-label="Your profile" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 32)}</a>`;
   $('#nSearch').onclick = () => import('./palette.js').then((m) => m.openPalette());
 }
@@ -178,8 +203,8 @@ async function pollRemote() {
   try {
     const d = await api('/api/nowplaying');
     const el = $('#np');
-    if (!d) { if (++npMiss >= 4) { el.classList.add('hidden'); setNp(null); } return; } // a slow answer is not the end
-    npMiss = 0; el.classList.remove('hidden');
+    if (!d) { if (++npMiss >= 4) { el.classList.add('hidden'); document.body.classList.remove('np-on'); setNp(null); } return; } // a slow answer is not the end
+    npMiss = 0; el.classList.remove('hidden'); document.body.classList.add('np-on');
     setNp({ title: d.title, imdbId: d.meta?.imdbId, season: d.meta?.season, episode: d.meta?.episode, playing: d.playing, pct: Math.round(d.percent || 0), left: Math.max(0, (d.duration || 0) - (d.position || 0)) });
     el.querySelector('.npt').textContent = d.title || 'Playing';
     el.querySelector('[data-r="toggle"]').innerHTML = icon(d.playing ? 'pause' : 'play');
@@ -208,7 +233,7 @@ async function navigate() {
     } else {
       browseEl.classList.add('hidden'); page.classList.remove('hidden');
       browse?.handle('away');
-      page.innerHTML = '<div id="pg"></div>';
+      page.innerHTML = `<div id="pg"><div class="page pg-sk" aria-busy="true" aria-label="Loading"><i class="skl h"></i><i class="skl"></i><i class="skl s"></i><div class="pg-skc"><i></i><i></i><i></i></div></div></div>`;
       window.scrollTo(0, 0);
       try { await (await import(`./pages/${r.loader}.js`)).default($('#pg'), params); }
       catch (e) { $('#pg').innerHTML = `<div class="page"><div class="note">${esc(e.message)}</div></div>`; }
@@ -225,7 +250,7 @@ function splash() {
   const g = $('#gate');
   if (sessionStorage.getItem('ih-in')) return g.remove();
   sessionStorage.setItem('ih-in', '1');
-  g.innerHTML = `${LOGO.replace('id="lg"', 'id="lg2"').replace('url(#lg)', 'url(#lg2)')}<b>Welcome back, ${esc(store.settings.profile.name)}</b><span>Private access</span>`;
+  g.innerHTML = `${LOGO}<b>Welcome back, ${esc(store.settings.profile.name)}</b><span>Private access</span>`;
   setTimeout(() => { g.classList.add('out'); setTimeout(() => g.remove(), 700); }, 900);
 }
 

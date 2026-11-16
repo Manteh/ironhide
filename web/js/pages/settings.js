@@ -1,12 +1,17 @@
 import { api, post, put, del } from '../api.js';
 import { cursorWanted } from '../cursor.js';
 import { store, saveSettings, onLeave } from '../main.js';
-import { $, $$, esc, icon, avatar, toast, AVATAR_ICONS, AVATAR_COLORS } from '../ui.js';
+import { $, $$, esc, icon, avatar, toast, ask, AVATAR_ICONS, AVATAR_COLORS } from '../ui.js';
 
 const SECTIONS = [
   ['profile', 'Profile', 'user'], ['appearance', 'Appearance', 'palette'], ['playback', 'Playback', 'sliders'], ['streams', 'Streams', 'film'],
   ['connectors', 'Connectors', 'plug'], ['together', 'Friends', 'users'], ['nodes', 'Nodes', 'nodes'], ['updates', 'Updates', 'bolt'], ['about', 'About', 'info'],
 ];
+const SUBS = {
+  profile: 'Your name and how you look to friends.', appearance: 'Theme, layout and motion.', playback: 'How titles start and which versions are picked.',
+  streams: 'Where versions come from and how they are ranked.', connectors: 'Accounts and keys Orbie uses. They stay on this Mac.',
+  together: 'Watch with friends.', nodes: 'Everything Orbie talks to, and whether it answers.', updates: "What's new in each version.", about: 'This install.',
+};
 const seg = (name, opts, cur) => `<div class="seg" data-seg="${name}">${opts.map(([v, l, ic]) => `<button data-v="${v}" class="${String(cur) === String(v) ? 'on' : ''}">${ic ? icon(ic) : ''}${l}</button>`).join('')}</div>`;
 const card = ({ title, desc, body, foot, danger }) => `<section class="scard ${danger ? 'danger' : ''}"><div class="body"><h3>${title}</h3>${desc ? `<p class="desc">${desc}</p>` : ''}${body}</div>${foot ? `<div class="foot">${foot}</div>` : ''}</section>`;
 const row = (label, hint, ctl) => `<div class="srow"><div class="lbl"><b>${label}</b>${hint ? `<span>${hint}</span>` : ''}</div>${ctl}</div>`;
@@ -21,9 +26,11 @@ const bindSeg = (root, name, fn) => $$(`[data-seg="${name}"] button`, root).forE
 
 export default async function settings(el, { section = 'profile' }) {
   if (!SECTIONS.some(([k]) => k === section)) section = 'profile';
-  el.innerHTML = `<div class="page"><div class="page-head"><div><h1 class="title">Settings</h1><div class="sub">Manage your profile, appearance, playback and connections.</div></div></div>
-    <div class="settings"><nav class="snav" aria-label="Settings">${SECTIONS.map(([k, l, ic]) => `<a href="#/settings/${k}" class="${k === section ? 'on' : ''}">${icon(ic)} ${l}</a>`).join('')}</nav>
-    <div class="scol" id="sbody"></div></div></div>`;
+  const cur = SECTIONS.find(([k]) => k === section);
+  el.innerHTML = `<div class="page spage"><div class="settings">
+    <aside class="sside"><h1 class="title">Settings</h1>
+      <nav class="snav" aria-label="Settings">${SECTIONS.map(([k, l, ic]) => `<a href="#/settings/${k}" class="${k === section ? 'on' : ''}">${icon(ic)}<span>${l}</span></a>`).join('')}</nav></aside>
+    <div class="smain"><header class="shead"><h2>${cur[1]}</h2><p>${SUBS[section] || ''}</p></header><div class="scol" id="sbody"></div></div></div></div>`;
   const body = $('#sbody');
   await ({ profile, appearance, playback, streams, connectors, together: togetherSettings, nodes, updates, about }[section])(body);
 }
@@ -53,7 +60,7 @@ function profile(body) {
         : 'Start over as a new user. You get a new friend code and an empty friends list, and the name screen comes back in every open browser. Your TorBox key, appearance and playback settings stay.',
         body: '', foot: `<span></span><button class="btn danger" id="signout">Sign out and start fresh</button>` }));
       $('#signout', body).onclick = async () => {
-        if (!confirm(hub ? 'Sign out and erase your data on this server? This cannot be undone.' : 'Sign out? You will lose your friends list and friend code. This cannot be undone.')) return;
+        if (!(await ask(hub ? 'Sign out and erase your data on this server? This cannot be undone.' : 'Sign out? You will lose your friends list and friend code. This cannot be undone.', { ok: 'Sign out', danger: true }))) return;
         if (hub) { await fetch('/hub/leave', { method: 'POST' }); location.href = '/'; return; }
         await fetch('/api/account/reset', { method: 'POST' }); location.href = '/';
       };
@@ -65,7 +72,7 @@ function profile(body) {
 // ---------- Another person on this Mac ----------
 function mountInstances(body) {
   body.insertAdjacentHTML('beforeend', card({ title: 'Another person on this Mac',
-    desc: 'Start a second IronHide with its own profile, friend code and history, then open it in a new tab. Good for trying rooms with yourself, or sharing this computer.',
+    desc: 'Start a second Orbie with its own profile, friend code and history, then open it in a new tab. Good for trying rooms with yourself, or sharing this computer.',
     body: `<div id="instList" class="inst-list"></div>
       <div class="inst-new"><input id="instName" class="input" maxlength="40" placeholder="Name (optional)" aria-label="Name"><button class="btn primary" id="instGo">Start a new instance</button></div>
       <label class="inst-keys"><input type="checkbox" id="instKeys" checked> Use my debrid keys so they can play right away</label>`,
@@ -77,7 +84,7 @@ function mountInstances(body) {
     list.innerHTML = items.map((i) => `<div class="inst"><span class="dot ${i.running ? 'online' : 'offline'}"></span><div class="inst-i"><b>${esc(i.name)}</b><span>localhost:${i.port} · ${i.running ? 'running' : 'stopped'}</span></div>
       ${i.running ? `<a class="btn sm" href="${i.url}" target="_blank" rel="noopener">Open</a><button class="btn ghost sm" data-stop="${i.id}">Stop</button>` : `<button class="btn sm" data-start="${i.id}">Start</button>`}<button class="btn ghost sm icon inst-rm" data-remove="${i.id}" data-rname="${esc(i.name)}" aria-label="Remove ${esc(i.name)}" title="Remove this person and their data">${icon('x')}</button></div>`).join('');
     $$('[data-remove]', list).forEach((b) => (b.onclick = async () => {
-      if (!confirm(`Remove ${b.dataset.rname}? Their profile, friend code, history and keys on this Mac are deleted. This cannot be undone.`)) return;
+      if (!(await ask(`Remove ${b.dataset.rname}? Their profile, friend code, history and keys on this Mac are deleted. This cannot be undone.`, { ok: 'Remove', danger: true }))) return;
       b.disabled = true; try { await del(`/api/instances/${b.dataset.remove}`); toast('Removed', 'ok'); } catch (e) { toast(e.message, 'err'); } paint();
     }));
     $$('[data-stop]', list).forEach((b) => (b.onclick = async () => { b.disabled = true; await post(`/api/instances/${b.dataset.stop}/stop`); setTimeout(paint, 800); }));
@@ -101,7 +108,7 @@ function appearance(body) {
   const draw = () => {
     const a = store.settings.appearance;
     body.innerHTML =
-      card({ title: 'Theme', desc: 'Choose how IronHide looks. System follows your Mac.', body: `<div class="theme-grid" role="radiogroup" aria-label="Theme">${THEMES.map(([k, l, bg, bar]) =>
+      card({ title: 'Theme', desc: 'Choose how Orbie looks. System follows your Mac.', body: `<div class="theme-grid" role="radiogroup" aria-label="Theme">${THEMES.map(([k, l, bg, bar]) =>
         `<button class="theme-opt ${a.theme === k ? 'on' : ''}" data-th="${k}"><div class="prev" style="background:${bg}"><i style="top:12px;width:55%;background:${bar}"></i><i style="top:28px;width:80%;background:${bar};opacity:.6"></i><i style="top:44px;width:35%;background:${ACCENTS[a.accent]}"></i></div><b>${l}</b></button>`).join('')}</div>` }) +
       card({ title: 'Accent colour', desc: 'Used for buttons, focus rings and highlights.', body: `<div class="swatches" role="radiogroup" aria-label="Accent">${Object.entries(ACCENTS).map(([k, c]) => `<button class="sw ${a.accent === k ? 'on' : ''}" data-ac="${k}" style="background:${c}" aria-label="${k}">${a.accent === k ? icon('check') : ''}</button>`).join('')}</div>` }) +
       card({ title: 'Layout', desc: 'Tune spacing, corners and poster size.', body:
@@ -134,7 +141,13 @@ async function playback(body) {
         (p.player === 'web' ? row('Web player quality', 'The browser and rooms pick this version first. 4K stays smooth in mpv, which is not affected.', seg('webMaxHeight', [['source', 'Source'], ['1080', '1080p'], ['720', '720p']], p.webMaxHeight)) +
           row('Always use GPU transcode', 'Skips direct play. Use if a file stutters or has no picture.', `<button class="switch ${p.forceTranscode ? 'on' : ''}" id="ftx" role="switch" aria-checked="${p.forceTranscode}" aria-label="Force transcode"></button>`) : '') +
         `<div class="banner" style="margin-top:var(--s4)">${icon('info')}<span>${cap.ffmpeg ? `ffmpeg found · GPU encoding via ${esc(cap.gpu)}. ` : 'ffmpeg not found, the web player is unavailable. '}This browser decodes HEVC: <b>${bc.hevc ? 'yes' : 'no'}</b>. Web playback streams the video untouched when possible (no CPU use) and converts audio to AAC.</span></div>` }) +
-      card({ title: 'Preferred quality', desc: 'IronHide uses this to pick the “Best match” stream and for one-click play.', body:
+      card({ title: 'While you watch', desc: 'What happens around an episode.', body:
+        row('Play the next episode', 'When an episode ends, the next one starts after a 10 second countdown you can cancel.', `<button class="switch ${p.autoNext !== false ? 'on' : ''}" id="autonext" role="switch" aria-checked="${p.autoNext !== false}" aria-label="Play the next episode automatically"></button>`) +
+        row('Skip intros by themselves', 'Off: a Skip intro button appears. On: known intros are skipped without asking. To teach it a show’s intro, press Shift+I where it starts and again where it ends.', `<button class="switch ${p.autoSkipIntro ? 'on' : ''}" id="autoskip" role="switch" aria-checked="${!!p.autoSkipIntro}" aria-label="Skip intros automatically"></button>`) +
+        row('Ambient mode', 'In the Mac app: a smaller picture you can move, with light from the film glowing around it (G while watching, Option + arrows to place it). Off: normal full screen.', `<button class="switch ${p.ambientMode ? 'on' : ''}" id="ambmode" role="switch" aria-checked="${!!p.ambientMode}" aria-label="Ambient mode"></button>`) +
+        row('Tell me about new episodes', 'A Mac notification when a show you were caught up on gets a new episode.', `<button class="switch ${p.notifyNewEpisodes !== false ? 'on' : ''}" id="notifynew" role="switch" aria-checked="${p.notifyNewEpisodes !== false}" aria-label="Notify about new episodes"></button>`) +
+        row('Show on Discord', 'In the Mac app: your Discord profile says what you are watching, with the poster, the episode and how far in you are. Turn off to keep it private.', `<button class="switch ${p.discordPresence !== false ? 'on' : ''}" id="discord" role="switch" aria-checked="${p.discordPresence !== false}" aria-label="Show what I am watching on Discord"></button>`) }) +
+      card({ title: 'Preferred quality', desc: 'Orbie uses this to pick the “Best match” stream and for one-click play.', body:
       row('Resolution', 'Auto picks the highest available.', seg('quality', [['auto', 'Auto'], ['2160p', '4K'], ['1080p', '1080p'], ['720p', '720p']], p.quality)) +
       row('HDR / Dolby Vision', 'Needs a capable display.', seg('hdr', [['prefer', 'Prefer'], ['any', 'No preference'], ['avoid', 'Avoid']], p.hdr)) +
       row('Remux releases', 'Largest files, untouched quality.', seg('remux', [['prefer', 'Prefer'], ['any', 'No preference'], ['avoid', 'Avoid']], p.remux)) +
@@ -149,29 +162,39 @@ async function playback(body) {
     ['quality', 'hdr', 'remux', 'player', 'webMaxHeight'].forEach((k) => bindSeg(body, k, (v) => persist({ [k]: v })));
     $('#ftx', body)?.addEventListener('click', () => persist({ forceTranscode: !p.forceTranscode }));
     $('#cached', body).onclick = () => persist({ cachedOnly: !p.cachedOnly });
+    $('#autonext', body).onclick = () => persist({ autoNext: p.autoNext === false });
+    $('#autoskip', body).onclick = () => persist({ autoSkipIntro: !p.autoSkipIntro });
+    $('#ambmode', body).onclick = () => persist({ ambientMode: !p.ambientMode });
+    $('#notifynew', body).onclick = () => persist({ notifyNewEpisodes: p.notifyNewEpisodes === false });
+    $('#discord', body).onclick = () => persist({ discordPresence: p.discordPresence === false });
     $('#maxsz', body).oninput = debounce(() => { p.maxSizeGb = +$('#maxsz', body).value || 0; saveSettings({ playback: p }).then(() => flash(body, 'spb')).catch((e) => toast(e.message, 'err')); });
   };
   draw();
 }
 
 // ---------- Connectors ----------
-const LOGOS = { torbox: 'bolt', realdebrid: 'bolt', alldebrid: 'bolt', tmdb: 'film', harvester: 'eye' };
+const LOGOS = { torbox: 'bolt', realdebrid: 'bolt', alldebrid: 'bolt', tmdb: 'film', youtube: 'trailer', harvester: 'eye' };
 async function connectors(body) {
   let data = await api('/api/connectors'), editing = null; const results = {};
   const draw = () => {
-    const group = (kind) => data.items.filter((c) => c.kind === kind).map((c) => `<div class="conn"><div class="logo">${icon(LOGOS[c.id])}</div>
-      <div class="info"><b>${esc(c.label)} ${c.active ? '<span class="badge acc">Active</span>' : ''}${results[c.id] ? `<span class="badge ${results[c.id].status === 'online' ? 'ok' : 'err'}">${esc(results[c.id].detail)}</span>` : c.configured ? '<span class="badge">Key saved</span>' : '<span class="badge">Not connected</span>'}</b>
-        <span>${c.configured ? esc(c.masked) + ' · ' : ''}${esc(c.help)}</span>
+    const status = (c) => {
+      const r = results[c.id];
+      if (r) return `<span class="cstat ${r.status === 'online' ? 'ok' : 'err'}"><i></i>${esc(r.detail)}</span>`;
+      return c.configured ? '<span class="cstat ok"><i></i>Connected</span>' : '<span class="cstat"><i></i>Not connected</span>';
+    };
+    const group = (kind) => data.items.filter((c) => c.kind === kind).map((c) => `<div class="conn ${c.configured ? 'on' : ''}"><div class="logo">${icon(LOGOS[c.id])}</div>
+      <div class="info"><div class="cname"><b>${esc(c.label)}</b>${c.active ? '<span class="ctag">In use</span>' : ''}${status(c)}</div>
+        <p>${esc(c.help)}</p>${c.configured ? `<code class="ckey">${esc(c.masked)}</code>` : ''}
         ${editing === c.id ? `<div class="edit"><input class="input" type="${c.url ? 'url' : 'password'}" id="keyin" placeholder="${c.url ? 'https://your-service.onrender.com' : 'Paste API key'}" autocomplete="off" spellcheck="false"><button class="btn primary" data-save="${c.id}">Save</button><button class="btn ghost" data-cancel>Cancel</button></div>` : ''}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-        ${c.configured ? `<button class="btn" data-test="${c.id}">Test</button>` : ''}<button class="btn" data-edit="${c.id}">${c.configured ? 'Replace' : 'Connect'}</button>
-        ${c.configured && !c.url ? `<button class="btn ghost danger" data-rm="${c.id}" aria-label="Remove">${icon('trash')}</button>` : ''}</div></div>`).join('');
+      <div class="cact">
+        ${c.configured ? `<button class="btn ghost" data-test="${c.id}">Test</button>` : ''}<button class="btn" data-edit="${c.id}">${c.configured ? 'Replace' : 'Connect'}</button>
+        ${c.configured && !c.url ? `<button class="btn ghost icon cdel" data-rm="${c.id}" aria-label="Remove ${esc(c.label)} key" title="Remove key">${icon('trash')}</button>` : ''}</div></div>`).join('');
     body.innerHTML =
       card({ title: 'Debrid service', desc: 'Resolves torrents into instant streams. Only one is used at a time.', body:
-        `<div class="srow" style="border:0;padding-top:0"><div class="lbl"><b>Active service</b><span>Used for every search and play.</span></div>
-          <select class="input" id="prov" style="width:200px">${['torbox', 'realdebrid', 'alldebrid', 'none'].map((v) => `<option value="${v}" ${data.debridProvider === v ? 'selected' : ''}>${{ torbox: 'TorBox', realdebrid: 'Real-Debrid', alldebrid: 'AllDebrid', none: 'None (P2P)' }[v]}</option>`).join('')}</select></div>${group('debrid')}` }) +
-      card({ title: 'Metadata', desc: 'Catalog sources. Cinemeta is built in and needs no key.', body: group('metadata'),
-        foot: '<span>Keys are stored locally in your IronHide config folder.</span>' });
+        `<div class="srow sprov"><div class="lbl"><b>Use for streaming</b><span>Every search and play goes through this one.</span></div>
+          <select class="input" id="prov">${['torbox', 'realdebrid', 'alldebrid', 'none'].map((v) => `<option value="${v}" ${data.debridProvider === v ? 'selected' : ''}>${{ torbox: 'TorBox', realdebrid: 'Real-Debrid', alldebrid: 'AllDebrid', none: 'None (P2P)' }[v]}</option>`).join('')}</select></div>${group('debrid')}` }) +
+      card({ title: 'Titles and info', desc: 'Posters, details, recommendations and comments. Cinemeta is built in and needs no key.', body: group('metadata'),
+        foot: '<span>Keys are stored only in ~/.config/ironhide on this Mac.</span>' });
     $('#prov', body).onchange = async (e) => { data = await put('/api/connectors/provider', { provider: e.target.value }); window.refreshNodes?.(); toast('Debrid service updated', 'ok'); draw(); };
     $$('[data-edit]', body).forEach((b) => (b.onclick = () => { editing = b.dataset.edit; draw(); $('#keyin', body)?.focus(); }));
     $$('[data-cancel]', body).forEach((b) => (b.onclick = () => { editing = null; draw(); }));
@@ -183,7 +206,7 @@ async function connectors(body) {
       data = await put(`/api/connectors/${b.dataset.save}`, { key }); editing = null; results[b.dataset.save] = t; window.refreshNodes?.(); toast('Connected', 'ok'); draw();
     }));
     $$('[data-test]', body).forEach((b) => (b.onclick = async () => { b.textContent = 'Testing…'; results[b.dataset.test] = await post(`/api/connectors/${b.dataset.test}/test`); draw(); }));
-    $$('[data-rm]', body).forEach((b) => (b.onclick = async () => { if (!confirm('Remove this key?')) return; data = await del(`/api/connectors/${b.dataset.rm}`); delete results[b.dataset.rm]; window.refreshNodes?.(); draw(); }));
+    $$('[data-rm]', body).forEach((b) => (b.onclick = async () => { if (!(await ask(`Remove the ${b.closest('.conn')?.querySelector('.cname b')?.textContent || ''} key? You can add it again any time.`, { ok: 'Remove key', danger: true }))) return; data = await del(`/api/connectors/${b.dataset.rm}`); delete results[b.dataset.rm]; window.refreshNodes?.(); draw(); }));
   };
   draw();
 }
@@ -205,8 +228,8 @@ async function nodes(body) {
       <circle cx="20" cy="23" r="4.5" fill="${n.status === 'online' ? 'var(--ok)' : n.status === 'error' ? 'var(--err)' : 'var(--muted)'}"/>
       <text x="36" y="20" font-size="13" font-weight="600">${esc(n.name)}</text><text class="gsub" x="36" y="35" font-size="11">${esc(n.sub)}</text></g>`).join('');
     body.innerHTML = `<div class="graph"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Node graph">${edges}
-      <g class="gcore" transform="translate(500 ${cy})"><circle r="48"/><path d="M0 -24l16 6v13c0 11-7 19-16 23-9-4-16-12-16-23v-13z" fill="var(--accent)" opacity=".9"/><text y="70" text-anchor="middle" font-size="13" font-weight="600">IronHide core</text></g>${boxes}</svg></div>
-      <div class="page-head" style="margin-bottom:var(--s4)"><div><h3 style="font-size:17px">Connected nodes</h3><div class="sub">Players, debrid and sources IronHide talks to.</div></div><button class="btn" id="rf">${icon('refresh')} Refresh</button></div>
+      <g class="gcore" transform="translate(500 ${cy})"><circle r="48"/><image href="/img/orbie-orb.png" x="-26" y="-26" width="52" height="52"/><text y="70" text-anchor="middle" font-size="13" font-weight="600">Orbie core</text></g>${boxes}</svg></div>
+      <div class="page-head" style="margin-bottom:var(--s4)"><div><h3 style="font-size:17px">Connected nodes</h3><div class="sub">Players, debrid and sources Orbie talks to.</div></div><button class="btn" id="rf">${icon('refresh')} Refresh</button></div>
       <div class="nlist">${list.map((n) => `<div class="ncard"><div class="top"><span class="dot ${n.status}"></span><b>${esc(n.name)}</b>${n.active ? '<span class="badge acc">Active</span>' : ''}
         <span class="badge ${n.status === 'online' ? 'ok' : n.status === 'error' ? 'err' : ''}">${n.status}</span></div>
         <div class="t2">${esc(n.detail || '')}</div><div class="meta"><span>${esc(n.sub)}</span><span>${n.latencyMs ? n.latencyMs + ' ms' : ''}</span></div>
@@ -233,7 +256,7 @@ async function streams(body) {
         `<div class="st-row"><b>Hide these</b><span>Hidden versions never show up or get picked.</span><div class="st-chips">${KIND_NAMES.map(([k, n]) => `<button class="st-chip hide ${hide.includes(k) ? 'on' : ''}" data-hide="${k}">${n}</button>`).join('')}</div></div>` +
         row('Sort by', 'Order asked from Torrentio.', seg('sortBy', [['qualitysize', 'Quality, then size'], ['quality', 'Quality'], ['seeders', 'Seeders'], ['size', 'Size']], p.sortBy || 'qualitysize')) +
         row('How many to load', 'More gives more choice, especially smaller files.', seg('resultCount', [[20, '20'], [60, '60'], [100, '100']], p.resultCount || 60)),
-        foot: `<span>Only for you: each friend's IronHide has its own. Saves automatically.</span>${savestat('sst')}` });
+        foot: `<span>Only for you: each friend's Orbie has its own. Saves automatically.</span>${savestat('sst')}` });
     $('#stSub', body).value = p.subLang || '';
     $('#stSub', body).onchange = (e) => persist({ subLang: e.target.value });
     $$('[data-al]', body).forEach((b) => (b.onclick = () => { const c = b.dataset.al; persist({ audioLangs: al.includes(c) ? al.filter((x) => x !== c) : [...al, c] }); }));
@@ -291,7 +314,7 @@ async function updates(body) {
   };
   let stats = {}; try { stats = await post('/api/updates/stats', { items: CHANGELOG.map((u) => ({ version: u.version, range: u.range, commits: u.commits, work: u.work })) }); } catch {}
   const total = Object.values(stats).reduce((a, s) => ({ add: a.add + s.add, del: a.del + s.del, commits: a.commits + s.commits }), { add: 0, del: 0, commits: 0 });
-  body.innerHTML = `<div class="upd"><header class="upd-top"><h2>What's new</h2><p>Every update to IronHide, newest first. Numbers come from git and leave out screenshots and lockfiles.</p>${total.commits ? `<div class="upd-stat big"><b class="plus">+${n(total.add)}</b><b class="minus">−${n(total.del)}</b>${strip(total.add, total.del)}<span>${n(total.commits)} commits in total</span></div>` : ''}</header>
+  body.innerHTML = `<div class="upd"><header class="upd-top"><h2>What's new</h2><p>Every update to Orbie, newest first. Numbers come from git and leave out screenshots and lockfiles.</p>${total.commits ? `<div class="upd-stat big"><b class="plus">+${n(total.add)}</b><b class="minus">−${n(total.del)}</b>${strip(total.add, total.del)}<span>${n(total.commits)} commits in total</span></div>` : ''}</header>
     <ol class="upd-list">${CHANGELOG.map((u, i) => { const st = stats[u.version]; return `<li class="upd-i">
       <details ${i < 2 ? 'open' : ''}><summary><span class="upd-v">v${esc(u.version)}</span><span class="upd-h"><b>${esc(u.title)}</b>${u.status === 'dev' ? '<em>In testing</em>' : i === 0 ? '<em class="latest">Latest</em>' : ''}<small>${esc(when(st?.lastAt || `${u.date}T12:00:00`))}</small></span><span class="upd-c">${icon('chev')}</span></summary>
         ${statsHtml(st)}<p class="upd-s">${esc(u.summary)}</p>
@@ -303,14 +326,14 @@ async function updates(body) {
 async function about(body) {
   const h = await api('/api/health').catch(() => ({}));
   body.innerHTML =
-    card({ title: 'IronHide', desc: 'A private media hub for your Mac and Claude.', body:
+    card({ title: 'Orbie', desc: 'A private media hub for your Mac and Claude.', body:
       row('Service', 'Local daemon', `<span class="badge ok">Running · pid ${esc(h.pid || '?')}</span>`) +
       row('Address', 'Only reachable from this Mac', `<span class="t2">${esc(location.host)}</span>`) +
       row('Config folder', 'Settings, history and keys', `<span class="t2">~/.config/ironhide</span>`) }) +
     card({ danger: true, title: 'Reset appearance and playback', desc: 'Restores the default theme, layout and playback preferences. Your profile, keys and history are kept.', body: '',
       foot: `<span>This cannot be undone.</span><button class="btn danger" id="reset">Reset to defaults</button>` });
   $('#reset', body).onclick = async () => {
-    if (!confirm('Reset appearance and playback to defaults?')) return;
+    if (!(await ask('Reset appearance and playback to defaults?', { ok: 'Reset', danger: true }))) return;
     await saveSettings({ appearance: { theme: 'dark', accent: 'indigo', density: 'comfortable', radius: 'round', motion: 'full', posterSize: 'm' }, playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true } });
     toast('Defaults restored', 'ok');
   };

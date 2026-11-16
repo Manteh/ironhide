@@ -1,4 +1,3 @@
-import { execFile } from 'child_process';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -16,7 +15,7 @@ import { profileData, profileMeta } from './profile.js';
 import { parseLangs } from './ui.js';
 import * as social from './social.js';
 import { listInstances, createInstance, startInstance, stopInstance, removeInstance } from './instances.js';
-import { addToHistory, updateEntryProgress, removeFromHistory, markWatched } from './history.js';
+import { addToHistory, updateEntryProgress, removeFromHistory, restoreRemoved, markWatched, setEpisodesWatched } from './history.js';
 import { learnQuality } from './preferences.js';
 import { refreshLink, touchSession, keyframesAround, ensureSyncClip, syncClipPath, capabilities, createSession, getSession, streamTo, subtitleVtt, closeSession, thumbFor, exactThumb, startThumbs } from './webplay.js';
 import { readFile as readFileAsync } from 'fs/promises';
@@ -25,6 +24,12 @@ import {
   getNodes, pickBest, getWatchlist, toggleWatchlist,
 } from './settings.js';
 import { WebSocketServer } from 'ws';
+import { refuse, hostAllowed, originAllowed, CSP } from './guard.js';
+import { updateStats } from './update-stats.js';
+import { newEpisodes } from './newepisodes.js';
+import { getIntro, setIntro } from './intros.js';
+import { prepareNext } from './tools.js';
+import { checkUpdate, installUpdate } from './app-update.js';
 
 import {
   listPlaylists, getPlaylist, createPlaylist, deletePlaylist,
@@ -35,11 +40,13 @@ import {
 
 import { searchMedia, getImdbId, getLatestEpisode } from './tmdb.js';
 import { getNowPlaying, isMpvRunning } from './mpv-ipc.js';
-import { getInfo, nowImdbId, getPerson, tmdbToImdb } from './moviemeta.js';
+import { getInfo, nowImdbId, getPerson, tmdbToImdb, getTrailerComments, getEpisode } from './moviemeta.js';
 import { nextEpisodeAfter } from './catalog.js';
 import { getPlayState, setPlayState, beginLaunch } from './playstate.js';
 
 const WEB_DIR = fileURLToPath(new URL('../web', import.meta.url));
+const ROOT_DIR = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
+const PKG_VERSION = (() => { try { return JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8')).version; } catch { return ''; } })();
 // A key that names one release without any debrid key in it: the torrent hash and file when we can see them, else the release name.
 // Where this person stopped in a film or episode, if it wasn't finished
 const resumeFor = (hist, imdbId, season, episode) => {
@@ -133,10 +140,7 @@ async function parseBody(req) {
 }
 
 function jsonResponse(res, data, status = 200) {
-  res.writeHead(status, {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-  });
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
   res.end(JSON.stringify(data));
 }
 
@@ -146,8 +150,10 @@ function errorResponse(res, message, status = 500) {
 }
 
 async function serveStatic(req, res) {
+  if (!hostAllowed(req)) { res.writeHead(421); res.end('Unknown host'); return; }
   let urlPath = req.url.split('?')[0];
   if (urlPath === '/') urlPath = '/index.html';
+  if (urlPath === '/favicon.ico') urlPath = '/favicon.svg'; // asked for by every browser, whatever the page says
   const filePath = path.join(WEB_DIR, path.normalize(urlPath));
   if (!filePath.startsWith(WEB_DIR + path.sep)) { res.writeHead(403); res.end('Forbidden'); return; }
   const ext = path.extname(filePath);
@@ -159,7 +165,9 @@ async function serveStatic(req, res) {
       res.end('Not Found');
       return;
     }
-    res.writeHead(200, { 'Content-Type': mime });
+    const head = { 'Content-Type': mime, 'X-Content-Type-Options': 'nosniff' };
+    if (ext === '.html' && process.env.IRONHIDE_HOSTED !== '1') Object.assign(head, { 'Content-Security-Policy': CSP, 'Referrer-Policy': 'strict-origin-when-cross-origin' }); // other sites see only http://127.0.0.1:<port>, never a path; YouTube embeds refuse to play with no referrer at all
+    res.writeHead(200, head);
     res.end(data);
   });
 }
@@ -167,19 +175,26 @@ async function serveStatic(req, res) {
 async function handleApi(req, res, urlPath) {
   const method = req.method;
 
-  if (method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    });
-    res.end();
-    return;
-  }
+  // Only this machine's own pages and programs: no other site may read or change anything here (see guard.js).
+  const why = refuse(req);
+  if (why) return errorResponse(res, why, 403);
+  if (method === 'OPTIONS') { res.writeHead(204); res.end(); return; } // no CORS: other sites get no preflight approval
 
   try {
     if (method === 'GET' && urlPath === '/api/catalog/feeds') {
       return jsonResponse(res, { feeds: FEEDS.map(({ id, label, short, kind, type, noGenre, cine, year, shuffle, tmdb, single }) => ({ id, label, short: short || label, kind, type, noGenre: !!noGenre, cine: !!cine, year: !!year, shuffle: !!shuffle, tmdb: !!tmdb, single: !!single })), cineGenres: CINE_GENRES, genres: await getGenres() });
+    }
+
+    if (method === 'GET' && urlPath === '/api/catalog/endless') {
+      const { endless } = await import('./collections.js'), qp = new URL(req.url, 'http://localhost').searchParams, hidden = await hiddenSet();
+      const items = await endless({ mode: qp.get('mode') || 'popular', type: qp.get('type') || '', genre: qp.get('genre') || '', page: qp.get('page') || 1, seed: qp.get('seed') || 0 }).catch(() => []);
+      return jsonResponse(res, items.filter((x) => !hidden.has(x.imdbId)));
+    }
+    if (method === 'GET' && urlPath === '/api/collections') { const { listCollections } = await import('./collections.js'); return jsonResponse(res, listCollections()); }
+    if (method === 'GET' && urlPath === '/api/collections/home') {
+      const { homeShelves } = await import('./collections.js'), qp = new URL(req.url, 'http://localhost').searchParams, hidden = await hiddenSet();
+      const sections = await homeShelves({ mood: qp.get('mood') || '', seed: qp.get('seed') || 0 }).catch(() => []);
+      return jsonResponse(res, { sections: sections.map((s) => ({ ...s, items: s.items.filter((x) => !hidden.has(x.imdbId)) })) });
     }
 
     if (method === 'GET' && urlPath === '/api/catalog/foryou') {
@@ -233,7 +248,24 @@ async function handleApi(req, res, urlPath) {
     }
 
     if (method === 'POST' && urlPath === '/api/history/remove') { const b = await parseBody(req); return jsonResponse(res, { removed: /^tt\d+$/.test(b.imdbId || '') ? await removeFromHistory(b.imdbId) : 0 }); }
+    if (method === 'POST' && urlPath === '/api/history/restore') { const b = await parseBody(req); return jsonResponse(res, { restored: /^tt\d+$/.test(b.imdbId || '') ? await restoreRemoved(b.imdbId) : 0 }); }
     if (method === 'POST' && urlPath === '/api/history/watched') { const b = await parseBody(req); return jsonResponse(res, { ok: /^tt\d+$/.test(b.imdbId || '') ? await markWatched(b.imdbId, b.season ?? null, b.episode ?? null) : false }); }
+    // tick episodes off (or back on) from the episode list: { imdbId, title, eps: [{ season, episode }], watched }
+    if (method === 'POST' && urlPath === '/api/history/episodes') {
+      const b = await parseBody(req);
+      const eps = (Array.isArray(b.eps) ? b.eps : []).map((e) => ({ season: Number(e.season), episode: Number(e.episode) })).filter((e) => e.season > 0 && e.episode > 0).slice(0, 200);
+      if (!/^tt\d+$/.test(b.imdbId || '') || !eps.length) return errorResponse(res, 'Which episodes?', 400);
+      return jsonResponse(res, { changed: await setEpisodesWatched(b.imdbId, String(b.title || ''), eps, !!b.watched) });
+    }
+    // shows you were caught up on that have new episodes out
+    if (method === 'GET' && urlPath === '/api/newepisodes') return jsonResponse(res, await newEpisodes({ fresh: new URL(req.url, 'http://localhost').searchParams.has('fresh') }).catch(() => []));
+    // where a show's intro ends (Skip intro), remembered per show; "now" = what's playing
+    if (/^\/api\/intro\/(now|tt\d+)$/.test(urlPath)) {
+      const id = urlPath.endsWith('/now') ? nowImdbId() : urlPath.split('/').pop();
+      if (!/^tt\d+$/.test(id || '')) return jsonResponse(res, { imdbId: null, intro: null });
+      if (method === 'GET') return jsonResponse(res, { imdbId: id, intro: getIntro(id) });
+      if (method === 'PUT') { try { return jsonResponse(res, { imdbId: id, intro: setIntro(id, await parseBody(req)) }); } catch (e) { return errorResponse(res, e.message, 400); } }
+    }
     if (method === 'GET' && urlPath === '/api/history') {
       return jsonResponse(res, await getHistory(100));
     }
@@ -280,11 +312,12 @@ async function handleApi(req, res, urlPath) {
         else { season = 1; episode = 1; }
       }
       if (!resumeFrom) resumeFrom = resumeFor(hist, body.imdbId, type === 'tv' ? season : null, type === 'tv' ? episode : null);
+      if (body.startOver) resumeFrom = 0; // "Start over" on the title page
       beginLaunch({ title: body.title || '', imdbId: body.imdbId });
       await tools.ironhide_streams.handler({ imdbId: body.imdbId, title: body.title || '', type, season, episode });
       const { streams } = getLoadedStreams();
       const best = pickBest(streams, playback, { exclude: brokenSet(streams) });
-      if (!best) { setPlayState({ phase: 'error', detail: 'No streams found for this title' }); return errorResponse(res, 'No streams found for this title', 404); }
+      if (!best) { setPlayState({ phase: 'error', detail: 'No streams found for this title', retry: false }); return errorResponse(res, 'No streams found for this title', 404); }
       setPlayState({ phase: 'resolving', detail: `Resolving ${streams[best - 1].size || 'stream'}` });
       const out = await tools.ironhide_play.handler({ index: best, resumeFrom });
       return jsonResponse(res, { ...out, played: { season, episode, resumeFrom: resumeFrom || 0 } });
@@ -295,6 +328,8 @@ async function handleApi(req, res, urlPath) {
       const p = new URL(req.url, 'http://localhost').searchParams, id = p.get('imdbId') || '';
       if (!/^tt\d+$/.test(id)) return jsonResponse(res, { finished: false, next: null });
       const season = p.get('season') ? Number(p.get('season')) : null, episode = p.get('episode') ? Number(p.get('episode')) : null;
+      // ?any=1: the episode after this one whether or not it was finished (the menu bar's "Next episode")
+      if (p.has('any')) { const next = season && episode ? await nextEpisodeAfter(id, season, episode).catch(() => null) : null; return jsonResponse(res, { finished: false, next, ended: !!season && !next }); }
       const h = (await getHistory(300)).find((x) => x.imdbId === id && (x.season || null) === season && (x.episode || null) === episode);
       const finished = !!h && (h.percent || 0) >= 90;
       const next = finished && season && episode ? (h.nextEp !== undefined ? h.nextEp : await nextEpisodeAfter(id, season, episode).catch(() => null)) : null;
@@ -305,6 +340,25 @@ async function handleApi(req, res, urlPath) {
     if (method === 'GET' && urlPath === '/api/playstate') return jsonResponse(res, getPlayState());
     if (method === 'POST' && urlPath === '/api/play/cancel') { setPlayState({ phase: 'idle', detail: '' }); await tools.ironhide_control.handler({ action: 'stop' }).catch(() => {}); return jsonResponse(res, { ok: true }); }
 
+    // The version that was just tried didn't play: remember it as broken and start the next best one of the same title
+    if (method === 'POST' && urlPath === '/api/play/next') {
+      const st = getPlayState(), { streams } = getLoadedStreams(), meta = getLoadedStreams().meta || {};
+      if (!streams?.length) return errorResponse(res, 'Nothing to retry: open the title and press Play', 400);
+      const failed = streams[(st.streamIndex || 0) - 1];
+      if (failed) brokenStreams.set(streamPin(failed), Date.now());
+      const best = pickBest(streams, (await getSettings()).playback, { exclude: brokenSet(streams) });
+      if (!best) { setPlayState({ phase: 'error', detail: 'No other versions left to try', retry: false }); return errorResponse(res, 'No other versions left to try', 404); }
+      beginLaunch({ title: meta.title || '', imdbId: meta.imdbId || '', detail: `Trying ${streams[best - 1].size || 'another version'}` });
+      setPlayState({ phase: 'resolving' });
+      const resume = resumeFor(await getHistory(200), meta.imdbId, meta.season, meta.episode);
+      return jsonResponse(res, await tools.ironhide_play.handler({ index: best, resumeFrom: resume || undefined }));
+    }
+    // the next episode is about to be offered: fetch its versions now so the countdown can start it at once
+    if (method === 'POST' && urlPath === '/api/nextup/prepare') {
+      const b = await parseBody(req);
+      if (/^tt\d+$/.test(b.imdbId || '') && b.season && b.episode) prepareNext({ imdbId: b.imdbId, type: 'tv', season: Number(b.season), episode: Number(b.episode) - 1 }).catch?.(() => {});
+      return jsonResponse(res, { ok: true });
+    }
     if (method === 'POST' && urlPath === '/api/play') {
       const body = await parseBody(req);
       const meta0 = getLoadedStreams().meta || {};
@@ -324,10 +378,16 @@ async function handleApi(req, res, urlPath) {
     // cast, details and what people think, for the title that is playing (or a given IMDb id)
     if (method === 'GET' && /^\/api\/person\/\d+$/.test(urlPath)) return jsonResponse(res, await getPerson(urlPath.split('/').pop()).catch((e) => ({ error: String(e.message || e) })));
     if (method === 'GET' && /^\/api\/tmdb\/(movie|tv)\/\d+$/.test(urlPath)) { const [, , , kind, tid] = urlPath.split('/'); return jsonResponse(res, await tmdbToImdb(kind, tid).catch((e) => ({ error: String(e.message || e) }))); }
+    if (method === 'GET' && urlPath.startsWith('/api/ytcomments/')) return jsonResponse(res, await getTrailerComments(decodeURIComponent(urlPath.slice(16)).split(',')).catch((e) => ({ error: String(e.message || e), comments: [] })));
+    if (method === 'GET' && urlPath === '/api/info/now') { // what's playing, plus the episode when it's a series
+      const id = nowImdbId(), info = await getInfo(id).catch((e) => ({ error: String(e.message || e) }));
+      const m = getLoadedStreams().meta || {};
+      const ep = !info.error && m.imdbId === id && m.season && m.episode ? await getEpisode(id, m.season, m.episode).catch(() => null) : null;
+      return jsonResponse(res, ep ? { ...info, episode: ep } : info);
+    }
     if (method === 'GET' && urlPath.startsWith('/api/info/')) { const id = urlPath.slice(10); return jsonResponse(res, await getInfo(id === 'now' ? nowImdbId() : id).catch((e) => ({ error: String(e.message || e) }))); }
-    // extra IronHides on this Mac (another person, own friend code). Spawns processes, so only our own pages may call it.
+    // extra Orbies on this Mac (another person, own friend code). Spawns processes, so only our own pages may call it.
     if (urlPath === '/api/instances' || /^\/api\/instances\/[a-z0-9]+(\/(start|stop))?$/.test(urlPath)) {
-      if (req.headers.origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.origin)) return errorResponse(res, 'Not allowed from this site', 403);
       const relay = social.snapshot().relay.url || '';
       if (method === 'GET' && urlPath === '/api/instances') return jsonResponse(res, await listInstances());
       if (method === 'POST' && urlPath === '/api/instances') { const b = await parseBody(req); return jsonResponse(res, await createInstance({ name: b.name, copyKeys: b.copyKeys !== false, relay })); }
@@ -336,8 +396,8 @@ async function handleApi(req, res, urlPath) {
       const m = urlPath.match(/^\/api\/instances\/([a-z0-9]+)\/(start|stop)$/);
       if (method === 'POST' && m) return jsonResponse(res, m[2] === 'start' ? await startInstance(m[1], relay) : await stopInstance(m[1]));
     }
-    if (method === 'POST' && urlPath === '/api/account/purge') { if (req.headers.origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.origin)) return errorResponse(res, 'Not allowed from this site', 403); social.purgeFriends(); return jsonResponse(res, { ok: true }); }
-    if (method === 'POST' && urlPath === '/api/account/reset') { if (req.headers.origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.origin)) return errorResponse(res, 'Not allowed from this site', 403); await resetProfile(); social.resetIdentity(); return jsonResponse(res, { ok: true }); }
+    if (method === 'POST' && urlPath === '/api/account/purge') { social.purgeFriends(); return jsonResponse(res, { ok: true }); }
+    if (method === 'POST' && urlPath === '/api/account/reset') { await resetProfile(); social.resetIdentity(); return jsonResponse(res, { ok: true }); }
     if (method === 'PUT' && urlPath === '/api/settings') { const out = await updateSettings(await parseBody(req)); social.sendProfile(); return jsonResponse(res, out); }
 
     if (method === 'GET' && urlPath === '/api/connectors') return jsonResponse(res, connectorsView());
@@ -375,7 +435,7 @@ async function handleApi(req, res, urlPath) {
       if (!r.ok) return errorResponse(res, 'Upstream ' + r.status, 502);
       const buf = Buffer.from(await r.arrayBuffer());
       if (buf.length > 6e6) return errorResponse(res, 'Too large', 413);
-      res.writeHead(200, { 'Content-Type': r.headers.get('content-type') || 'image/jpeg', 'Cache-Control': 'public, max-age=604800', 'Access-Control-Allow-Origin': '*' });
+      res.writeHead(200, { 'Content-Type': r.headers.get('content-type') || 'image/jpeg', 'Cache-Control': 'public, max-age=604800' });
       return res.end(buf);
     }
 
@@ -386,22 +446,11 @@ async function handleApi(req, res, urlPath) {
       res.writeHead(rg ? 206 : 200, { 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': b - a + 1, ...(rg ? { 'Content-Range': `bytes ${a}-${b}/${size}` } : {}) });
       return fs.createReadStream(f, { start: a, end: b }).pipe(res);
     }
-    // Real numbers for the Updates tab, straight from git
-    if (method === 'POST' && urlPath === '/api/updates/stats') {
-      const items = (await parseBody(req)).items || [], out = {}, HASH = /^[0-9a-f]{7,40}$/, RANGE = /^[0-9a-f]{7,40}\.\.([0-9a-f]{7,40}|HEAD)$/;
-      const git = (args) => new Promise((res2) => execFile('git', args, { cwd: fileURLToPath(new URL('..', import.meta.url)), maxBuffer: 4e7 }, (e, so) => res2(e ? '' : so)));
-      const skip = (f) => /^docs\/screens\/|package-lock\.json$/.test(f);
-      const count = (txt, r) => { for (const l of txt.split('\n')) { if (l.startsWith('@')) { r.commits++; const at = l.slice(1); r.lastAt ||= at; r.firstAt = at; continue; } const m = l.match(/^(\d+)\t(\d+)\t(.+)$/); if (m && !skip(m[3])) { r.add += +m[1]; r.del += +m[2]; r.files.add(m[3]); } } };
-      for (const it of items.slice(0, 40)) {
-        const args = it.range && RANGE.test(it.range) ? [it.range] : Array.isArray(it.commits) && it.commits.every((h) => HASH.test(h)) ? ['--no-walk', ...it.commits] : null; if (!args) continue;
-        const r = { commits: 0, add: 0, del: 0, files: new Set(), lastAt: '', firstAt: '' };
-        count(await git(['log', '--date-order', '--numstat', '--format=@%cI', ...args]), r);
-        const row = { commits: r.commits, add: r.add, del: r.del, files: r.files.size, lastAt: r.lastAt, firstAt: r.firstAt };
-        if (it.work) { const w = { commits: 0, add: 0, del: 0, files: new Set() }; count(await git(['diff', '--numstat', 'HEAD']), w); row.workAdd = w.add; row.workDel = w.del; }
-        out[it.version] = row;
-      }
-      return jsonResponse(res, out);
-    }
+    // Real numbers for the Updates tab, straight from git (or from the numbers the release build saved)
+    if (method === 'POST' && urlPath === '/api/updates/stats') return jsonResponse(res, await updateStats((await parseBody(req)).items || []));
+    // Mac app updates
+    if (method === 'GET' && urlPath === '/api/app/update') return jsonResponse(res, await checkUpdate({ fresh: new URL(req.url, 'http://localhost').searchParams.has('fresh') }));
+    if (method === 'POST' && urlPath === '/api/app/update/install') return jsonResponse(res, await installUpdate());
     if (method === 'GET' && urlPath === '/api/webplay/capabilities') return jsonResponse(res, capabilities());
 
     // In-browser playback: pick a stream, resolve the direct link, probe it, return a session.
@@ -437,7 +486,7 @@ async function handleApi(req, res, urlPath) {
         // In a room everyone plays the exact release the owner's copy chose. Without it, positions would not line up.
         const pinned = body.pin ? findPinned(loaded.streams, body.pin) : 0;
         const best = pinned || pickBest(loaded.streams, webPrefs(settings), { exclude: brokenSet(loaded.streams), browserSafe: CDN_DELIVERY || !!body.room });
-        if (!best) { setPlayState({ phase: 'error', detail: 'No streams found for this title' }); return errorResponse(res, 'No streams found for this title', 404); }
+        if (!best) { setPlayState({ phase: 'error', detail: 'No streams found for this title', retry: false }); return errorResponse(res, 'No streams found for this title', 404); }
         stream = loaded.streams[best - 1];
       }
       try {
@@ -500,7 +549,7 @@ async function handleApi(req, res, urlPath) {
         const f = (q.get('exact') === '1' && await exactThumb(id, t)) || thumbFor(id, t);
         if (!f) { res.writeHead(204); return res.end(); }
         const buf = await readFileAsync(f.path);
-        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=600', 'X-Thumb-Time': String(f.t), 'Access-Control-Expose-Headers': 'X-Thumb-Time' });
+        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=600', 'X-Thumb-Time': String(f.t) });
         return res.end(buf);
       }
       if (what.startsWith('sub/') && method === 'GET') {
@@ -561,7 +610,14 @@ async function handleApi(req, res, urlPath) {
     }
 
     if (method === 'GET' && urlPath === '/api/health') {
-      return jsonResponse(res, { ok: true, service: 'ironhide', pid: process.pid });
+      return jsonResponse(res, { ok: true, service: 'ironhide', pid: process.pid, version: PKG_VERSION, owner: process.env.IRONHIDE_OWNER || 'cli', root: ROOT_DIR });
+    }
+    // Stop this daemon. Programs on this Mac only (the Mac app replacing a stale copy of itself), never a web page.
+    if (method === 'POST' && urlPath === '/api/shutdown') {
+      if (req.headers.origin || req.headers['sec-fetch-mode']) return errorResponse(res, 'Not allowed from a page', 403);
+      jsonResponse(res, { ok: true });
+      setTimeout(() => process.exit(0), 150);
+      return;
     }
 
     // Generic tool endpoint: the MCP server (and any other client) calls tools here.
@@ -695,7 +751,8 @@ export function startWebServer() {
       }
     });
 
-    const wss = new WebSocketServer({ server });
+    // the live channel (social, queue, cursors): same rules as the API, so another site can't listen in or send
+    const wss = new WebSocketServer({ server, verifyClient: ({ req }) => hostAllowed(req) && originAllowed(req.headers.origin) });
     wss.on('error', () => {}); // surfaced via server 'error' below
     server.once('error', reject);
 

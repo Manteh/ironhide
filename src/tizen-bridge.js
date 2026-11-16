@@ -1,4 +1,4 @@
-// IronHide Tizen Bridge
+// Orbie Tizen Bridge
 // WebSocket server that connects to the TizenBrew app on the TV
 // TV app connects here and receives play/control commands
 // If another process already owns the bridge port, commands are proxied via HTTP
@@ -307,7 +307,7 @@ export function isTVConnected() {
 
 function sendCommand(cmd) {
   if (readyClients.size === 0) {
-    throw new Error('No clients connected. Open IronHide on the TV or browser first.');
+    throw new Error('No clients connected. Open Orbie on the TV or browser first.');
   }
   const msg = JSON.stringify(cmd);
   console.error(`[bridge] sending to ${readyClients.size} client(s): ${msg.slice(0, 200)}`);
@@ -344,7 +344,7 @@ export async function tvPlay(url, title, resumeFrom) {
   await sendOrProxy({
     action: 'play',
     url,
-    title: title || 'IronHide',
+    title: title || 'Orbie',
     resumeFrom: resumeFrom || 0,
   });
 }

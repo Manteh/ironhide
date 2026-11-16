@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// IronHide hub: hosted mode. Visitors pick a unique name, get a cookie, and are proxied to their own
-// private IronHide daemon (own keys, history, settings, identity). The relay runs beside it.
+// Orbie hub: hosted mode. Visitors pick a unique name, get a cookie, and are proxied to their own
+// private Orbie daemon (own keys, history, settings, identity). The relay runs beside it.
 // No daemon changes needed: each user is just `src/daemon.js` with its own IRONHIDE_HOME and port.
 import http from 'http';
 import net from 'net';
@@ -70,13 +70,13 @@ process.on('exit', () => procs.forEach((_, id) => stop(id)));
 for (const s of ['SIGINT', 'SIGTERM']) process.on(s, () => process.exit(0));
 
 // ---------- entry page ----------
-const page = (msg = '') => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IronHide</title>
+const page = (msg = '') => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Orbie</title>
 <style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0d0d0f;color:#f3f3f5;font:16px/1.5 -apple-system,system-ui,sans-serif}
 form{width:min(380px,92vw);display:flex;flex-direction:column;gap:12px;padding:28px;border-radius:22px;background:#17171b;border:1px solid #ffffff14;box-shadow:0 30px 80px #0008}
 h1{margin:0;font-size:30px;letter-spacing:-.03em}p{margin:0;color:#9a9aa5;font-size:14px}.e{color:#ff7b7b}
 input{height:46px;border-radius:12px;border:1px solid #ffffff1c;background:#1f1f25;color:inherit;padding:0 14px;font-size:16px;outline:none}input:focus{border-color:#ffffff80}
 button{height:46px;border:0;border-radius:12px;background:#6d6af2;color:#fff;font-weight:600;font-size:16px;cursor:pointer}</style>
-<form method="post" action="/hub/enter"><h1>IronHide</h1><p>Pick a name to come in. Come back with the same browser to pick up where you left off.</p>
+<form method="post" action="/hub/enter"><h1>Orbie</h1><p>Pick a name to come in. Come back with the same browser to pick up where you left off.</p>
 ${msg ? `<p class="e">${msg}</p>` : ''}<input name="name" placeholder="Your name" maxlength="24" autofocus autocomplete="off" required>
 ${ACCESS_CODE ? '<input name="code" placeholder="Access code" autocomplete="off" required>' : ''}<button>Enter</button></form>`;
 
@@ -135,4 +135,4 @@ server.on('upgrade', async (req, sock, head) => {
 });
 
 startRelay();
-server.listen(PORT, () => console.error(`IronHide hub on :${PORT}${ACCESS_CODE ? ' (access code required)' : ''}`));
+server.listen(PORT, () => console.error(`Orbie hub on :${PORT}${ACCESS_CODE ? ' (access code required)' : ''}`));

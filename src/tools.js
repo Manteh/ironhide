@@ -7,6 +7,7 @@ import { parseLangs } from "./ui.js";
 import { addToHistory, getHistory, getLastWatched, updateLatestProgress, updateEntryProgress, normalizeProgress } from "./history.js";
 import { nextEpisodeAfter } from "./catalog.js";
 import { playDetached, readProgress, formatTime } from "./player.js";
+import { setPlayState } from "./playstate.js";
 import { learnQuality, getQualityPreference, getGlobalPreference } from "./preferences.js";
 import { addRating, getTasteProfile, getRatings } from "./taste.js";
 import { invalidateRecommendations } from "./recommend.js";
@@ -199,12 +200,16 @@ let mpvWasRunning = false; // tracks if mpv was running on last poll
 // ── Progress, finishing and the next episode ──
 // What was last read from mpv while it ran, so a crash or a missing progress file still leaves a saved position
 let liveProgress = null, lastFinishAt = 0;
+// Only playback this daemon started is ours to record. Another Orbie on this Mac (an extra profile, a test copy)
+// talks to the same mpv socket, and must not save someone else's film into its own history.
+let ownsPlayback = false;
 const matchOf = (m) => ({ imdbId: m.imdbId, season: m.season, episode: m.episode });
 const isTv = (m) => (m.type === "tv" || m.type === "series") && m.season && m.episode;
 
 // mpv closed (or the file ended): save where it stopped, decide if it was finished, and line up the next episode
 async function handleFinish(progress) {
   progress = progress || liveProgress;
+  if (!ownsPlayback) return;
   if (!progress || !(progress.duration > 0)) return;
   if (Date.now() - lastFinishAt < 8000) return; // the monitor and the launcher both notice; handle it once
   lastFinishAt = Date.now();
@@ -226,8 +231,24 @@ async function handleFinish(progress) {
     pendingRating = { imdbId: meta.imdbId, title: `${meta.title}${ep}`, type: meta.type, percent: n.percent };
   }
   liveProgress = null;
+  ownsPlayback = false;
 }
 export const getPlaybackStatus = () => globalPlaybackStatus;
+
+// Near the end of an episode: look up the next one's streams now, so the "Up next" countdown starts it instantly
+// (torrentio.js keeps the answer for a few minutes).
+let warmedFor = '';
+async function warmNextEpisode(meta) {
+  if (!isTv(meta)) return;
+  const key = `${meta.imdbId}:${meta.season}:${meta.episode}`;
+  if (warmedFor === key) return;
+  warmedFor = key;
+  try {
+    const next = await nextEpisodeAfter(meta.imdbId, meta.season, meta.episode);
+    if (next) await getStreams(meta.imdbId, 'tv', next.season, next.episode);
+  } catch {}
+}
+export const prepareNext = warmNextEpisode;
 
 // ── Active mpv monitor ──
 // Polls every 3 seconds. While mpv runs it saves the position every ~6 s; when mpv disappears it captures the final state.
@@ -236,6 +257,7 @@ function startMpvMonitor() {
   setInterval(async () => {
     const running = await isMpvRunning();
 
+    if (!ownsPlayback) { mpvWasRunning = false; return; } // not ours (see ownsPlayback)
     if (running) {
       if (!mpvWasRunning) { mpvWasRunning = true; liveProgress = null; }
       if (++monitorTick % 2 === 0) {
@@ -243,6 +265,7 @@ function startMpvMonitor() {
         if (np && np.duration > 0 && np.position >= 0 && globalMeta.imdbId) {
           liveProgress = { position: np.position, duration: np.duration, percent: np.percent };
           if (np.position > 5) await updateEntryProgress(matchOf(globalMeta), liveProgress).catch(() => {});
+          if (np.percent >= 80) warmNextEpisode({ ...globalMeta });
         }
       }
     }
@@ -278,8 +301,10 @@ server.registerTool(
     }
 
     const onFinish = handleFinish;
+    setPlayState({ streamIndex: index }); // which version this is, so "Try another version" can skip it if it fails
 
     const epTag = globalMeta.season ? ` S${String(globalMeta.season).padStart(2, "0")}E${String(globalMeta.episode).padStart(2, "0")}` : "";
+    ownsPlayback = true;
     const result = await playDetached(stream, globalSubs, onFinish, resumeFrom, globalMeta.title ? `${globalMeta.title}${epTag}` : undefined);
 
     if (result.status === "not_cached") {
@@ -634,6 +659,7 @@ server.registerTool(
     const onFinish = handleFinish;
 
     const resumeTag = entry.season ? ` S${String(entry.season).padStart(2, "0")}E${String(entry.episode).padStart(2, "0")}` : "";
+    ownsPlayback = true;
     const result = await playDetached(stream, subs, onFinish, resumeFrom, `${entry.title}${resumeTag}`);
 
     if (result.status === "not_cached") {
@@ -708,7 +734,7 @@ server.registerTool(
 server.registerTool(
   "ironhide_cast_tv",
   {
-    description: "Cast a stream to the Samsung TV instead of playing on Mac. Only works with Real-Debrid cached streams. If the IronHide TizenBrew app is connected, plays natively on the TV with full codec support and seeking. Falls back to DLNA proxy if the app isn't running. Use this when the user says 'play on TV', 'cast to TV', 'put it on the big screen', etc.",
+    description: "Cast a stream to the Samsung TV instead of playing on Mac. Only works with Real-Debrid cached streams. If the Orbie TizenBrew app is connected, plays natively on the TV with full codec support and seeking. Falls back to DLNA proxy if the app isn't running. Use this when the user says 'play on TV', 'cast to TV', 'put it on the big screen', etc.",
     inputSchema: {
       index: z.number().describe("Stream number from ironhide_streams results (1-based)"),
     },
@@ -728,7 +754,7 @@ server.registerTool(
     }
 
     try {
-      const title = globalMeta.title || 'IronHide';
+      const title = globalMeta.title || 'Orbie';
       const ep = globalMeta.season ? ` S${String(globalMeta.season).padStart(2, "0")}E${String(globalMeta.episode).padStart(2, "0")}` : "";
       const fullTitle = `${title}${ep}`;
 
@@ -766,7 +792,7 @@ server.registerTool(
         return {
           content: [{
             type: "text",
-            text: `📺 Now playing natively on Samsung TV!\n${fullTitle}\n${stream.quality.slice(0, 80)}\n${stream.size}\n\nPlaying on OG Bobby TV via IronHide app (native AVPlayer — full codec support, seeking works). Use ironhide_tv_control to pause/play/seek.${tvWatcherHint}`,
+            text: `📺 Now playing natively on Samsung TV!\n${fullTitle}\n${stream.quality.slice(0, 80)}\n${stream.size}\n\nPlaying on OG Bobby TV via Orbie app (native AVPlayer — full codec support, seeking works). Use ironhide_tv_control to pause/play/seek.${tvWatcherHint}`,
           }],
         };
       }
@@ -774,7 +800,7 @@ server.registerTool(
       // Fallback: DLNA proxy path
       const tvAvail = await isTVAvailable();
       if (!tvAvail) {
-        return { content: [{ type: "text", text: "Samsung TV not found on the network. Is it turned on? (IronHide TizenBrew app also not connected)" }] };
+        return { content: [{ type: "text", text: "Samsung TV not found on the network. Is it turned on? (Orbie TizenBrew app also not connected)" }] };
       }
 
       await castStream(stream, fullTitle);
@@ -797,7 +823,7 @@ server.registerTool(
 server.registerTool(
   "ironhide_tv_control",
   {
-    description: `Control playback on the Samsung TV. Works with both native IronHide app (TizenBrew) and DLNA. Available actions:
+    description: `Control playback on the Samsung TV. Works with both native Orbie app (TizenBrew) and DLNA. Available actions:
 - pause — pause playback
 - play — resume playback
 - stop — stop and disconnect

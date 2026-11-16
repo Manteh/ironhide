@@ -3,7 +3,7 @@
 export const CHANGELOG = [
   {
     version: '1.0', range: '28b1991..HEAD', date: '2026-11-08', title: 'Made for you', status: 'dev',
-    summary: 'IronHide learns your taste, finds anything as you type, and feels fast everywhere: picks you would actually love, a version picker that explains itself, and a Mac app that never stutters.',
+    summary: 'Orbie learns your taste, finds anything as you type, and feels fast everywhere: picks you would actually love, a version picker that explains itself, and a Mac app that never stutters.',
     groups: {
       New: [
         'Recommendations that learn you: every rating, every film you finish, every series you binge, what you save and what you hide shapes your picks. Each one shows a match % and why ("Because you loved FROM").',
@@ -105,7 +105,7 @@ export const CHANGELOG = [
     groups: {
       New: [
         'Rooms pause where they were when the last player closes, and stay available under Your rooms.',
-        'Rooms come back even if the relay restarts, because each IronHide keeps its own saved copy, including the chat.',
+        'Rooms come back even if the relay restarts, because each Orbie keeps its own saved copy, including the chat.',
         'Room owner: keeps control, gets host back on returning, cannot be kicked, and can hand the room over.',
         'Kick people from a room. They cannot rejoin it.',
         'See friends\' rooms in your list and join without a code.',
@@ -124,7 +124,7 @@ export const CHANGELOG = [
   },
   {
     version: '0.7', commits: ['847cc65', 'a063b46', '66c5bb0', '8f7c39b', '3f9d6df'], date: '2026-11-04', title: 'Hosted relay',
-    summary: 'Friends run their own IronHide and meet through one small relay. No video goes through it.',
+    summary: 'Friends run their own Orbie and meet through one small relay. No video goes through it.',
     groups: {
       New: ['Relay deployed on Render, with a people list and unique names online.', 'First-run name screen.'],
       Improved: ['Every install connects to the shared relay with no setup.', 'API keys are hidden in error messages.'],
@@ -155,7 +155,7 @@ export const CHANGELOG = [
     },
   },
   {
-    version: '0.3', range: 'ed94f94..b8affa0', date: '2026-11-04', title: 'IronHide on the web',
+    version: '0.3', range: 'ed94f94..b8affa0', date: '2026-11-04', title: 'Orbie on the web',
     summary: 'The web app rebuilt from scratch, using TorBox and your Trakt harvester.',
     groups: {
       New: ['Floating left rail and ambient color that follows the poster.', 'Launch indicator and a smooth hand-off to mpv.', 'Shelves from the Trakt harvester.', 'Settings for profile, appearance, playback, connectors and nodes.'],
@@ -171,6 +171,6 @@ export const CHANGELOG = [
   {
     version: '0.1', commits: ['8785579', '7fd7d8a'], date: '2026-04-20', title: 'First release',
     summary: 'Where it started: search and stream from Claude Code.',
-    groups: { New: ['IronHide MCP server and CLI.', 'Streams in mpv with full remote control.', 'Watch history, resume, ratings and a taste profile.'] },
+    groups: { New: ['Orbie MCP server and CLI.', 'Streams in mpv with full remote control.', 'Watch history, resume, ratings and a taste profile.'] },
   },
 ];

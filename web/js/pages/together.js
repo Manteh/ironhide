@@ -1,5 +1,5 @@
 // Friends: who your friends are and what they're doing, their rooms, starting your own, and the room lobby.
-import { $, $$, esc, icon, avatar, posterOf, toast, fmtTime } from '../ui.js';
+import { $, $$, esc, icon, avatar, posterOf, toast, fmtTime, ask } from '../ui.js';
 import { social, onState, sapi, inRoom, isHost, canControl, fmtCode } from '../social.js';
 import { mountChat } from '../chat.js';
 import { onLeave } from '../main.js';
@@ -116,7 +116,7 @@ export default async function together(el) {
       $('#jnRoom', el).onsubmit = (e) => { e.preventDefault(); const v = $('#rCode', el).value.trim(); if (v) sapi('/room/join', { code: v }); };
       $$('[data-join]', el).forEach((b) => (b.onclick = () => sapi('/room/join', { code: b.dataset.join })));
       $$('[data-rejoin]', el).forEach((b) => (b.onclick = () => { b.disabled = true; sapi('/room/join', { code: b.dataset.rejoin }).catch((e) => { b.disabled = false; toast(e.message, 'err'); }); }));
-      $$('[data-forget]', el).forEach((b) => (b.onclick = () => { if (confirm('Forget this room? You will no longer see it here.')) sapi('/room/forget', { code: b.dataset.forget }); }));
+      $$('[data-forget]', el).forEach((b) => (b.onclick = () => ask('Forget this room? You will no longer see it here.', { ok: 'Forget', danger: true }).then((ok) => ok && sapi('/room/forget', { code: b.dataset.forget }))));
       $$('[data-no]', el).forEach((b) => (b.onclick = () => sapi('/room/invite/dismiss', { code: b.dataset.no })));
       return;
     }
@@ -132,8 +132,8 @@ export default async function together(el) {
         : `<div class="tg-k">What are we watching?</div><p class="tg-note">${host ? 'Pick a title. Everyone in the room gets it and loads their own copy.' : 'Waiting for the host to pick something.'}</p>${host ? '<button class="btn primary" id="pick">Pick a title</button>' : ''}`}</div>
       <div class="tg-card chatbox" id="tgChat"></div>`;
     $('#cpRoom', el).onclick = () => copy(r.code, 'Room code copied'); $('#lvRoom', el).onclick = () => sapi('/room/leave');
-    $$('[data-own]', el).forEach((b) => (b.onclick = () => { if (confirm(`Make ${b.dataset.kname} the owner of this room? You will lose owner control.`)) sapi('/room/transfer', { id: b.dataset.own }); }));
-    $$('[data-kick]', el).forEach((b) => (b.onclick = () => { if (confirm(`Remove ${b.dataset.kname} from the room? They will not be able to rejoin it.`)) sapi('/room/kick', { id: b.dataset.kick }); }));
+    $$('[data-own]', el).forEach((b) => (b.onclick = () => ask(`Make ${b.dataset.kname} the owner of this room? You will lose owner control.`, { ok: 'Make owner' }).then((ok) => ok && sapi('/room/transfer', { id: b.dataset.own }))));
+    $$('[data-kick]', el).forEach((b) => (b.onclick = () => ask(`Remove ${b.dataset.kname} from the room? They will not be able to rejoin it.`, { ok: 'Remove', danger: true }).then((ok) => ok && sapi('/room/kick', { id: b.dataset.kick }))));
     $('#openSw', el)?.addEventListener('click', () => sapi('/room/settings', { open: !(r.open !== false) }));
     $$('[data-seg="ctl"] button', el).forEach((b) => (b.onclick = () => sapi('/room/settings', { control: b.dataset.v })));
     $('#pick', el)?.addEventListener('click', async () => { const { openPalette } = await import('../palette.js'); openPalette('', { pick: (t) => sapi('/room/media', { media: { imdbId: t.imdbId, type: t.type, title: t.title, year: t.year, poster: t.poster, ...(t.type === 'series' ? { season: 1, episode: 1 } : {}) } }) }); });

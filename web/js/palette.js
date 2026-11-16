@@ -6,13 +6,18 @@
 //  - Keys: ↑↓ move, Enter opens details, ⌘/Ctrl+Enter plays, Esc closes.
 import { api } from './api.js';
 import { store, saveSettings, quickPlay } from './main.js';
-import { $, $$, esc, icon, posterOf } from './ui.js';
+import { $, $$, esc, icon, posterOf, wl } from './ui.js';
 
 let box;
 const COMMANDS = [
   ['Continue watching', '#/continue', 'bookmark'], ['Movies', '#/feed/trending_movies', 'film'], ['Series', '#/feed/trending_shows', 'tv'],
   ['Popular', '#/feed/popular_movies', 'film'], ['Most watched', '#/feed/watched_weekly', 'film'], ['Upcoming', '#/feed/anticipated', 'film'], ['Box office', '#/feed/boxoffice', 'film'],
   ['Taste Lab: rate and compare', '#/taste', 'heart'], ['Your taste and profile', '#/profile', 'user'], ['Open settings', '#/settings/profile', 'user'], ['Playback preferences', '#/settings/playback', 'sliders'], ['Open connectors', '#/settings/connectors', 'plug'],
+  // every Settings section by name, and the words people use for what's in it
+  ['Settings: Profile (name, avatar)', '#/settings/profile', 'user'], ['Settings: Appearance (theme, accent, posters)', '#/settings/appearance', 'palette'],
+  ['Settings: Playback (player, next episode, skip intro)', '#/settings/playback', 'sliders'], ['Settings: Streams (quality, languages, sizes)', '#/settings/streams', 'film'],
+  ['Settings: Connectors (TorBox, TMDB, keys)', '#/settings/connectors', 'plug'], ['Settings: Friends and rooms', '#/settings/together', 'users'],
+  ['Settings: Nodes', '#/settings/nodes', 'nodes'], ['Settings: Updates (what\'s new)', '#/settings/updates', 'bolt'], ['Settings: About', '#/settings/about', 'info'],
   ['Theme: Dark', { theme: 'dark' }, 'moon'], ['Theme: Midnight', { theme: 'midnight' }, 'moon'], ['Theme: Light', { theme: 'light' }, 'sun'], ['Theme: System', { theme: 'system' }, 'monitor'],
 ];
 const TRY = ['korean thriller', 'sci-fi series 2024', 'like interstellar', '90s horror', 'anime films', 'comedy series'];
@@ -88,6 +93,17 @@ export function openPalette(prefill = '', opts = {}) {
     e.onmousemove = () => { if (sel !== +e.dataset.i) { sel = +e.dataset.i; paint(); } };
   });
   const meta = (r) => [r.year, r.type === 'series' ? 'Series' : 'Film', r.rating && `★ ${r.rating}`].filter(Boolean).join(' · ');
+  // several results with the same name ("Reverence" ×3): add what sets each apart, from what we already have
+  let twins = new Set();
+  const nameKey = (r) => String(r.title || '').trim().toLowerCase();
+  const findTwins = (list) => { const n = new Map(); for (const r of list) n.set(nameKey(r), (n.get(nameKey(r)) || 0) + 1); twins = new Set([...n].filter(([, c]) => c > 1).map(([k]) => k)); };
+  const apart = (r) => {
+    if (!twins.has(nameKey(r))) return '';
+    const bits = [r.genres?.slice(0, 2).join(', '), r.overview && (r.overview.length > 70 ? r.overview.slice(0, 68).replace(/\s\S*$/, '') + '…' : r.overview)].filter(Boolean);
+    // nothing to go on in the search answer: the lead cast arrives from the title's details a moment later
+    return `<small class="sx-apart" data-apart="${esc(r.imdbId)}" data-type="${esc(r.type)}">${esc(bits.join(' — '))}</small>`;
+  };
+  const mine = (r) => (wl.has(r.imdbId) ? `<span class="sx-mine">${icon('bookmark')} On your shelf</span>` : '');
   const prog = (r) => (r.progress ? `<span class="sx-prog">${r.progress.season ? `S${r.progress.season}E${r.progress.episode} · ` : ''}${r.progress.pct}%</span>` : '');
 
   // ---- empty: recents, recently opened, ideas ----
@@ -110,8 +126,8 @@ export function openPalette(prefill = '', opts = {}) {
     const have = new Set(server.map((x) => x.imdbId));
     const titles = data ? [...server, ...(override ? [] : local.filter((x) => !have.has(x.imdbId)).slice(0, 2))] : local;
     const people = data?.people || [];
-    const cmds = override ? [] : COMMANDS.filter(([l]) => l.toLowerCase().includes(q.toLowerCase())).slice(0, 3).map(([label, to, ic]) => ({ kind: 'cmd', label, ic, ...(typeof to === 'string' ? { href: to } : to) }));
-    items = [];
+    const cmds = override ? [] : COMMANDS.filter(([l]) => { const L = l.toLowerCase(); return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => L.includes(w)); }).slice(0, 4).map(([label, to, ic]) => ({ kind: 'cmd', label, ic, ...(typeof to === 'string' ? { href: to } : to) }));
+    items = []; findTwins(titles);
     const hq = override ? '' : q;
     let topHtml = '';
     if (data?.personFirst && people[0]) {
@@ -120,11 +136,11 @@ export function openPalette(prefill = '', opts = {}) {
     } else if (titles[0]) {
       const r = titles[0]; items.push({ kind: 'title', r });
       topHtml = `<div class="sx-top" data-i="0">${r.backdrop ? `<img class="sx-bd" src="${esc(r.backdrop)}" alt="" decoding="async">` : ''}<div class="sx-tc"><i class="sx-pp" style="background-image:url('${esc(r.poster || posterOf(r.imdbId))}')"></i>
-        <div class="sx-ti"><small>Top result${r.local ? ' · in your library' : ''}</small><h3>${mark(r.title, hq)}</h3><div class="sx-meta">${esc(meta(r))}${r.genres?.length ? ` · ${esc(r.genres.join(', '))}` : ''}${prog(r)}</div>${r.overview ? `<p>${esc(r.overview)}</p>` : ''}
+        <div class="sx-ti"><small>Top result${r.local ? ' · in your library' : ''}</small><h3>${mark(r.title, hq)}</h3><div class="sx-meta">${esc(meta(r))}${r.genres?.length ? ` · ${esc(r.genres.join(', '))}` : ''}${prog(r)}${mine(r)}</div>${r.overview ? `<p>${esc(r.overview)}</p>` : ''}
         <div class="sx-btns"><button class="btn primary sm" data-play>${icon('play')} ${r.progress ? 'Resume' : 'Play'} <kbd>⌘↵</kbd></button><button class="btn sm">Details <kbd>↵</kbd></button></div></div></div></div>`;
     }
     const rest = (data?.personFirst ? titles : titles.slice(1)).slice(0, 9);
-    const listHtml = rest.map((r) => { items.push({ kind: 'title', r }); return `<div class="sx-row" data-i="${items.length - 1}"><i style="background-image:url('${esc(r.poster || posterOf(r.imdbId))}')"></i><div><b>${mark(r.title, hq)}</b><small>${esc(meta(r))}${r.local ? ' · in your library' : ''}</small></div>${prog(r)}</div>`; }).join('');
+    const listHtml = rest.map((r) => { items.push({ kind: 'title', r }); return `<div class="sx-row" data-i="${items.length - 1}"><i style="background-image:url('${esc(r.poster || posterOf(r.imdbId))}')"></i><div><b>${mark(r.title, hq)}</b><small>${esc(meta(r))}${r.local ? ' · in your library' : ''}</small>${apart(r)}</div>${prog(r)}${mine(r)}</div>`; }).join('');
     const ppl = (data?.personFirst ? people.slice(1) : people).slice(0, 5);
     const pplHtml = ppl.map((p) => { items.push({ kind: 'person', p }); return `<div class="sx-pr" data-i="${items.length - 1}"><i style="background-image:url('${esc(p.photo)}')"></i><b>${mark(p.name, hq)}</b><small>${esc(p.dept)}</small></div>`; }).join('');
     const cmdHtml = cmds.map((c) => { items.push(c); return `<div class="sx-cmd" data-i="${items.length - 1}">${icon(c.ic)}<span>${esc(c.label)}</span></div>`; }).join('');
@@ -134,6 +150,17 @@ export function openPalette(prefill = '', opts = {}) {
       + (cmdHtml ? `<section><h5>Go to</h5><div class="sx-cmds">${cmdHtml}</div></section>` : '')
       + (!items.length ? (pending ? '<div class="sx-empty">Searching…</div>' : `<div class="sx-empty">Nothing for “${esc(q)}”. Try fewer words, or something like “${esc(TRY[Math.floor(Math.random() * TRY.length)])}”.</div>`) : '');
     sel = Math.min(sel, Math.max(0, items.length - 1)); paint(); bind();
+    fillApart();
+  }
+  const castCache = new Map();
+  function fillApart() {
+    $$('[data-apart]', out).forEach(async (el) => {
+      if (el.textContent.trim()) return;
+      const id = el.dataset.apart;
+      if (!castCache.has(id)) castCache.set(id, api(`/api/title/${id}?type=${el.dataset.type === 'series' ? 'series' : 'movie'}`).then((t) => (t?.cast || []).slice(0, 2).map((c) => (typeof c === 'string' ? c : c.name)).filter(Boolean)).catch(() => []));
+      const cast = await castCache.get(id);
+      if (cast.length && el.isConnected) el.textContent = `With ${cast.join(', ')}`;
+    });
   }
 
   async function run(now = false) {

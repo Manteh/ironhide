@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Watches Samsung TV playback state. Exits when playback stops.
-// Works with both native IronHide TizenBrew app (polls bridge HTTP) and DLNA.
+// Works with both native Orbie TizenBrew app (polls bridge HTTP) and DLNA.
 // Used as a background task so Claude detects when TV playback ends.
 
 const TV_URL = 'http://192.168.1.209:9197/upnp/control/AVTransport1';

@@ -1,4 +1,4 @@
-// Data for the Profile page. Everything comes from what IronHide already keeps on this Mac.
+// Data for the Profile page. Everything comes from what Orbie already keeps on this Mac.
 import { getHistory } from './history.js';
 import { getRatings } from './taste.js';
 import { getWatchlist } from './settings.js';

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Make IronHide.app self-contained.
+"""Make Orbie.app self-contained.
 
 Copies every non-system dynamic library that the app binary, ffmpeg and ffprobe need (libmpv and the ~40 Homebrew libraries
 behind it) into Contents/Frameworks, rewrites each reference to @rpath/<name>, points the executables' rpath at that folder,
 drops rpaths that lead back to Homebrew, and ad-hoc signs everything (Apple Silicon refuses unsigned or altered code).
 
-usage: bundle_libs.py <IronHide.app> <extra executable> ...
+usage: bundle_libs.py <Orbie.app> <extra executable> ...
 """
 import os, re, shutil, subprocess, sys
 

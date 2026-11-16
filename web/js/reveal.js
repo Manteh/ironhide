@@ -1,17 +1,16 @@
 // Chained entrance animations for the title sheet, the versions view and actor profiles.
-// Web Animations API on transform + opacity (composited, so they stay at full frame rate while the page works). A short
-// motion blur is added only to a handful of small header elements, where it costs almost nothing; big blocks never blur.
+// Web Animations API on transform + opacity (composited, so they stay at full frame rate while the page works).
 // fill: 'backwards' means nothing lingers after an animation ends.
 const reduce = matchMedia('(prefers-reduced-motion: reduce)');
 const off = () => reduce.matches || document.documentElement.dataset.motion === 'off';
 const EASE = 'cubic-bezier(.16, 1, .3, 1)';
 
-export function rise(el, { delay = 0, y = 16, x = 0, scale = 1, blur = 0, dur = 560 } = {}) {
+// `blur` is accepted but no longer drawn: in WebKit an animated filter can't run on the compositor, so a dozen blurring
+// header pieces made the whole sheet repaint every frame while it opened (down to ~10 fps). Transform + opacity only.
+export function rise(el, { delay = 0, y = 16, x = 0, scale = 1, dur = 560 } = {}) {
   if (!el || off() || !el.animate) return;
   const from = { opacity: 0, transform: `translate3d(${x}px, ${y}px, 0) scale(${scale})` };
-  if (blur) from.filter = `blur(${blur}px)`;
   const to = { opacity: 1, transform: 'translate3d(0, 0, 0) scale(1)' };
-  if (blur) to.filter = 'blur(0px)';
   el.animate([from, to], { duration: dur, delay, easing: EASE, fill: 'backwards' });
 }
 

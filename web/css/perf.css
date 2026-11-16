@@ -4,7 +4,7 @@
    2. The ambient light is lighter (smaller layers) and freezes while you scroll; only the visible scene drifts.
    3. While scrolling, cards ignore the pointer, so hover tilts and colour changes don't fire under a still mouse. */
 #ihbar { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(12,12,16,.9) !important; }
-.rail { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: linear-gradient(180deg, rgba(34,34,42,.96), rgba(22,22,28,.97)) !important; }
+.rail { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(10,10,10,.5) !important; }
 .mini { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: color-mix(in srgb, var(--bg) 94%, transparent) !important; }
 .rd.plus, .rail2 * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 .rd.plus { background: rgba(40,40,48,.95) !important; }
@@ -135,7 +135,7 @@ html:not(.ihp-on) .wp:not(:fullscreen) { top: var(--bar-h, 38px); }
 .fy-rows:empty { display: none; }
 .fy-row { margin: 8px 0 30px; }
 .fy-row header, .fy-more { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
-.fy-row h3, .fy-more h3 { margin: 0; font-size: 19px; font-weight: 680; letter-spacing: -.015em; }
+.fy-row > header h3, .fy-more h3 { margin: 0; font-size: 19px; font-weight: 680; letter-spacing: -.015em; }
 .fy-row header span { font-size: 13px; color: var(--muted); }
 .fy-scroll { display: flex; gap: 18px; overflow-x: auto; overflow-y: hidden; padding: 10px 6px 14px; margin: -10px -6px 0; scrollbar-width: none; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
 .fy-scroll::-webkit-scrollbar { display: none; }
@@ -159,3 +159,99 @@ html:not(.ihp-on) .wp:not(:fullscreen) { top: var(--bar-h, 38px); }
 .cont-row .bc { width: clamp(150px, 12vw, 240px) !important; min-width: 0 !important; max-width: clamp(150px, 12vw, 240px) !important; flex: 0 0 auto !important; }
 .cont-row .bc .binfo, .cont-row .bc .bmeta { min-width: 0; max-width: 100%; }
 .cont-row .bc .binfo h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- sidebar: neutral smoked glass that takes on the room's colour, quiet until used ---- */
+.rail { width: 76px; padding: 10px 8px; gap: 4px; border-radius: 26px; border: 1px solid rgba(255,255,255,.07);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 24px 60px -20px rgba(0,0,0,.7); }
+.rlogo { width: 56px; height: 46px; }
+.rlogo .tile { width: 36px; height: 36px; border-radius: 12px; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.rsep { width: 26px; background: rgba(255,255,255,.08); margin: 6px 0; }
+.ri { width: 58px; height: 54px; gap: 6px; border-radius: 15px; color: rgba(255,255,255,.52);
+  transition: transform .1s var(--ease), background .12s linear, color .12s linear; }
+.ri .i, .ri svg { width: 20px; height: 20px; stroke-width: 1.8; transition: transform .2s var(--spring); }
+.ri span { font-size: 10px; font-weight: 560; letter-spacing: .015em; }
+.ri:hover { color: rgba(255,255,255,.92); background: rgba(255,255,255,.06); }
+.ri:hover .i, .ri:hover svg { transform: translateY(-1px); }
+.ri:active { transform: scale(.94); }
+.ri.on { color: #fff; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+.ri.on span { font-weight: 640; }
+/* a short light mark beside the current page */
+.ri::before { content: ""; position: absolute; left: -8px; top: 50%; width: 3px; height: 18px; margin-top: -9px; border-radius: 0 3px 3px 0; background: #fff; opacity: 0; transform: scaleY(.3); transition: opacity .15s linear, transform .25s var(--spring); }
+.ri.on::before { opacity: .9; transform: none; }
+.rme { padding: 2px; background: rgba(255,255,255,.1); margin-top: 4px; }
+.rme:hover { background: rgba(255,255,255,.3); }
+.rme .avatar { box-shadow: 0 0 0 2px rgba(10,10,10,.9); }
+.rnode { width: 58px; }
+#browse, #page { padding-left: 100px; }
+@media (max-width: 720px) { .rail { width: auto; padding: 8px 10px; } .ri::before { display: none; } #browse, #page { padding-left: 0; } }
+
+/* ---- your rating: a button beside Save that opens a small card ---- */
+.dx-ratew { position: relative; display: inline-flex; }
+.dx-ratebtn .i { width: 17px; height: 17px; }
+.dx-ratebtn.rated .i { fill: #f5c518; stroke: none; color: #f5c518; }
+.dx-ratebtn .rv { font-variant-numeric: tabular-nums; } .dx-ratebtn small { font-size: .82em; opacity: .5; margin-left: 1px; font-weight: 560; }
+.dx-ratebtn.nope { color: var(--muted); }
+.rt-pop { position: absolute; left: 0; top: calc(100% + 10px); z-index: 40; width: 340px; padding: 16px 16px 12px; border-radius: 18px;
+  background: rgba(22,22,22,.97); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 24px 60px -12px rgba(0,0,0,.75), inset 0 1px 0 rgba(255,255,255,.05);
+  opacity: 0; transform: translateY(-6px) scale(.97); transform-origin: 30px 0; pointer-events: none; visibility: hidden;
+  transition: opacity .14s linear, transform .2s var(--ease), visibility 0s .2s; }
+.dx.rating .rt-pop { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition: opacity .12s linear, transform .22s var(--spring, cubic-bezier(.34,1.56,.64,1)), visibility 0s; }
+.rt-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.rt-pop .rt-l { font-size: 13px; color: var(--text); font-weight: 600; }
+.rt-pop .rt-stars { display: flex; gap: 4px; margin: 0 -4px; }
+.rt-pop .rt-s { width: 44px; height: 44px; border-radius: 12px; }
+.rt-pop .rt-s .i { width: 28px; height: 28px; }
+.rt-pop .rt-s:hover { background: rgba(255,255,255,.06); }
+.rt-k2 { margin: 14px 0 8px; }
+.rt-pop .rt-asp { gap: 6px; }
+.rt-pop .rt-a { height: 30px; padding: 0 12px; font-size: 12.5px; }
+.rt-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.07); }
+.rt-pop .rt-no { margin: 0; border: 0; height: 30px; padding: 0 10px; margin-left: -10px; }
+.rt-clear { all: unset; cursor: pointer; height: 30px; padding: 0 10px; margin-right: -10px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.rt-clear:hover { color: var(--text); background: rgba(255,255,255,.08); }
+@media (max-width: 640px) { .rt-pop { position: fixed; left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; } }
+.dx.rating .dx-hero { z-index: 30; } /* the popover hangs below the hero, over the episodes */
+
+/* ---- collections: mood chips, "See all", hub tiles, shelf page heading ---- */
+.moods { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 22px; }
+.moods > span { font-size: 13px; color: var(--muted); margin-right: 4px; }
+.moods button { height: 34px; padding: 0 15px; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.045); color: var(--text-2); font: inherit; font-size: 13.5px; font-weight: 560; cursor: pointer; transition: background .18s var(--ease), color .18s, border-color .18s, transform .18s var(--ease); }
+.moods button:hover { background: rgba(255,255,255,.09); color: var(--text); }
+.moods button:active { transform: scale(.96); }
+.moods button.on { background: var(--text, #f4f4f5); color: #111; border-color: transparent; }
+.fy-row > header .fy-all { margin-left: auto; font-size: 13px; color: var(--muted); text-decoration: none; opacity: 0; transition: opacity .18s; }
+.fy-row:hover > header .fy-all, .fy-row > header .fy-all:focus-visible { opacity: 1; } .fy-row > header .fy-all:hover { color: var(--text); }
+.fy-row.seasonal > header h3::before { content: '●'; font-size: 9px; color: var(--accent, #f0a04b); margin-right: 9px; vertical-align: 3px; }
+.col-grp { grid-column: 1 / -1; min-width: 0; margin: 6px 0 34px; } .col-grp h3 { margin: 0 0 14px; font-size: 19px; font-weight: 680; letter-spacing: -.015em; }
+.col-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; align-items: stretch; }
+.col-tile { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 5px; padding: 18px 18px 17px; border-radius: 18px; text-decoration: none; color: var(--text); background: linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.025)); border: 1px solid rgba(255,255,255,.07); transition: transform .25s var(--ease), background .2s, border-color .2s; }
+.col-tile:hover { transform: translateY(-3px); background: linear-gradient(160deg, rgba(255,255,255,.11), rgba(255,255,255,.04)); border-color: rgba(255,255,255,.16); }
+.col-tile b { font-size: 15.5px; font-weight: 660; } .col-tile small { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.col-tile em { position: absolute; top: 14px; right: 14px; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.col-tile.live em { color: var(--accent, #f0a04b); }
+.col-head { display: flex; align-items: baseline; gap: 12px; } .col-head a { color: var(--muted); text-decoration: none; font-size: 20px; line-height: 1; } .col-head a:hover { color: var(--text); }
+
+/* Entrance animations without the blur. WebKit (the Mac app) can't run an animated filter on the compositor, so every
+   card or row that blurred in repainted on the main thread each frame: the dips to ~50 fps when a page filled in.
+   Same names, defined last, so these win; the motion (rise, scale, fade) is unchanged. */
+@keyframes fadeup { from { opacity: 0; transform: translateY(14px) scale(.99); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes blurin { from { opacity: 0; transform: translateY(16px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes railin { from { opacity: 0; transform: translate(-20px, -50%) scale(.95); } to { opacity: 1; transform: translateY(-50%); } }
+@keyframes rise { from { opacity: 0; transform: translateY(20px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes railin-m { from { opacity: 0; transform: translate(-50%, 24px); } to { opacity: 1; transform: translateX(-50%); } }
+@keyframes hposter { from { opacity: 0; } to { opacity: 1; } }
+
+/* Scrolling: posters are plain flat boxes until you point at one. A resting 3D transform plus will-change made WebKit keep
+   every poster (hundreds on a page) as its own GPU layer with a rounded clip, and composite all of them on every frame of
+   a fast scroll. Now only the card under the pointer gets a layer (cards3d adds .tilt; the Continue row lifts on hover). */
+.bposter { transform: none; will-change: auto; }
+.bc:not(.sk) .bposter.tilt { will-change: transform; }
+.cont-row .bc:not(.sk) .bposter { transform: none !important; will-change: auto; }
+.cont-row .bc:not(.sk):hover .bposter, .cont-row .bc:not(.sk):focus-visible .bposter { will-change: transform; }
+.cont-row .bimg { will-change: auto !important; backface-visibility: visible; }
+/* blurred glass that scrolls with the page is re-blurred every frame; a solid tint looks the same at rest */
+.greet-b .ghost2 { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(255,255,255,.12) !important; }
+/* the Orbie logo is a rendered image of the sphere */
+img.orb-logo { display: block; width: 26px; height: 26px; transition: transform .5s cubic-bezier(.34,1.5,.64,1); filter: drop-shadow(0 2px 6px rgba(120, 80, 255, .45)); -webkit-user-drag: none; }
+.rlogo:hover img.orb-logo { transform: scale(1.12) rotate(-8deg); }

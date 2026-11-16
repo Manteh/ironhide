@@ -6,14 +6,17 @@ import { tmpdir } from 'os';
 import net from 'net';
 import { fileURLToPath } from 'url';
 import { getProp, setProp, isMpvRunning as ipcRunning } from './mpv-ipc.js';
+import { startTorrent } from './torrent-stream.js';
+import { magnetFor } from './torrentio.js';
 import { getSettings, STREAM_LANGS } from './settings.js';
 import { setPlayState, getPlayState } from './playstate.js';
+import { proxied, release as releaseStreamCache } from './streamcache.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LUA_SCRIPT = join(__dirname, 'mpv-progress.lua');
 const MPV_BIN = '/Applications/mpv.app/Contents/MacOS/mpv';
 
-// When the IronHide Mac app is open it plays in its own window (libmpv). Same mpv options, progress script and
+// When the Orbie Mac app is open it plays in its own window (libmpv). Same mpv options, progress script and
 // IPC socket as the external player; falls through to the external mpv when the app is not running.
 const APP_SOCK = '/tmp/ironhide-app.sock';
 function appRunning() {
@@ -23,11 +26,12 @@ function appRunning() {
     s.once('error', () => resolve(false));
   });
 }
+// Resolves null when the app is not there (play in the external mpv instead), else when playback ends: { status, error? }
 function playInApp(url, args, env) {
   return new Promise((resolve) => {
     const sock = net.createConnection(APP_SOCK);
     let started = false, buf = '';
-    sock.once('error', () => resolve(started ? { status: 'done', progress: null } : null));
+    sock.once('error', () => resolve(started ? { status: 'done', progress: undefined } : null));
     sock.on('connect', () => sock.write(JSON.stringify({ url, args, env }) + '\n'));
     sock.on('data', (d) => {
       buf += d;
@@ -36,7 +40,7 @@ function playInApp(url, args, env) {
         const line = buf.slice(0, i); buf = buf.slice(i + 1);
         let ev; try { ev = JSON.parse(line); } catch { continue; }
         if (ev.event === 'started') started = true;
-        if (ev.event === 'exit') { sock.destroy(); resolve({ status: 'done', progress: undefined }); }
+        if (ev.event === 'exit') { sock.destroy(); resolve(ev.error ? { status: 'error', error: ev.error, progress: undefined } : { status: 'done', progress: undefined }); }
       }
     });
     sock.on('close', () => resolve(started ? { status: 'done', progress: undefined } : null));
@@ -97,6 +101,7 @@ export async function play(stream, subs = []) {
     if (!resolved.ready) return { status: 'not_cached' };
 
     const viaApp = await playInApp(resolved.url, mpvArgs, { IRONHIDE_PROGRESS_FILE: progressFile });
+    if (viaApp?.status === 'error') return { status: 'error', error: viaApp.error, progress: await readProgress(progressFile) };
     if (viaApp) return { status: 'done', progress: await readProgress(progressFile) };
 
     proc = spawn(MPV_BIN, [...mpvArgs, resolved.url], {
@@ -148,6 +153,7 @@ function watchMpvProcess(progressFile, onFinish) {
     if (running && !wasRunning) wasRunning = true;
     if (!running && wasRunning) {
       clearInterval(interval);
+      releaseStreamCache();
       await new Promise(r => setTimeout(r, 400));
       const progress = await readProgress(progressFile);
       if (onFinish) onFinish(progress);
@@ -160,7 +166,7 @@ function watchMpvProcess(progressFile, onFinish) {
 // Sets PATH so webtorrent can find mpv internally.
 // Uses 'sh scriptPath' to avoid needing chmod +x.
 function launchScript(lines) {
-  const scriptPath = '/tmp/ironhide-launch.sh';
+  const scriptPath = join(tmpdir(), 'ironhide-launch.sh'); // this user's own temp folder, not the shared /tmp
   writeFileSync(scriptPath, [
     '#!/bin/sh',
     'export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH',
@@ -175,14 +181,28 @@ function sh(s) {
 
 export async function playDetached(stream, subs = [], onFinish, resumeFrom, title) {
   const progressFile = PROGRESS_FILE;
+  // No debrid link (expired key, uncached, or never set up): stream the torrent from its peers and play the local URL the same way
+  let torrent = null;
+  if (stream.magnet && !stream.url) {
+    setPlayState({ phase: 'launching', detail: 'Finding peers (no debrid)' });
+    try { torrent = await startTorrent(stream.magnet, { fileIdx: stream.fileIdx }); }
+    catch (e) { setPlayState({ phase: 'error', detail: e.message, retry: true }); return { status: 'error', progressFile: null }; }
+    const done = onFinish; onFinish = (p) => { torrent.stop(); done?.(p); };
+    stream = { ...stream, isRD: true, url: torrent.url };
+  }
   const ipcSocket = '/tmp/ironhide-mpv.sock';
-  try { unlinkSync(ipcSocket); } catch {}
+  // (mpv clears a stale socket itself when it starts. Deleting it here, before anything is known, cut off a player that was
+  // still running: another Orbie's, or this one's while a new title was still being looked up.)
 
   if (stream.isRD && stream.url) {
     const res = await fetch(stream.url, { redirect: 'manual' });
     const location = res.headers.get('location') || (res.status < 300 ? stream.url : null);
-    if (!location) { setPlayState({ phase: 'error', detail: 'Stream is not available' }); return { status: 'not_cached', progressFile: null }; }
-    if (/failed_|error|denied/i.test(location)) { setPlayState({ phase: 'error', detail: 'Stream is not cached' }); return { status: 'not_cached', progressFile: null }; }
+    // the debrid link is dead (expired key, not cached): if we know the torrent, stream it from its peers instead
+    const viaPeers = () => stream.infoHash && !torrent ? playDetached({ ...stream, isRD: false, url: null, magnet: magnetFor(stream.infoHash) }, subs, onFinish, resumeFrom, title) : null;
+    if (!location) { const r = await viaPeers(); if (r) return r; setPlayState({ phase: 'error', detail: 'Stream is not available' }); return { status: 'not_cached', progressFile: null }; }
+    if (/failed_|error|denied/i.test(location)) { const r = await viaPeers(); if (r) return r; setPlayState({ phase: 'error', detail: 'Stream is not cached' }); return { status: 'not_cached', progressFile: null }; }
+    // through the local caching proxy: one redirect lookup instead of one per seek, and track switches re-read from memory
+    const playUrl = await proxied(location);
     setPlayState({ phase: 'launching', detail: 'Starting the player' });
 
     const mpvArgs = [
@@ -196,17 +216,21 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
       ...(title ? [`--force-media-title=${title}`] : []),
       ...(resumeFrom > 0 ? [`--start=${Math.floor(resumeFrom)}`] : []),
       ...subs.map(x => `--sub-file=${x.path}`),
-      location,
+      playUrl,
     ];
     // The Mac app plays in its own window: hand the stream over instead of starting an external mpv.
     if (await appRunning()) {
-      playInApp(location, mpvArgs.slice(0, -1), { IRONHIDE_PROGRESS_FILE: progressFile }).then(async () => {
+      playInApp(playUrl, mpvArgs.slice(0, -1), { IRONHIDE_PROGRESS_FILE: progressFile }).then(async (r) => {
+        // the stream never opened (dead link, refused by the CDN): say so instead of quietly going back
+        if (r?.status === 'error') setPlayState({ phase: 'error', detail: r.error || 'The stream could not be opened', retry: true });
+        releaseStreamCache();
         await sleep(400);
         if (onFinish) onFinish(await readProgress(progressFile));
       });
       presentWhenReady(getPlayState().token).catch((e) => { console.error('[player] showing mpv failed:', e.message); setPlayState({ phase: 'error', detail: 'The player did not start' }); });
-      return { status: 'playing', progressFile, cancel: () => {} };
+      return { status: 'playing', progressFile, cancel: () => torrent?.stop() };
     }
+    try { unlinkSync(ipcSocket); } catch {} // the external mpv is about to take it over
     launchScript([
       `export IRONHIDE_PROGRESS_FILE=${sh(progressFile)}`,
       `nohup /opt/homebrew/bin/mpv ${mpvArgs.map(sh).join(' ')} > /dev/null 2>&1 &`,
@@ -214,7 +238,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
 
     const interval = watchMpvProcess(progressFile, onFinish);
     presentWhenReady(getPlayState().token).catch((e) => { console.error('[player] showing mpv failed:', e.message); setPlayState({ phase: 'error', detail: 'The player did not start' }); });
-    return { status: 'playing', progressFile, cancel: () => clearInterval(interval) };
+    return { status: 'playing', progressFile, cancel: () => { clearInterval(interval); torrent?.stop(); } };
 
   } else if (stream.magnet) {
     const wtArgs = [stream.magnet, '--mpv'];

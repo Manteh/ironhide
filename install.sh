@@ -1,15 +1,15 @@
 #!/bin/bash
-# IronHide installer.
-#   curl -fsSL https://raw.githubusercontent.com/Manteh/ironhide-app/HEAD/install.sh | bash
+# Orbie installer.
+#   curl -fsSL https://raw.githubusercontent.com/Manteh/orbie/HEAD/install.sh | bash
 # While the repo is private (needs the GitHub CLI, logged in):
-#   gh api repos/Manteh/ironhide-app/contents/install.sh -H "Accept: application/vnd.github.raw" | bash
-# Downloads the latest release, puts IronHide.app in /Applications (or ~/Applications) and opens it.
+#   gh api repos/Manteh/orbie/contents/install.sh -H "Accept: application/vnd.github.raw" | bash
+# Downloads the latest release, puts Orbie.app in /Applications (or ~/Applications) and opens it.
 # Everything the app needs (Node, the mpv player, ffmpeg) is inside it: nothing else gets installed.
 # IRONHIDE_DEST=<folder> installs somewhere else; IRONHIDE_NO_OPEN=1 skips opening it.
 set -uo pipefail
 export LC_ALL=en_US.UTF-8
 
-REPO="Manteh/ironhide-app"
+REPO="Manteh/orbie"
 
 # ── look ────────────────────────────────────────────────────────────────────
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
@@ -98,11 +98,11 @@ logo
 printf '\n  %sMovies and shows, instantly.%s   %sInstaller for macOS%s\n\n' "$W" "$R" "$G" "$R"
 
 # this Mac
-[ "$(uname -s)" = "Darwin" ] || fail "IronHide is a Mac app."
+[ "$(uname -s)" = "Darwin" ] || fail "Orbie is a Mac app."
 ARCH=$(uname -m)
-[ "$ARCH" = "arm64" ] || fail "This Mac has an Intel chip." "IronHide 1.0 runs on Apple Silicon (M1 and later)."
+[ "$ARCH" = "arm64" ] || fail "This Mac has an Intel chip." "Orbie 1.0 runs on Apple Silicon (M1 and later)."
 OSV=$(sw_vers -productVersion)
-[ "${OSV%%.*}" -ge 12 ] || fail "macOS $OSV is too old." "IronHide needs macOS 12 Monterey or later."
+[ "${OSV%%.*}" -ge 15 ] || fail "macOS $OSV is too old." "Orbie needs macOS 15 Sequoia or later."
 CHIP=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "Apple Silicon")
 done_step "$CHIP  ·  macOS $OSV"
 
@@ -113,7 +113,7 @@ fetch_release() {
   command -v gh >/dev/null && gh api "repos/$REPO/releases/latest" >"$TMP/rel.json" && touch "$TMP/private"
 }
 spin "Finding the latest version" fetch_release ||
-  fail "Couldn't read the IronHide releases." "Check your connection. If the repo is private, install the GitHub CLI and run: gh auth login"
+  fail "Couldn't read the Orbie releases." "Check your connection. If the repo is private, install the GitHub CLI and run: gh auth login"
 if [ -f "$TMP/private" ]; then
   TOKEN=$(gh auth token 2>/dev/null) || fail "The GitHub CLI isn't logged in." "Run: gh auth login"
   AUTH=(-H "Authorization: Bearer $TOKEN" -H "Accept: application/octet-stream")
@@ -121,7 +121,7 @@ fi
 TAG=$(jget "$TMP/rel.json" tag_name)
 i=0 ASSET=''
 while NAME=$(jget "$TMP/rel.json" "assets.$i.name"); do
-  case "$NAME" in IronHide-*-"$ARCH".zip) ASSET=$i; break ;; esac
+  case "$NAME" in Orbie-*-"$ARCH".zip|IronHide-*-"$ARCH".zip) ASSET=$i; break ;; esac # IronHide: releases from before the rename
   i=$((i + 1))
 done
 [ -n "$ASSET" ] || fail "The latest release ($TAG) has no download for this Mac."
@@ -130,32 +130,41 @@ if [ ${#AUTH[@]} -gt 0 ]; then URL=$(jget "$TMP/rel.json" "assets.$ASSET.url")
 else URL=$(jget "$TMP/rel.json" "assets.$ASSET.browser_download_url"); fi
 DEST=${IRONHIDE_DEST:-/Applications}
 [ -w "$DEST" ] || { DEST="$HOME/Applications"; mkdir -p "$DEST"; }
-CURRENT=$(defaults read "$DEST/IronHide.app/Contents/Info" CFBundleShortVersionString 2>/dev/null || true)
-if [ "v$CURRENT" = "$TAG" ]; then done_step "IronHide $TAG  ${G}already installed, refreshing it"
-elif [ -n "$CURRENT" ]; then done_step "IronHide $TAG  ${G}updating from v$CURRENT"
-else done_step "IronHide $TAG"; fi
+CURRENT=$(defaults read "$DEST/Orbie.app/Contents/Info" CFBundleShortVersionString 2>/dev/null || defaults read "$DEST/IronHide.app/Contents/Info" CFBundleShortVersionString 2>/dev/null || true)
+if [ "v$CURRENT" = "$TAG" ]; then done_step "Orbie $TAG  ${G}already installed, refreshing it"
+elif [ -n "$CURRENT" ]; then done_step "Orbie $TAG  ${G}updating from v$CURRENT"
+else done_step "Orbie $TAG"; fi
 
 # 2. download
-download "$URL" "$SIZE" "$TMP/IronHide.zip" ${AUTH[@]+"${AUTH[@]}"} || fail "The download failed." "$(tail -1 "$TMP/log")"
+download "$URL" "$SIZE" "$TMP/Orbie.zip" ${AUTH[@]+"${AUTH[@]}"} || fail "The download failed." "$(tail -1 "$TMP/log")"
 done_step "Downloaded $(human "$SIZE")"
 
 # 3. unpack and check the signature
-unpack() { ditto -x -k "$TMP/IronHide.zip" "$TMP/x" && [ -d "$TMP/x/IronHide.app" ] && codesign --verify --deep --strict "$TMP/x/IronHide.app"; }
+# an older release unpacks as IronHide.app: it goes in under the new name
+unpack() {
+  ditto -x -k "$TMP/Orbie.zip" "$TMP/x" || return 1
+  [ -d "$TMP/x/Orbie.app" ] || { [ -d "$TMP/x/IronHide.app" ] && mv "$TMP/x/IronHide.app" "$TMP/x/Orbie.app"; } || return 1
+  codesign --verify --deep --strict "$TMP/x/Orbie.app"
+}
 spin "Unpacking and verifying" unpack || fail "The download is damaged." "Run the installer again."
 done_step "Unpacked and verified"
 
 # 4. install
 install_app() {
-  if pgrep -xq ironhide-mac; then osascript -e 'quit app "IronHide"' >/dev/null 2>&1; sleep 2; pkill -x ironhide-mac 2>/dev/null; fi
-  rm -rf "$DEST/IronHide.app" && mv "$TMP/x/IronHide.app" "$DEST/" || return 1
+  if pgrep -xq ironhide-mac; then osascript -e 'quit app "Orbie"' -e 'quit app "IronHide"' >/dev/null 2>&1; sleep 2; pkill -x ironhide-mac 2>/dev/null; fi
+  # the app's own service, if a crash left it behind (it stops by itself within seconds, this just doesn't wait)
+  pkill -f "(Orbie|IronHide).app/Contents/Resources/ironhide/src/daemon.js" 2>/dev/null
+  # the app was called IronHide before: take the old copy away so there is only one
+  rm -rf "$DEST/IronHide.app"
+  rm -rf "$DEST/Orbie.app" && mv "$TMP/x/Orbie.app" "$DEST/" || return 1
   # downloaded apps are quarantined by macOS; this one is ad-hoc signed, so the flag is cleared here
-  xattr -dr com.apple.quarantine "$DEST/IronHide.app" 2>/dev/null; return 0
+  xattr -dr com.apple.quarantine "$DEST/Orbie.app" 2>/dev/null; return 0
 }
 spin "Installing" install_app || fail "Couldn't write to $DEST." "$(tail -1 "$TMP/log")"
 done_step "Installed in ${DEST/#$HOME/~}"
 
 # ── done ────────────────────────────────────────────────────────────────────
-printf '\n  %s%sIronHide is ready.%s' "$B" "$W" "$R"
+printf '\n  %s%sOrbie is ready.%s' "$B" "$W" "$R"
 [ -n "${IRONHIDE_NO_OPEN:-}" ] && printf '\n\n' || printf '  %sOpening it now…%s\n\n' "$G" "$R"
 if [ -z "$CURRENT" ]; then
   printf '  %sAdd two keys in Settings → Connectors and you are set:%s\n' "$G" "$R"
@@ -163,4 +172,4 @@ if [ -z "$CURRENT" ]; then
   printf '    %s›%s %sTMDB%s    %sfree at themoviedb.org/settings/api, for picks and search%s\n\n' "$G" "$R" "$W" "$R" "$G" "$R"
 fi
 printf '  %sUpdate any time by running the same line again.%s\n\n' "$D" "$R"
-[ -n "${IRONHIDE_NO_OPEN:-}" ] || open "$DEST/IronHide.app"
+[ -n "${IRONHIDE_NO_OPEN:-}" ] || open "$DEST/Orbie.app"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "==> IronHide setup"
+echo "==> Orbie setup"
 
 # 1. Homebrew
 if ! command -v brew &>/dev/null; then
@@ -37,7 +37,7 @@ network-timeout=60
 MPVCONF
 fi
 
-# 6. IronHide config
+# 6. Orbie config
 IRONHIDE_CONF="$HOME/.config/ironhide/config.json"
 mkdir -p "$(dirname "$IRONHIDE_CONF")"
 
@@ -65,7 +65,7 @@ MCP_JSON="$HOME/.mcp.json"
 IRONHIDE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if ! grep -q "ironhide" "$MCP_JSON" 2>/dev/null; then
-  echo "==> Registering IronHide MCP server in $MCP_JSON..."
+  echo "==> Registering Orbie MCP server in $MCP_JSON..."
   if [ -f "$MCP_JSON" ]; then
     # Merge into existing file
     node - << JS
@@ -93,7 +93,7 @@ JS
 JSON
   fi
 else
-  echo "==> IronHide already in $MCP_JSON, skipping"
+  echo "==> Orbie already in $MCP_JSON, skipping"
 fi
 
 echo ""

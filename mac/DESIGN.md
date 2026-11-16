@@ -18,4 +18,4 @@
 
 Kept as a **sidecar, not ported**. It is about 300 KB of JS (TorBox, Torrentio/Comet, history, social, webplay, mpv IPC) that works. Porting to Rust is a rewrite with no user-visible gain. The app finds Node, runs `src/daemon.js` with a clean environment, waits for `/api/health`, then navigates the window to it; on quit it kills only a daemon it started itself. The TV bridge is off unless `IRONHIDE_TV_BRIDGE=1`.
 
-Later options: bundle a Node binary (or switch to Bun/`node --sea`) so the app has no Node requirement; a libmpv view for in-window playback; a tray icon and global media keys.
+Done since: a bundled Node binary, the libmpv view for in-window playback, media keys and Now Playing. Still open: a tray icon; HDR output (needs a non-OpenGL renderer).

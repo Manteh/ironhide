@@ -1,8 +1,8 @@
 import { readFile, writeFile, rename, mkdir } from 'fs/promises';
 import { join } from 'path';
-import { homedir } from 'os';
+import { CONFIG_DIR } from './config.js';
 
-const HISTORY_DIR = join(homedir(), '.config', 'ironhide');
+const HISTORY_DIR = CONFIG_DIR; // honours IRONHIDE_HOME, so extra Orbies on this Mac keep their own history
 const HISTORY_FILE = join(HISTORY_DIR, 'history.json');
 const TMP_FILE = HISTORY_FILE + '.tmp';
 
@@ -85,9 +85,26 @@ export async function addToHistory(entry) {
 export async function removeFromHistory(imdbId) {
   return serialize(async () => {
     const history = await loadHistoryRaw();
-    const keep = history.filter((h) => h.imdbId !== imdbId);
+    const keep = history.filter((h) => h.imdbId !== imdbId), gone = history.filter((h) => h.imdbId === imdbId);
     if (keep.length !== history.length) await saveHistoryRaw(keep);
+    removedLast = gone;
     return history.length - keep.length;
+  });
+}
+// Undo for the removal above: the entries go back where their dates put them
+let removedLast = [];
+export async function restoreRemoved(imdbId) {
+  return serialize(async () => {
+    const back = removedLast.filter((h) => h.imdbId === imdbId);
+    if (!back.length) return 0;
+    const history = await loadHistoryRaw();
+    for (const e of back) {
+      const i = history.findIndex((h) => (h.watchedAt || '') < (e.watchedAt || ''));
+      history.splice(i < 0 ? history.length : i, 0, e);
+    }
+    removedLast = removedLast.filter((h) => h.imdbId !== imdbId);
+    await saveHistoryRaw(history);
+    return back.length;
   });
 }
 
@@ -100,6 +117,34 @@ export async function markWatched(imdbId, season, episode) {
     history[i].percent = 100; history[i].position = history[i].duration || history[i].position;
     await saveHistoryRaw(history);
     return true;
+  });
+}
+
+// Mark episodes watched or not watched from the episode list (one, or a whole season).
+// Watched: the episode counts as finished. A later episode than where you are goes first (so you move on past it);
+// an earlier one is filed behind your latest entry for the show, so it doesn't send you back.
+// Not watched: its entries go, so it shows as new again.
+const epOrder = (h) => (h.season || 0) * 10000 + (h.episode || 0);
+export async function setEpisodesWatched(imdbId, title, eps, watched) {
+  return serialize(async () => {
+    let history = await loadHistoryRaw();
+    const same = (h, e) => h.imdbId === imdbId && (h.season || null) === e.season && (h.episode || null) === e.episode;
+    if (!watched) {
+      history = history.filter((h) => !eps.some((e) => same(h, e)));
+      await saveHistoryRaw(history);
+      return eps.length;
+    }
+    const sorted = [...eps].sort((a, b) => epOrder(a) - epOrder(b));
+    for (const e of sorted) {
+      const i = history.findIndex((h) => same(h, e));
+      if (i >= 0) { history[i].percent = 100; history[i].position = history[i].duration || history[i].position; continue; }
+      const entry = { title: titleFor({ imdbId, title }, history), imdbId, type: 'tv', season: e.season, episode: e.episode, quality: '', position: null, duration: null, percent: 100, marked: true, watchedAt: new Date().toISOString() };
+      const latest = history.findIndex((h) => h.imdbId === imdbId && h.season);
+      if (latest < 0 || epOrder(e) > epOrder(history[latest])) history.unshift(entry);
+      else history.splice(latest + 1, 0, entry);
+    }
+    await saveHistoryRaw(history.slice(0, 5000));
+    return eps.length;
   });
 }
 

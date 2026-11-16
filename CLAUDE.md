@@ -1,10 +1,10 @@
-# IronHide — CLI Movie/TV Streamer
+# Orbie — CLI Movie/TV Streamer
 
-IronHide is a CLI tool that searches for movies/TV shows and streams them via torrent to mpv. It uses Torrentio + Real-Debrid for instant cached streams.
+Orbie is a CLI tool that searches for movies/TV shows and streams them via torrent to mpv. It uses Torrentio + Real-Debrid for instant cached streams.
 
 ## MCP Server
 
-IronHide includes an MCP server (`mcp/server.js`) that provides these tools:
+Orbie includes an MCP server (`mcp/server.js`) that provides these tools:
 
 1. **`ironhide_search`** — Search for movies/TV shows by title. Returns titles with IMDB IDs, latest episode info for TV, and watch history.
 2. **`ironhide_streams`** — Get available streams for a title (by IMDB ID). Shows quality, size, languages, seeders. Pass `preferLang: "LT"` for Lithuanian.
@@ -16,14 +16,14 @@ IronHide includes an MCP server (`mcp/server.js`) that provides these tools:
 8. **`ironhide_resume`** — Instant resume from history using saved stream URL. No search needed.
 9. **`ironhide_rate`** — Save a rating (1-5 stars) + liked/disliked aspects. Feeds into taste profile.
 10. **`ironhide_taste`** — Get taste profile for making personalized recommendations.
-11. **`ironhide_cast_tv`** — Cast an RD stream to the Samsung TV. If the IronHide TizenBrew app is connected, plays natively with full codec support and seeking. Falls back to DLNA proxy if not.
+11. **`ironhide_cast_tv`** — Cast an RD stream to the Samsung TV. If the Orbie TizenBrew app is connected, plays natively with full codec support and seeking. Falls back to DLNA proxy if not.
 12. **`ironhide_tv_control`** — Control TV playback: pause, play, stop, seek, status. Works with both native app and DLNA.
 
 When the user says "play on TV", "cast to TV", "put on the big screen", use `ironhide_cast_tv` instead of `ironhide_play`. TV casting only works with ⚡RD streams.
 
 ### Native TV App (TizenBrew)
 
-The IronHide TizenBrew app (`~/ironhide-tv/`) runs on the Samsung TV and plays streams natively via AVPlayer. The MCP server runs a WebSocket bridge on port 8787 that the TV app connects to. When connected, `ironhide_cast_tv` sends the RD direct URL to the TV — no proxy, no DLNA, full codec support including HEVC/DTS-HD/DV, and real seeking.
+The Orbie TizenBrew app (`~/ironhide-tv/`) runs on the Samsung TV and plays streams natively via AVPlayer. The MCP server runs a WebSocket bridge on port 8787 that the TV app connects to. When connected, `ironhide_cast_tv` sends the RD direct URL to the TV — no proxy, no DLNA, full codec support including HEVC/DTS-HD/DV, and real seeking.
 
 ## Daemon and web app
 
@@ -51,9 +51,9 @@ Bash(command: "while echo '{}' | nc -U -w1 /tmp/ironhide-mpv.sock >/dev/null 2>&
 ```
 When notified this task completed → call `ironhide_status` → proactively respond with rating prompt / next episode. YOU speak first, don't wait for the user.
 
-### Always use IronHide for watching content
+### Always use Orbie for watching content
 
-Do NOT suggest Amazon Prime, Netflix, or any other streaming service. The user has IronHide for everything.
+Do NOT suggest Amazon Prime, Netflix, or any other streaming service. The user has Orbie for everything.
 
 ## Flows
 

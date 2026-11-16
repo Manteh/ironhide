@@ -1,4 +1,4 @@
--- IronHide mpv progress tracker
+-- Orbie mpv progress tracker
 -- Saves playback position periodically via file (fallback for non-IPC mode)
 
 local last_pos = 0
@@ -6,7 +6,8 @@ local last_dur = 0
 local reached_eof = false
 
 local function save_progress()
-    local path = os.getenv("IRONHIDE_PROGRESS_FILE") or "/tmp/ironhide-progress.json"
+    -- the Mac app's player passes it as a script option (--script-opts=ironhide-progress-file=...), mpv.app via the environment
+    local path = mp.get_opt("ironhide-progress-file") or os.getenv("IRONHIDE_PROGRESS_FILE") or "/tmp/ironhide-progress.json"
 
     local pos = last_pos
     local duration = last_dur

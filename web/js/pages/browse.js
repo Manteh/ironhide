@@ -10,7 +10,7 @@ import { makeDropdown, closeDropdown } from '../dropdown.js';
 
 // Movies and series share one tab each: the Movies / Series switch picks which list is shown
 const TABS = [
-  ['home', 'For You', '#/'], ['today', 'Today'], ['rising', 'Rising'], ['fresh', 'New'], ['trending', 'Trending'], ['popular', 'Popular'], ['theaters', 'In cinemas'],
+  ['home', 'For You', '#/'], ['collections', 'Collections'], ['today', 'Today'], ['rising', 'Rising'], ['fresh', 'New'], ['trending', 'Trending'], ['popular', 'Popular'], ['theaters', 'In cinemas'],
   ['toprated', 'Top rated'], ['gems', 'Hidden gems'], ['anticipated', 'Upcoming'], ['boxoffice', 'Box office'], ['watched_weekly', 'Most watched'], ['surprise', 'Surprise me'], ['shelf', 'Shelf', '#/shelf'],  // Continue watching has its own row on Home, "See all" and the sidebar's Resume
 ];
 const hrefOf = ([id, , h]) => h || `#/feed/${id}`;
@@ -22,8 +22,8 @@ const ls = (k, d) => { try { return JSON.parse(localStorage.getItem('br-' + k)) 
 const keep = (k, v) => { try { localStorage.setItem('br-' + k, JSON.stringify(v)); } catch {} };
 const FEED_NAME = { new: 'New', toprated: 'Top rated', gems: 'Hidden gem', surprise: 'Surprise', trending_movies: 'Trending', trending_shows: 'Trending series', popular_movies: 'Popular', popular_shows: 'TV hit', watched_weekly: 'Most watched', anticipated: 'Upcoming', boxoffice: 'Box office' };
 
-let root, feeds = [], genres = [], cineGenres = [];
-const st = { tkind: ls('tkind', ''), tab: 'home', genre: '', items: [], more: false, busy: false, token: 0, kind: ls('kind', 'movie'), sort: ls('sort', 'default'), min: ls('min', 0), hideSeen: ls('hide', false), year: '', seed: Math.floor(Date.now() / 1800000) };
+let root, feeds = [], genres = [], cineGenres = [], colMeta = { groups: [], moods: [], collections: [] }, lastTaste = [], lastCols = [];
+const st = { tkind: ls('tkind', ''), tab: 'home', genre: '', items: [], more: false, busy: false, token: 0, kind: ls('kind', 'movie'), sort: ls('sort', 'default'), min: ls('min', 0), endless: false, epage: 0, hideSeen: ls('hide', false), mood: ls('mood', ''), year: '', seed: Math.floor(Date.now() / 1800000) };
 const feedMeta = (id) => feeds.find((f) => f.id === id) || {};
 const typeOf = (it) => (it.type === 'tv' || it.type === 'series' ? 'series' : 'movie');
 // the feed id to ask for, given the Movies / Series switch
@@ -52,7 +52,10 @@ async function sendToRoom(media, name) {
     await sapi('/room/media', { media }); toast('Sent to your room', 'ok'); location.hash = '#/friends';
   } catch (e) { toast(e.message, 'err'); }
 }
-const forgetTitle = async (id, title) => { await post('/api/history/remove', { imdbId: id }); await refreshHistory(); toast(`${title} removed from Continue watching`, 'ok'); };
+const forgetTitle = async (id, title) => {
+  await post('/api/history/remove', { imdbId: id }); await refreshHistory();
+  toast(`${title} removed from Continue watching`, 'ok', { action: { label: 'Undo', run: async () => { await post('/api/history/restore', { imdbId: id }); await refreshHistory(); } } });
+};
 const watchedTitle = async (id, title, season, episode) => { await post('/api/history/watched', { imdbId: id, season, episode }); await refreshHistory(); toast(`${title} marked as watched`, 'ok'); };
 
 function cardMenu(c) {
@@ -132,6 +135,16 @@ const leftLabel = (h) => {
   return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m left` : `${m}m left`;
 };
 
+// shows you follow that have new episodes out (server: /api/newepisodes), for a Home row and a badge on their cards
+let newEps = [], newSet = new Set();
+async function loadNewEps(fresh = false) {
+  try { newEps = await api('/api/newepisodes' + (fresh ? '?fresh=1' : '')); } catch { newEps = []; }
+  newSet = new Set(newEps.map((n) => n.imdbId));
+  paintCont();
+}
+
+const progressTag = (id) => { const h = store.history.find((x) => x.imdbId === id); if (!h) return ''; const p = h.percent || 0; return p >= 90 ? (h.season ? `Watched S${pad(h.season)}E${pad(h.episode)}` : 'Watched') : p > 3 ? (h.season ? `On S${pad(h.season)}E${pad(h.episode)}` : 'In progress') : ''; };
+let feedsReady = Promise.resolve();
 export function continueItems(history, max = 40) {
   const seen = new Set(), out = [];
   for (const h of history) {
@@ -167,10 +180,13 @@ function card(it, i = 0) {
   const sub = [it.year, (it.genres || []).slice(0, 1).join('')].filter(Boolean).join(' · ');
   const resuming = !!it.left;  // continue-watching cards say where you are, right under the title
   const right = resuming ? '' : (it.rating ? '★ ' + it.rating : it.chart ? '' : it.tag || ''); // chart badges already sit on the left
-  return `<article class="bc" tabindex="0" draggable="true" data-year="${esc(it.year || '')}" data-rating="${esc(it.rating || '')}" style="--i:${Math.min(i, 24)}" data-id="${esc(it.imdbId)}" data-type="${esc(type)}" data-title="${esc(it.title)}" data-poster="${esc(posterOf(it.imdbId) || it.poster || posterOf(it.imdbId))}" ${it.season ? `data-season="${it.season}" data-episode="${it.episode}"` : ''}>
+  const label = [it.title, it.year, type === 'series' ? 'series' : 'film', it.left || (it.tag && it.tag !== 'Resume' ? it.tag : ''), it.rating ? `rated ${it.rating}` : ''].filter(Boolean).join(', ');
+  return `<article class="bc" tabindex="0" role="link" aria-label="${esc(label)}" draggable="true" data-year="${esc(it.year || '')}" data-rating="${esc(it.rating || '')}" style="--i:${Math.min(i, 24)}" data-id="${esc(it.imdbId)}" data-type="${esc(type)}" data-title="${esc(it.title)}" data-poster="${esc(posterOf(it.imdbId) || it.poster || posterOf(it.imdbId))}" ${it.season ? `data-season="${it.season}" data-episode="${it.episode}"` : ''}>
     <div class="bposter"><img class="bimg" src="${esc(cardSrc(it).src)}"${cardSrc(it).fb ? ` data-fb="${esc(cardSrc(it).fb)}"` : ''} alt="" loading="${i < 8 ? 'eager' : 'lazy'}"${i < 6 ? ' fetchpriority="high"' : ''} decoding="async" draggable="false">
       ${it.match ? `<span class="bmatch" title="How well this fits your taste">${it.match}% match</span>` : ''}
       ${it.rank && it.rank <= 20 ? `<span class="brank${it.rank <= 3 ? ' top' : ''}">${it.rank}</span>` : ''}
+      ${newSet.has(it.imdbId) && !it.rank ? `<span class="bnew" title="New episodes since you caught up">New ep</span>` : ''}
+      ${it.removable ? `<button class="bx" data-forget aria-label="Remove ${esc(it.title)} from Continue watching" title="Remove from Continue watching">${icon('x')}</button>` : ''}
       ${it.pct ? `<div class="bprog"><i style="width:${Math.min(100, Math.max(4, Math.round(it.pct)))}%"></i></div>` : ''}</div>
     <div class="binfo"><h3>${esc(it.title)}</h3>${it.match && it.tag ? `<div class="bwhy" title="${esc(it.tag)}">${esc(shortWhy(it.tag))}</div>` : ''}<div class="bmeta"><span>${esc(resuming ? [it.tag === 'Resume' ? '' : it.tag, it.left].filter(Boolean).join(' · ') : it.match ? sub : it.tag && (it.rating || it.chart) ? it.tag : sub)}</span>${right ? `<em>${esc(right)}</em>` : ''}</div>${it.overview ? `<p class="bdesc">${esc(it.overview)}</p>` : ''}</div></article>`;
 }
@@ -236,7 +252,7 @@ async function loadTab(reset = true) {
   const my = ++st.token;
   const grid = $('#grid', root), hero = $('#hero', root), more = $('#more', root);
   if (reset) {
-    st.items = [];
+    st.items = []; st.endless = false; st.epage = 0;
     if (grid.children.length && !grid.querySelector('.sk')) { grid.classList.add('leaving'); hero.classList.add('leaving'); await new Promise((r) => setTimeout(r, 170)); }
     if (my !== st.token) return;
     grid.classList.remove('leaving'); hero.classList.remove('leaving');
@@ -245,19 +261,36 @@ async function loadTab(reset = true) {
   }
   st.busy = true;
   let items = [], label = '', added = null;
-  if (st.tab !== 'home') paintRows([]);
-  if (st.tab === 'continue') { items = continueItems(store.history); }
-  else if (st.tab === 'shelf') { items = store.watchlist.map((w) => ({ ...w, tag: '' })); }
+  if (st.tab !== 'home') { lastTaste = []; lastCols = []; paintRows([], []); }
+  if (!reset && st.endless) {
+    // the list ran out: keep going with more titles of the same kind (taste-ranked on Home)
+    const key = feedKey(0), got = await (st.pre?.key === key ? st.pre.p : api(key).catch(() => []));
+    st.pre = null; if (my !== st.token) return;
+    st.epage++;
+    const seen = new Set(st.items.map((i) => i.imdbId)); added = got.filter((i) => !seen.has(i.imdbId));
+    items = [...st.items, ...added]; st.more = got.length > 0 && st.epage < 250;
+  }
+  else if (st.tab === 'continue') { items = continueItems(store.history).map((it) => ({ ...it, removable: true })); }
+  else if (st.tab === 'shelf') { items = store.watchlist.map((w) => ({ ...w, tag: progressTag(w.imdbId) })); }
+  else if (st.tab === 'collections') {
+    const m = await api('/api/collections').catch(() => null); if (my !== st.token) return;
+    if (m) colMeta = m;
+    st.busy = false; st.more = false; paintTools(); grid.innerHTML = hubHtml(colMeta) || '<div class="empty">Collections need a TMDB key in Settings.</div>'; more.innerHTML = ''; return;
+  }
   else if (st.tab === 'home') {
-    const [fy, secs] = await Promise.all([api(`/api/catalog/foryou?seed=${st.seed}`).catch(() => []), api(`/api/foryou/sections?seed=${st.seed}`).catch(() => ({ sections: [] }))]);
+    const [fy, secs, cols] = await Promise.all([api(`/api/catalog/foryou?seed=${st.seed}`).catch(() => []), api(`/api/foryou/sections?seed=${st.seed}`).catch(() => ({ sections: [] })), api(colsUrl()).catch(() => ({ sections: [] }))]);
     if (my !== st.token) return;
-    paintRows(secs.sections || []);
+    lastTaste = secs.sections || []; lastCols = cols.sections || [];
+    paintRows(lastTaste, lastCols);
     const cont = continueItems(store.history, 4), seen = new Set(cont.map((c) => c.imdbId));
-    const inRows = new Set((secs.sections || []).flatMap((x) => x.items.map((i) => i.imdbId)));
+    const inRows = new Set([...(secs.sections || []), ...lastCols].flatMap((x) => x.items.map((i) => i.imdbId)));
     items = fy.filter((m) => !seen.has(m.imdbId) && !inRows.has(m.imdbId));  // in progress and row picks are shown above
     hero.innerHTML = await renderHero(fy.filter((x) => x.tag === 'Trending').concat(fy));
     if (my !== st.token) return;
+    st.endless = true; st.epage = 0; st.more = true;
   } else {
+    await feedsReady;
+    if (my !== st.token) return;
     const skip = reset ? 0 : st.items.length, key = feedKey(skip);
     // the next page was probably fetched while you were still reading this one
     const got = await (st.pre?.key === key ? st.pre.p : api(feedUrl(skip)).catch(() => []));
@@ -266,12 +299,14 @@ async function loadTab(reset = true) {
     const seen = new Set(st.items.map((i) => i.imdbId)); const fresh = got.filter((i) => !seen.has(i.imdbId));
     added = fresh.map((f) => ({ ...f, label: FEED_NAME[st.tab] }));
     items = [...st.items, ...added];
-    st.more = fresh.length >= 10 && !['boxoffice', 'toprated', 'gems', 'surprise'].includes(st.tab);
+    // a chart that ends (or a one-page list like Top rated) carries on with more of the same instead of stopping
+    if (fresh.length < 10 || ['boxoffice', 'toprated', 'gems', 'surprise'].includes(st.tab)) { st.endless = true; st.epage = 0; }
+    st.more = true;
   }
   if (my !== st.token) return;
   st.items = items; st.busy = false;
   more.innerHTML = '';
-  const emptyHtml = `<div class="empty">${st.tab === 'shelf' ? 'Your shelf is empty. Open a title and tap Save.' : st.tab === 'continue' ? 'Nothing in progress yet.' : 'Nothing here right now.'}</div>`;
+  const emptyHtml = `<div class="empty">${st.tab === 'shelf' ? 'Your shelf is empty. Open a title and tap Save.' : st.tab === 'continue' ? 'Nothing in progress. Anything you start watching shows up here.' : 'Nothing here right now.'}</div>`;
   const view = ['continue', 'shelf'].includes(st.tab) ? items : shown(items);
   if (reset) { paintTools(); grid.innerHTML = view.length ? view.map(card).join('') : emptyHtml; }
   else syncGrid(view, emptyHtml); // more arriving at the end: nothing you are looking at is touched
@@ -289,17 +324,26 @@ function feedUrl(skip) {
   if (skip) qs.set('skip', skip);
   return `/api/catalog/feed/${feedId()}?${qs}`;
 }
-const feedKey = (skip) => feedUrl(skip);
+const END_MODE = { toprated: 'top', gems: 'gems', surprise: 'surprise', home: 'foryou' };
+function endUrl() {
+  const t = st.tab, fm = feedMeta(base(t)), qs = new URLSearchParams({ mode: END_MODE[t] || (t.startsWith('col_') ? 'top' : 'popular'), page: st.epage + 1, seed: st.seed });
+  const type = t === 'home' || t.startsWith('col_') ? '' : fm.tmdb ? st.tkind : isTrakt(t) || fm.cine ? st.kind : '';
+  if (type) qs.set('type', type);
+  if (st.genre && t !== 'home') qs.set('genre', st.genre);
+  return `/api/catalog/endless?${qs}`;
+}
+const feedKey = (skip) => (st.endless ? endUrl() : feedUrl(skip));
 function readAhead() {
   const skip = st.items.length, key = feedKey(skip);
   if (st.pre?.key === key) return;
-  const p = api(feedUrl(skip)).catch(() => []);
+  const p = api(key).catch(() => []);
   st.pre = { key, p };
   p.then((l) => prefetch(l.map((i) => posterOf(i.imdbId)))); // warm the posters too
 }
 const nearBottom = () => { const m = $('#more', root); return !!m && m.getBoundingClientRect().top < innerHeight * 2.2; };
 function checkMore() {
-  if (!st.more || st.busy || root.classList.contains('hidden') || !nearBottom()) return;
+  // Collections is one finished page: no "load more" (it used to add 4 placeholder cards on every scroll and redraw the page)
+  if (!st.more || st.busy || st.tab === 'collections' || root.classList.contains('hidden') || !nearBottom()) return;
   const grid = $('#grid', root); if (!grid.querySelector('.bc.tmp')) grid.insertAdjacentHTML('beforeend', Array.from({ length: 4 }, (_, i) => skCard(i, 'tmp')).join('')); // placeholders, only if it isn't ready yet
   loadTab(false);
 }
@@ -328,14 +372,21 @@ function syncGrid(view, emptyHtml) {
 
 function paintTools() {
   const el = $('#tools', root); if (!el) return;
-  const t = st.tab, fm = feedMeta(base(t)), isFeed = !['continue', 'shelf'].includes(t);
-  if (!isFeed) { el.innerHTML = ''; return; }
+  const t = st.tab, fm = feedMeta(base(t)), isFeed = !['continue', 'shelf', 'collections'].includes(t);
+  root.classList.toggle('pagey', !isFeed && t !== 'collections'); // Resume and Shelf are pages of their own: heading, denser grid, no category strip
+  if (!isFeed) {
+    if (t === 'collections') { el.innerHTML = '<div class="pg-head"><h1>Collections</h1><span>Shelves for every mood, season and obsession</span></div>'; return; }
+    const n = t === 'continue' ? continueItems(store.history).length : store.watchlist.length;
+    el.innerHTML = `<div class="pg-head"><h1>${t === 'continue' ? 'Continue watching' : 'Your shelf'}</h1><span>${n} title${n === 1 ? '' : 's'}${t === 'continue' && n ? ' · right-click a card for more' : ''}</span></div>`;
+    return;
+  }
   const dual = t === 'home' || fm.tmdb ? false : isTrakt(t) || fm.cine, glist = fm.cine || fm.tmdb ? cineGenres : genres;
   const years = Array.from({ length: new Date().getFullYear() - 1949 }, (_, i) => String(new Date().getFullYear() - i));
-  el.innerHTML = `<div class="tl">
+  const col = t.startsWith('col_') && colMeta.collections.find((c) => 'col_' + c.id === t);
+  el.innerHTML = `${col ? `<div class="pg-head col-head"><a href="#/feed/collections" aria-label="All collections">←</a><h1>${esc(col.title)}</h1><span>${esc(col.sub || '')}</span></div>` : ''}<div class="tl">
     ${dual ? `<div class="seg2" role="group" aria-label="Type"><button data-kind="movie" class="${st.kind === 'movie' ? 'on' : ''}">Movies</button><button data-kind="series" class="${st.kind === 'series' ? 'on' : ''}">Series</button></div>` : ''}
     ${fm.tmdb && fm.kind === 'both' ? `<div class="seg2" role="group" aria-label="Type"><button data-tk="" class="${!st.tkind ? 'on' : ''}">All</button><button data-tk="movie" class="${st.tkind === 'movie' ? 'on' : ''}">Films</button><button data-tk="series" class="${st.tkind === 'series' ? 'on' : ''}">Series</button></div>` : ''}
-    ${t !== 'home' && t !== 'boxoffice' && glist.length ? '<span id="gsel"></span>' : ''}
+    ${t !== 'home' && t !== 'boxoffice' && !t.startsWith('col_') && glist.length ? '<span id="gsel"></span>' : ''}
     ${t === 'new' ? '<span id="ysel"></span>' : ''}
     <span id="srt"></span>
     <span id="mnr"></span>
@@ -545,15 +596,40 @@ function paintCont() {
   const what = top ? `${esc(top.title)}${top.left ? ` · ${esc(top.left)}` : ''}${top.tag && top.tag !== 'Resume' ? ` · ${esc(top.tag.replace('Next · ', ''))}` : ''}` : '';
   el.innerHTML = `<div class="greet"><div><h1>${hi}${name ? `, ${esc(name)}` : ''}</h1><p>${top ? `${top.pct ? 'Pick up where you left off' : 'Up next'}: <b>${what}</b>` : 'What are we watching tonight?'}</p></div>
     <div class="greet-b">${top ? `<button class="pill" data-gplay data-id="${esc(top.imdbId)}" data-type="${esc(top.type)}" data-title="${esc(top.title)}" ${top.season ? `data-season="${top.season}" data-episode="${top.episode}"` : ''}>${icon('play')} ${top.pct ? 'Resume' : 'Play'}</button>` : ''}<button class="pill ghost2" data-gsearch>${icon('search')} Search</button></div></div>
-    ${list.length ? `<header><h2>Continue watching</h2><a href="#/continue">See all</a></header><div class="cont-row">${list.map((it, i) => card(it, i)).join('')}</div>` : ''}`;
+    ${list.length ? `<header><h2>Continue watching</h2><a href="#/continue">See all</a></header><div class="cont-row">${list.map((it, i) => card(it, i)).join('')}</div>` : ''}
+    ${newEps.length ? `<header><h2>New episodes</h2><span class="cont-sub">Shows you were caught up on</span></header><div class="cont-row">${newEps.map((n, i) => card({ imdbId: n.imdbId, type: 'series', title: n.title, poster: n.poster, season: n.season, episode: n.episode, tag: `${n.count > 1 ? `${n.count} new · ` : 'New · '}S${pad(n.season)}E${pad(n.episode)}` }, i)).join('')}</div>` : ''}`;
 }
 
 // For You rows: top picks, "because you loved", new, hidden gems, something different (from the taste engine)
-function paintRows(sections) {
+const colsUrl = () => `/api/collections/home?seed=${st.seed}${st.mood ? `&mood=${encodeURIComponent(st.mood)}` : ''}`;
+// the Home rows: collection shelves woven between the taste rows (a chosen mood puts its shelves first)
+function weave(taste, cols) {
+  if (st.mood) return [...cols, ...taste];
+  const out = taste.slice(0, 1), a = taste.slice(1), b = [...cols];
+  while (a.length || b.length) { if (b.length) out.push(b.shift()); if (a.length) out.push(a.shift()); }
+  return out;
+}
+function moodChips() {
+  const ms = colMeta.moods || []; if (!ms.length) return '';
+  return `<div class="moods" role="group" aria-label="Tonight I want"><span>Tonight I want</span>${ms.map((m) => `<button data-mood="${m.id}" class="${st.mood === m.id ? 'on' : ''}" aria-pressed="${st.mood === m.id}">${esc(m.label)}</button>`).join('')}</div>`;
+}
+function paintRows(taste, cols = lastCols) {
   const el = $('#fyRows', root); if (!el) return;
-  const hid = hiddenIds(); sections = sections.map((x) => ({ ...x, items: x.items.filter((i) => !hid.has(i.imdbId)) })).filter((x) => x.items.length);
-  el.innerHTML = sections.map((sec) => `<section class="fy-row"><header><h3>${esc(sec.title)}</h3>${sec.sub ? `<span>${esc(sec.sub)}</span>` : ''}</header>
+  const hid = hiddenIds(), clean = (l) => l.map((x) => ({ ...x, items: x.items.filter((i) => !hid.has(i.imdbId)) })).filter((x) => x.items.length);
+  const sections = weave(clean(taste), clean(cols));
+  el.innerHTML = (sections.length ? moodChips() : '') + sections.map((sec) => `<section class="fy-row${sec.seasonal ? ' seasonal' : ''}"><header><h3>${esc(sec.title)}</h3>${sec.sub ? `<span>${esc(sec.sub)}</span>` : ''}${sec.more ? `<a class="fy-all" href="${esc(sec.more)}">See all</a>` : ''}</header>
     <div class="fy-scroll">${sec.items.map((it, i) => card(it, i)).join('')}</div></section>`).join('') + (sections.length ? '<header class="fy-more"><h3>More for you</h3><span>Sort and filter apply here</span></header>' : '');
+}
+// swap only the collection shelves (a mood was picked), keeping the hero and the grid below untouched
+async function refreshCols() {
+  const my = st.token, cols = await api(colsUrl()).catch(() => ({ sections: [] }));
+  if (my !== st.token || st.tab !== 'home') return;
+  lastCols = cols.sections || []; paintRows(lastTaste, lastCols);
+}
+// the Collections tab: every shelf, grouped
+function hubHtml(m) {
+  const by = (g) => m.collections.filter((c) => c.group === g.id && (!c.seasonal || c.live));
+  return m.groups.map((g) => ({ g, list: by(g) })).filter((x) => x.list.length).map(({ g, list }) => `<section class="col-grp"><h3>${esc(g.label)}</h3><div class="col-tiles">${list.map((c) => `<a class="col-tile${c.seasonal ? ' live' : ''}" href="#/feed/col_${c.id}"><b>${esc(c.title)}</b><small>${esc(c.sub || '')}</small>${c.seasonal ? '<em>Now</em>' : c.kind === 'tv' ? '<em>Series</em>' : ''}</a>`).join('')}</div></section>`).join('');
 }
 function paintChrome() {
   paintCont();
@@ -575,8 +651,12 @@ export async function mount(el) {
       <div id="fyRows" class="fy-rows"></div><div id="tools" class="tools"></div><div id="grid" class="bgrid"></div><div id="more" class="more"></div></div>
     <aside id="rail" class="rail2" aria-label="Continue watching, friends and now playing"></aside>`;
   applyTint(null);
-  const meta = await api('/api/catalog/feeds').catch(() => ({ feeds: [], genres: [] }));
-  feeds = meta.feeds; genres = meta.genres; cineGenres = meta.cineGenres || [];
+  // the list of feeds and genres: only the category tabs need it, so the view doesn't wait for it
+  feedsReady = api('/api/catalog/feeds').catch(() => ({ feeds: [], genres: [] })).then((meta) => {
+    feeds = meta.feeds; genres = meta.genres; cineGenres = meta.cineGenres || [];
+    if (!['home', 'continue', 'shelf'].includes(st.tab)) paintTools();
+  });
+  api('/api/collections').then((m) => { colMeta = m; if (st.tab === 'home' && lastTaste.length + lastCols.length) paintRows(lastTaste, lastCols); else if (st.tab.startsWith('col_')) paintTools(); }).catch(() => {});
 
   // interactions: delegation on the whole view
   el.addEventListener('click', (e) => {
@@ -589,16 +669,37 @@ export async function mount(el) {
     if (gp) { quickPlay({ imdbId: gp.dataset.id, type: gp.dataset.type, title: gp.dataset.title, ...(gp.dataset.season ? { season: +gp.dataset.season, episode: +gp.dataset.episode } : {}) }); return; }
     if (e.target.closest('[data-gsearch]')) { import('../palette.js').then((m) => m.openPalette()); return; }
     if (e.target.closest('[data-hero-play]')) { const h = e.target.closest('.hero2'); quickPlay({ imdbId: h.dataset.id, type: h.dataset.type, title: h.dataset.title, ...(h.dataset.season ? { season: +h.dataset.season, episode: +h.dataset.episode } : {}) }); return; }
+    const mb = e.target.closest('[data-mood]');
+    if (mb) { st.mood = st.mood === mb.dataset.mood ? '' : mb.dataset.mood; keep('mood', st.mood); st.seed = Math.floor(Date.now() / 1800000) + (st.mood ? 7 : 0); paintRows(lastTaste, lastCols); refreshCols(); return; }
+    const fx = e.target.closest('[data-forget]');
+    if (fx) { e.stopPropagation(); const c = fx.closest('.bc'); forgetTitle(c.dataset.id, c.dataset.title); return; }
     const c = e.target.closest('.bc[data-id]'); if (!c) return;
     location.hash = `#/title/${c.dataset.type}/${c.dataset.id}`;
   });
+  loadNewEps(); setInterval(() => loadNewEps(), 30 * 60e3);
   el.addEventListener('pointerdown', (e) => { const c = e.target.closest?.('.bc[data-id]'); if (c) prefetchTitle(c.dataset.type, c.dataset.id); });
   // cards on screen quietly warm their details (title data only, two at a time, when the app is idle)
   const warmQ = [], warmSeen = new Set(); let warming = 0;
   const pump = () => { while (warming < 2 && warmQ.length) { const c = warmQ.shift(); warming++; (window.requestIdleCallback || setTimeout)(() => { prefetchTitle(c.type, c.id, true); setTimeout(() => { warming--; pump(); }, 250); }, { timeout: 1500 }); } };
   const warmIO = new IntersectionObserver((es) => { for (const e of es) { if (!e.isIntersecting) continue; const d = e.target.dataset; warmIO.unobserve(e.target); if (!d.id || warmSeen.has(d.id)) continue; warmSeen.add(d.id); warmQ.push({ id: d.id, type: d.type }); } pump(); }, { rootMargin: '200px 0px' });
   new MutationObserver(() => el.querySelectorAll('.bc[data-id]:not([data-warm])').forEach((c) => { c.dataset.warm = '1'; warmIO.observe(c); })).observe(el, { childList: true, subtree: true });
-  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const c = e.target.closest?.('.bc[data-id]'); if (c) location.hash = `#/title/${c.dataset.type}/${c.dataset.id}`; } });
+  el.addEventListener('keydown', (e) => {
+    const c = e.target.closest?.('.bc[data-id]'); if (!c) return;
+    if (e.key === 'Enter') { location.hash = `#/title/${c.dataset.type}/${c.dataset.id}`; return; }
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    // the nearest card in that direction, among the cards of the same grid or row
+    const list = [...c.parentElement.querySelectorAll(':scope > .bc[data-id]')], r = c.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let best = null, bestD = Infinity;
+    for (const o of list) {
+      if (o === c) continue;
+      const q = o.getBoundingClientRect(), dx = q.left + q.width / 2 - cx, dy = q.top + q.height / 2 - cy;
+      const ok = e.key === 'ArrowLeft' ? dx < -4 && Math.abs(dy) < r.height / 2 : e.key === 'ArrowRight' ? dx > 4 && Math.abs(dy) < r.height / 2 : e.key === 'ArrowUp' ? dy < -4 : dy > 4;
+      if (!ok) continue;
+      const d = Math.abs(dx) + Math.abs(dy) * 2; if (d < bestD) { bestD = d; best = o; }
+    }
+    if (best) { e.preventDefault(); best.focus(); best.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); }
+  });
   // hover a card: the light glides toward it and takes on its colours
   let warmT = 0, scrolling = 0; addEventListener('scroll', () => { clearTimeout(scrolling); scrolling = setTimeout(() => { scrolling = 0; }, 160); }, { passive: true, capture: true });
   el.addEventListener('pointerover', (e) => {
