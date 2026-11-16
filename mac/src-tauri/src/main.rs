@@ -356,7 +356,7 @@ fn main() {
                 .background_color(Color(7, 7, 13, 255))
                 // title bar takes the window colour and the title is hidden, like Discord
                 .title_bar_style(TitleBarStyle::Overlay)
-                .traffic_light_position(tauri::LogicalPosition::new(16.0, 12.0))
+                .traffic_light_position(tauri::LogicalPosition::new(16.0, 15.0))
                 .hidden_title(true)
                 .disable_drag_drop_handler()
                 .initialization_script(NATIVE_JS)
