@@ -67,8 +67,53 @@ export async function getInfo(imdbId) {
   const castSrc = kind === 'tv' && d.aggregate_credits?.cast?.length
     ? d.aggregate_credits.cast.map((p) => ({ ...p, character: p.roles?.[0]?.character || '', episodes: p.total_episode_count || 0 }))
     : d.credits?.cast || [];
+  const crewSrc = kind === 'tv' && d.aggregate_credits?.crew?.length
+    ? d.aggregate_credits.crew.map((c) => ({ ...c, job: c.jobs?.[0]?.job || c.job }))
+    : d.credits?.crew || [];
   const crew = d.credits?.crew || [];
   const people = (jobs) => [...new Set(crew.filter((p) => jobs.includes(p.job)).map((p) => p.name))].slice(0, 3);
+
+  const KEY_CREW = [
+    { match: ['Director'], label: 'Director', order: 1 },
+    { match: ['Creator'], label: 'Creator', order: 1 },
+    { match: ['Screenplay', 'Writer'], label: 'Screenplay', order: 2 },
+    { match: ['Novel', 'Author', 'Book'], label: 'Original Novel', order: 3 },
+    { match: ['Director of Photography', 'Cinematographer'], label: 'Cinematography', order: 4 },
+    { match: ['Original Music Composer', 'Music', 'Composer'], label: 'Original Score', order: 5 },
+    { match: ['Editor'], label: 'Editor', order: 6 },
+    { match: ['Production Design'], label: 'Production Design', order: 7 },
+    { match: ['Costume Design'], label: 'Costume Design', order: 8 },
+    { match: ['Visual Effects Supervisor'], label: 'VFX Supervisor', order: 9 },
+    { match: ['Sound Designer', 'Supervising Sound Editor'], label: 'Sound Design', order: 10 },
+    { match: ['Producer'], label: 'Producer', order: 11 },
+  ];
+
+  const byPerson = new Map();
+  for (const c of crewSrc) {
+    for (const r of KEY_CREW) {
+      if (r.match.includes(c.job)) {
+        let entry = byPerson.get(c.id);
+        if (!entry) {
+          entry = { id: c.id, name: c.name, roles: [], photo: img(c.profile_path) };
+          byPerson.set(c.id, entry);
+        }
+        entry.roles.push(r);
+        break;
+      }
+    }
+  }
+
+  const curatedCrew = [...byPerson.values()].map((p) => {
+    p.roles.sort((a, b) => a.order - b.order);
+    const unique = [...new Set(p.roles.map((r) => r.label))];
+    return {
+      id: p.id,
+      name: p.name,
+      role: unique.slice(0, 2).join(', '),
+      order: p.roles[0].order,
+      photo: p.photo,
+    };
+  }).sort((a, b) => a.order - b.order).slice(0, 16);
   const cert = kind === 'tv'
     ? (d.content_ratings?.results || []).find((r) => r.iso_3166_1 === 'US')?.rating || ''
     : ((d.release_dates?.results || []).find((r) => r.iso_3166_1 === 'US')?.release_dates || []).map((x) => x.certification).find(Boolean) || '';
@@ -105,6 +150,7 @@ export async function getInfo(imdbId) {
     keywords: (d.keywords?.keywords || d.keywords?.results || []).map((k) => k.name).slice(0, 10),
     directors: people(['Director']), writers: people(['Screenplay', 'Writer', 'Novel']), creators: (d.created_by || []).map((p) => p.name).slice(0, 3),
     cast: castSrc.slice(0, 18).map((p) => ({ id: p.id, name: p.name, character: p.character || '', episodes: p.episodes || 0, photo: img(p.profile_path) })),
+    crew: curatedCrew,
     reviews: revs.slice(0, 6).map((r) => ({ author: r.author, avatar: r.author_details?.avatar_path && !/^\/http/.test(r.author_details.avatar_path) ? img(r.author_details.avatar_path, 'w45') : '', rating: r.author_details?.rating ?? null, date: (r.created_at || '').slice(0, 10), text: clip(r.content, 1400), url: r.url })),
     similar,
     reddit: null, redditHint: false,
@@ -136,7 +182,9 @@ export async function getPerson(pid) {
   const merge = (list) => { const m = new Map(); for (const x of list) { const k = `${x.kind}:${x.tmdbId}`, p = m.get(k); if (!p) m.set(k, x); else if (x.role && !p.role.includes(x.role)) p.role = `${p.role}, ${x.role}`; } return [...m.values()]; };
   const talk = /talk|news|reality|award|oscar|golden globe|late night|tonight show|jimmy|ellen|graham norton|saturday night live|self/i;
   const cast = merge((d.combined_credits?.cast || []).filter((x) => !(x.genre_ids || []).some((g) => [10763, 10764, 10767].includes(g)) && !talk.test(x.character || '')).map((x) => credit(x, x.character || '')));
-  const crew = merge((d.combined_credits?.crew || []).filter((x) => ['Directing', 'Writing', 'Production'].includes(x.department) && ['Director', 'Screenplay', 'Writer', 'Creator', 'Producer', 'Executive Producer', 'Novel'].includes(x.job)).map((x) => credit(x, x.job)));
+  const CREW_JOBS = ['Director', 'Screenplay', 'Writer', 'Creator', 'Producer', 'Executive Producer', 'Novel', 'Author', 'Director of Photography', 'Cinematographer', 'Original Music Composer', 'Music', 'Composer', 'Editor', 'Production Design', 'Costume Design'];
+  const CREW_DEPTS = ['Directing', 'Writing', 'Production', 'Camera', 'Sound', 'Editing', 'Art', 'Costume & Make-Up'];
+  const crew = merge((d.combined_credits?.crew || []).filter((x) => CREW_DEPTS.includes(x.department) && CREW_JOBS.includes(x.job)).map((x) => credit(x, x.job)));
   const byYear = (a, b) => (b.year || '9999').localeCompare(a.year || '9999');
   const knownFor = [...(d.known_for_department === 'Acting' ? cast : [...crew, ...cast])].filter((x) => x.poster && x.votes > 50 && !(x.kind === 'tv' && x.episodes > 0 && x.episodes < 3)).sort((a, b) => (b.votes * (b.kind === 'tv' ? Math.min(1, (b.episodes || 1) / 10) : 1)) - (a.votes * (a.kind === 'tv' ? Math.min(1, (a.episodes || 1) / 10) : 1))).slice(0, 12);
   const years = [...cast, ...crew].map((x) => +x.year).filter(Boolean);

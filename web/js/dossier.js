@@ -70,9 +70,9 @@ function personHTML(p, back) {
         <b>${esc(c.title)}</b><small>${esc([c.year, c.role].filter(Boolean).join(' · '))}</small></a>`).join('')}</div></section>` : ''}
     ${p.photos?.length > 1 ? `<section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">Photos</h3><span class="dx-count">${p.photos.length}</span></div><div class="dx-row pv-photos">${p.photos.map((u) => `<i><img src="${esc(u)}" alt="" loading="lazy" decoding="async" data-ld></i>`).join('')}</div></section>` : ''}
     <section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">Filmography</h3>
-      <div class="pv-tabs">${p.crew?.length ? `<div class="seg"><button data-ptab="acting" class="on">Acting <em>${p.acting.length}</em></button><button data-ptab="crew">Behind the camera <em>${p.crew.length}</em></button></div>` : ''}
+      <div class="pv-tabs">${p.crew?.length ? `<div class="seg"><button data-ptab="acting" class="${(!p.acting?.length && p.crew?.length) ? '' : 'on'}">Acting <em>${p.acting.length}</em></button><button data-ptab="crew" class="${(!p.acting?.length && p.crew?.length) ? 'on' : ''}">Behind the camera <em>${p.crew.length}</em></button></div>` : ''}
         <div class="seg"><button data-pkind="all" class="on">All</button><button data-pkind="movie">Films</button><button data-pkind="tv">Series</button></div></div></div>
-      <div class="pv-list" id="pvList">${filmography(p, { tab: 'acting', kind: 'all' })}</div></section>
+      <div class="pv-list" id="pvList">${filmography(p, { tab: (!p.acting?.length && p.crew?.length) ? 'crew' : 'acting', kind: 'all' })}</div></section>
   </div></div>`;
 }
 function filmography(p, st) {
@@ -467,13 +467,24 @@ export async function openDossier({ type, id }) {
       ${ok && inf.keywords?.length ? `<div class="dx-kw">${inf.keywords.map((k) => `<span>${esc(k)}</span>`).join('')}</div>` : ''}`;
 
     const cast = ok && inf.cast?.length ? inf.cast : (meta.cast || []).map((n) => ({ name: n }));
+    const crew = ok && inf.crew?.length ? inf.crew : [];
     const reviews = ok ? inf.reviews || [] : [];
     const sim = ok ? inf.similar || [] : [];
     more.innerHTML = `
-      ${cast.length ? `<section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">Cast</h3><span class="dx-count">${cast.length}</span></div><div class="dx-row">${cast.map((c) => `
+      ${(cast.length || crew.length) ? `<section class="dx-sec"><div class="dx-sh">
+        ${crew.length ? `<div class="dx-ptabs" role="tablist">
+          <button class="dx-pt on" data-ptab="cast" role="tab" aria-selected="true">Cast <span class="dx-count">${cast.length}</span></button>
+          <button class="dx-pt" data-ptab="crew" role="tab" aria-selected="false">Filmmakers <span class="dx-count">${crew.length}</span></button>
+        </div>` : `<h3 class="dx-h">Cast</h3><span class="dx-count">${cast.length}</span>`}
+      </div>
+      <div class="dx-row dx-prow" id="dxCastRow">${cast.map((c) => `
         <a class="dx-person" ${c.id ? `href="#" data-pid="${c.id}" aria-label="About ${esc(c.name)}"` : ''}>
           <i>${c.photo ? `<img src="${esc(c.photo)}" alt="" loading="lazy" decoding="async" data-ld>` : `<span>${esc((c.name || '?')[0])}</span>`}</i>
-          <b>${esc(c.name)}</b>${c.character ? `<small>${esc(c.character)}</small>` : ''}${c.episodes > 1 ? `<em>${c.episodes} episodes</em>` : ''}</a>`).join('')}</div></section>` : ''}
+          <b>${esc(c.name)}</b>${c.character ? `<small>${esc(c.character)}</small>` : ''}${c.episodes > 1 ? `<em>${c.episodes} episodes</em>` : ''}</a>`).join('')}</div>
+      ${crew.length ? `<div class="dx-row dx-prow" id="dxCrewRow" style="display:none">${crew.map((c) => `
+        <a class="dx-person" ${c.id ? `href="#" data-pid="${c.id}" aria-label="About ${esc(c.name)}"` : ''}>
+          <i>${c.photo ? `<img src="${esc(c.photo)}" alt="" loading="lazy" decoding="async" data-ld>` : `<span>${esc((c.name || '?')[0])}</span>`}</i>
+          <b>${esc(c.name)}</b><small title="${esc(c.role)}">${esc(c.role)}</small></a>`).join('')}</div>` : ''}</section>` : ''}
       ${reviews.length ? `<section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">Reviews</h3><span class="dx-count">${reviews.length}</span></div><div class="dx-revs">${reviews.map((r) => `
         <article class="dx-rev"><header><span class="dx-av">${r.avatar ? `<img src="${esc(r.avatar)}" alt="" loading="lazy">` : esc((r.author || '?')[0])}</span>
           <div><b>${esc(r.author)}</b><small>${fmtDate(r.date)}</small></div>${r.rating != null ? `<span class="dx-rr ${r.rating >= 7 ? 'hi' : r.rating >= 5 ? 'mid' : 'lo'}">${icon('star')} ${r.rating}</span>` : ''}</header>
@@ -486,6 +497,21 @@ export async function openDossier({ type, id }) {
     // review: show the whole text only if it was actually clipped
     $$('.dx-rev', more).forEach((r) => { const p = $('p', r), b = $('.dx-rm', r); requestAnimationFrame(() => { if (p.scrollHeight <= p.clientHeight + 2) b.remove(); }); b.onclick = () => { r.classList.toggle('open'); b.textContent = r.classList.contains('open') ? 'Show less' : 'Read more'; }; });
     bindYt();
+    $$('.dx-pt', more).forEach((btn) => {
+      btn.onclick = () => {
+        const tab = btn.dataset.ptab;
+        $$('.dx-pt', more).forEach((b) => {
+          const on = b === btn;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        const castRow = $('#dxCastRow', more), crewRow = $('#dxCrewRow', more);
+        if (castRow && crewRow) {
+          castRow.style.display = tab === 'cast' ? 'flex' : 'none';
+          crewRow.style.display = tab === 'crew' ? 'flex' : 'none';
+        }
+      };
+    });
     $$('[data-pid]', more).forEach((a) => {
       a.onclick = (e) => { e.preventDefault(); openPerson(+a.dataset.pid); };
       a.addEventListener('pointerenter', () => personData(+a.dataset.pid), { once: true }); // warm it up
@@ -570,7 +596,7 @@ export async function openDossier({ type, id }) {
     const bio = $('.pv-bio', pv), more = $('.pv-more', pv);
     if (bio && more) requestAnimationFrame(() => { if (bio.scrollHeight <= bio.clientHeight + 2) more.remove(); });
     more?.addEventListener('click', () => { bio.classList.toggle('open'); more.textContent = bio.classList.contains('open') ? 'Show less' : 'Read full biography'; });
-    const st2 = { tab: 'acting', kind: 'all' };
+    const st2 = { tab: (!p.acting?.length && p.crew?.length) ? 'crew' : 'acting', kind: 'all' };
     const draw2 = () => { const l = $('#pvList', pv); if (l) l.innerHTML = filmography(p, st2); $$('[data-ptab]', pv).forEach((b) => b.classList.toggle('on', b.dataset.ptab === st2.tab)); $$('[data-pkind]', pv).forEach((b) => b.classList.toggle('on', b.dataset.pkind === st2.kind)); };
     $$('[data-ptab]', pv).forEach((b) => (b.onclick = () => { st2.tab = b.dataset.ptab; draw2(); }));
     $$('[data-pkind]', pv).forEach((b) => (b.onclick = () => { st2.kind = b.dataset.pkind; draw2(); }));
