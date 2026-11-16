@@ -1,5 +1,5 @@
 // Your profile: what you watched, your favourites, numbers, medals and friends. All of it from your own Orbie.
-import { $, esc, icon, avatar, ask } from '../ui.js';
+import { $, esc, icon, avatar, ask, posterCard } from '../ui.js';
 import { api } from '../api.js';
 import { store } from '../main.js';
 
@@ -64,7 +64,8 @@ function medalHtml(m, x) {
 }
 
 // ---------- pieces ----------
-const card = (x, sub, extra = '') => `<a class="pf-c" href="${route(x)}" title="${esc(x.title)}"><span class="pf-p" style="background-image:url('${esc(x.poster || poster(x.imdbId))}')">${extra}</span><b>${esc(x.title)}</b>${sub ? `<small>${sub}</small>` : ''}</a>`;
+// the same poster card as Home (size, tilt, hover), so rows here feel like the rest of the app
+const card = (x, sub, extra = '') => posterCard({ ...x, poster: x.poster || poster(x.imdbId) }, { sub, extra });
 const section = (title, sub, body, cls = '') => `<section class="pf-s ${cls}"><header><h2>${esc(title)}</h2>${sub ? `<span>${sub}</span>` : ''}</header>${body}</section>`;
 const empty = (t) => `<p class="pf-empty">${esc(t)}</p>`;
 const ago = (t) => { const d = Math.floor((Date.now() - t) / 864e5); return d <= 0 ? 'Today' : d === 1 ? 'Yesterday' : d < 30 ? `${d} days ago` : new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
@@ -120,7 +121,7 @@ export default async function profile(el, params = {}) {
     </header>
     <div class="pf-stats">${stat(hoursTxt, 'hours watched')}${stat(num(x.films.length), x.films.length === 1 ? 'film' : 'films')}${stat(num(x.shows.length), x.shows.length === 1 ? 'show' : 'shows', `${num(x.episodes.length)} episodes`)}${stat(num(x.finished.length), 'finished')}${stat(num(x.streak), 'day streak', `best ${x.best}`)}${stat(num(data.watchlist.length), fid ? 'on their list' : 'on your list')}</div>
 
-    ${section('Recently watched', '', recent.size ? `<div class="pf-row">${[...recent.values()].slice(0, 14).map((r) => card(r, IS_TV(r) ? `S${r.season} E${r.episode} · ${ago(r.at)}` : ago(r.at), r.pct > 0 && r.pct < 97 ? `<i class="pf-prog"><u style="width:${r.pct}%"></u></i>` : '')).join('')}</div>` : empty(fid ? 'Nothing yet.' : 'Nothing yet. Press play on something.'))}
+    ${section('Recently watched', '', recent.size ? `<div class="pf-row">${[...recent.values()].slice(0, 14).map((r) => card(r, IS_TV(r) ? `S${r.season} E${r.episode} · ${ago(r.at)}` : ago(r.at), r.pct > 0 && r.pct < 97 ? `<div class="bprog"><i style="width:${Math.max(4, Math.round(r.pct))}%"></i></div>` : '')).join('')}</div>` : empty(fid ? 'Nothing yet.' : 'Nothing yet. Press play on something.'))}
 
     <div class="pf-two">
       ${section('Activity', `${num(x.days.size)} days with something on`, heatmap(x.days))}
@@ -160,7 +161,7 @@ export default async function profile(el, params = {}) {
           ${t.languages?.length ? `<h4 class="tz-sub">Languages</h4><div class="tz-chips">${chips(t.languages)}</div>` : ''}
           ${t.decades?.length ? `<h4 class="tz-sub">Eras</h4><div class="tz-chips">${chips(t.decades)}</div>` : ''}</div>
       </div>
-      ${t.favourites?.length ? `<h4 class="tz-sub">Shaping your picks most</h4><div class="tz-favs">${t.favourites.map((f) => `<a href="#/title/${f.type}/${f.imdbId}"><i style="background-image:url('${esc(f.poster)}')"></i><span>${esc(f.title)}</span>${f.rating ? `<em>${'★'.repeat(f.rating)}</em>` : ''}</a>`).join('')}</div>` : ''}`;
+      ${t.favourites?.length ? `<h4 class="tz-sub">Shaping your picks most</h4><div class="pf-row tz-favs">${t.favourites.map((f, i) => posterCard(f, { sub: f.rating ? `<em class="pc-stars">${'★'.repeat(f.rating)}</em>` : '', i })).join('')}</div>` : ''}`;
   }).catch(() => {});
   // release dates and genres come from the catalog, so they arrive a moment later
   (fid ? Promise.resolve({ upcoming: data.upcoming || [], genres: data.genres || [] }) : api('/api/profile/meta')).then((m) => {

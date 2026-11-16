@@ -116,22 +116,38 @@ export function toast(msg, kind = '', opts = {}) {
   const box = $('#toasts'); if (!box) return;
   const el = document.createElement('div');
   el.className = 'toast ' + kind; el.setAttribute('role', kind === 'err' ? 'alert' : 'status');
-  const text = document.createElement('span'); text.textContent = kind === 'err' ? friendly(msg) : String(msg); el.append(text);
-  const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 250); };
+  // a small mark says what kind of message it is: done, a problem, or just so you know
+  const mark = document.createElement('i'); mark.className = 'toast-mark'; mark.innerHTML = icon(kind === 'err' ? 'info' : kind === 'ok' ? 'check' : 'bolt');
+  const text = document.createElement('span'); text.className = 'toast-text'; text.textContent = kind === 'err' ? friendly(msg) : String(msg);
+  el.append(mark, text);
+  const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 260); };
   if (opts.action) {
     const b = document.createElement('button'); b.className = 'toast-act'; b.textContent = opts.action.label;
     b.onclick = () => { close(); opts.action.run(); }; el.append(b); el.classList.add('has-act');
   }
-  box.appendChild(el);
   const ms = opts.ms ?? (opts.action ? 8000 : kind === 'err' ? 6000 : 3800);
+  // a hairline along the bottom runs down while the message stays; it waits while you point at it
+  const bar = document.createElement('b'); bar.className = 'toast-time'; el.append(bar);
+  const run = (d) => { bar.style.animation = 'none'; void bar.offsetWidth; bar.style.animation = `toast-time ${d}ms linear forwards`; };
+  box.appendChild(el); run(ms);
   let t = setTimeout(close, ms);
-  el.onmouseenter = () => clearTimeout(t); el.onmouseleave = () => { t = setTimeout(close, 2500); }; // stays while you read it
+  el.onmouseenter = () => { clearTimeout(t); bar.style.animationPlayState = 'paused'; };
+  el.onmouseleave = () => { t = setTimeout(close, 2500); run(2500); };
   return close;
 }
 
 export const wl = new Set(); // imdb ids on the watchlist, filled at boot
 
 // Poster card. Whole poster links to the title; hover buttons play or save in one click.
+// The poster card from Home, for any page: same size, tilt, lift and hover, as a link to the title.
+// `sub` is the line under the title, `extra` sits on the poster (a progress bar, a badge).
+export function posterCard(it, { sub = '', extra = '', i = 0 } = {}) {
+  const type = it.type === 'tv' ? 'series' : it.type;
+  return `<a class="bc pc" href="#/title/${esc(type)}/${esc(it.imdbId)}" style="--i:${Math.min(i, 24)}" data-id="${esc(it.imdbId)}" data-type="${esc(type)}" data-title="${esc(it.title)}" data-poster="${esc(it.poster || '')}">
+    <div class="bposter"><img class="bimg ld" src="${esc(it.poster || posterOf(it.imdbId))}" alt="" loading="${i < 8 ? 'eager' : 'lazy'}" decoding="async" draggable="false">${extra}</div>
+    <div class="binfo"><h3>${esc(it.title)}</h3>${sub ? `<div class="bmeta"><span>${sub}</span></div>` : ''}</div></a>`;
+}
+
 export function card(item, extra = '') {
   const type = item.type === 'tv' ? 'series' : item.type;
   const href = `#/title/${esc(type)}/${esc(item.imdbId)}`;
