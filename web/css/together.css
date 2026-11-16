@@ -364,3 +364,15 @@ a.fr-link { color: inherit; text-decoration: none; } a.fr-link:hover { text-deco
 .welcome .wl-discord { display: flex; align-items: center; justify-content: center; gap: 10px; background: #5865f2; color: #fff; border: 0; font-weight: 650; }
 .welcome .wl-discord:hover { background: #4752c4; } .welcome .wl-discord svg { width: 20px; height: 20px; }
 .welcome .wl-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; } .welcome .wl-or::before, .welcome .wl-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* invite step spacing: the orb gets room to breathe, the heading block is centred under it, and no empty gaps */
+.welcome .wl-msg:empty { display: none; }
+.welcome .wl-invite { gap: 0; }
+.welcome .wl-invite .wl-steps { margin-bottom: 30px; }
+.welcome .wl-invite .wl-orb { margin-bottom: 30px; }
+.welcome .wl-invite .wl-orb img { width: 84px; height: 84px; }
+.welcome .wl-invite h1 { margin: 0 0 8px; text-align: center; }
+.welcome .wl-invite > p { margin: 0 0 22px; text-align: center; }
+.welcome .wl-invite .wl-code { min-height: 76px; }
+.welcome .wl-invite .wl-msg { margin-top: 12px; }
+.welcome .wl-invite #wgo { margin-top: 18px; }

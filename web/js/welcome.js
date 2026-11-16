@@ -19,7 +19,9 @@ export function welcome(settings, { invite = false, onlyInvite = false } = {}) {
     let saved = settings, step = invite ? 0 : 1;
     const steps = onlyInvite ? [0] : invite ? [0, 1, 2, 3] : [1, 2, 3];
     const dots = () => steps.length < 2 ? '' : `<div class="wl-steps" aria-label="Step ${steps.indexOf(step) + 1} of ${steps.length}">${steps.map((n) => `<i class="${n === step ? 'on' : n < step ? 'done' : ''}"></i>`).join('')}</div>`;
-    const finish = () => { box.remove(); done(saved); };
+    // while setting up, the window header shows only the window controls: no name, Resume or Settings yet
+    document.documentElement.classList.add('onboarding');
+    const finish = () => { box.remove(); document.documentElement.classList.remove('onboarding'); done(saved); };
 
     // ---- 0. the invite ----
     const stepInvite = (msg = '', kind = '') => {
