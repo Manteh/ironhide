@@ -1,7 +1,7 @@
 /* Window header for the Orbie Mac app: sits where the native title bar was (the traffic lights float over its left end). */
 :root { --bar-h: 38px; }
 html:not(.ihp-on) body { padding-top: var(--bar-h); min-height: calc(100vh - var(--bar-h)); }
-#ihbar { position: fixed; top: 0; left: 0; right: 0; height: var(--bar-h); z-index: 9000; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 10px 0 0; background: rgba(10,10,14,.52); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); border-bottom: 1px solid rgba(255,255,255,.07); font: 13px/1 var(--sans, Inter, -apple-system, system-ui, sans-serif); color: var(--text, #f4f4f5); user-select: none; -webkit-user-select: none; -webkit-font-smoothing: antialiased; }
+#ihbar { position: fixed; top: 0; left: 0; right: 0; height: var(--bar-h); z-index: 9000; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 10px 0 0; background: rgba(7, 7, 13, 0.82); -webkit-backdrop-filter: blur(36px) saturate(1.8) brightness(0.92); backdrop-filter: blur(36px) saturate(1.8) brightness(0.92); border-bottom: 1px solid rgba(255,255,255,.08); box-shadow: 0 4px 20px rgba(0,0,0,.4); font: 13px/1 var(--sans, Inter, -apple-system, system-ui, sans-serif); color: var(--text, #f4f4f5); user-select: none; -webkit-user-select: none; -webkit-font-smoothing: antialiased; }
 html.ihp-on #ihbar { display: none; }
 #ihbar .l, #ihbar .r { display: flex; align-items: center; gap: 2px; min-width: 0; }
 #ihbar .l { padding-left: 82px; } /* room for the traffic lights */
@@ -37,3 +37,8 @@ html.ihp-on #ihbar { display: none; }
 #ihmenu svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
 #ihmenu hr { border: 0; height: 1px; background: rgba(255,255,255,.08); margin: 6px 4px; }
 #ihbar button.pill { display: flex; flex-direction: row; align-items: center; white-space: nowrap; }
+
+#ihbar button.btn-sanctuary { padding: 0 4px; }
+#ihbar button.btn-sanctuary .top-orb-img { width: 17px; height: 17px; border-radius: 50%; display: block; filter: drop-shadow(0 0 5px rgba(165, 130, 255, 0.75)); transition: transform .3s cubic-bezier(.34,1.5,.64,1), filter .3s; pointer-events: none; }
+#ihbar button.btn-sanctuary:hover .top-orb-img { transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(185, 150, 255, 1)); }
+#ihbar button.btn-sanctuary.on { background: rgba(255, 255, 255, 0.12); }
