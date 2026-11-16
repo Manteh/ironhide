@@ -18,6 +18,8 @@ let ws = null, link = 'off', backoff = 1000, timer = 0, pingTimer = 0, stopped =
 const S = { directory: false, people: [], you: null, presence: new Map(), incoming: [], outgoing: [], room: null, chat: [], invites: [], offsets: [], watching: null };
 let emit = () => {}, pushTimer = 0;
 export const onSocial = (fn) => { emit = fn; };
+// this Orbie's signing key (the same one friend codes come from), for membership and invites
+export function identity() { if (!data.priv) load(); return { pub: data.pub, priv: data.priv }; }
 
 // ---------- identity + persistence ----------
 function load() {

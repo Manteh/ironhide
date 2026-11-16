@@ -255,3 +255,7 @@ html:not(.ihp-on) .wp:not(:fullscreen) { top: var(--bar-h, 38px); }
 /* the Orbie logo is a rendered image of the sphere */
 img.orb-logo { display: block; width: 26px; height: 26px; transition: transform .5s cubic-bezier(.34,1.5,.64,1); filter: drop-shadow(0 2px 6px rgba(120, 80, 255, .45)); -webkit-user-drag: none; }
 .rlogo:hover img.orb-logo { transform: scale(1.12) rotate(-8deg); }
+/* Settings › Invites */
+.inv-code { width: 100%; margin: 12px 0 10px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; resize: none; }
+.inv-list { display: grid; gap: 6px; } .inv-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; background: var(--surface-2); }
+.inv-row svg { width: 16px; height: 16px; opacity: .7; } .inv-row span { margin-left: auto; color: var(--muted); font-size: 12.5px; }

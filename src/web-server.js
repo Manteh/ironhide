@@ -153,7 +153,8 @@ async function serveStatic(req, res) {
   if (!hostAllowed(req)) { res.writeHead(421); res.end('Unknown host'); return; }
   let urlPath = req.url.split('?')[0];
   if (urlPath === '/') urlPath = '/index.html';
-  if (urlPath === '/favicon.ico') urlPath = '/favicon.svg'; // asked for by every browser, whatever the page says
+  if (urlPath === '/favicon.ico') urlPath = '/favicon.svg';
+  if (urlPath === '/auth/discord') urlPath = '/discord.html'; // where Discord's sign-in sends the browser back (discord-auth.js) // asked for by every browser, whatever the page says
   const filePath = path.join(WEB_DIR, path.normalize(urlPath));
   if (!filePath.startsWith(WEB_DIR + path.sep)) { res.writeHead(403); res.end('Forbidden'); return; }
   const ext = path.extname(filePath);
@@ -375,6 +376,25 @@ async function handleApi(req, res, urlPath) {
     }
 
     if (method === 'GET' && urlPath === '/api/settings') return jsonResponse(res, await getSettings());
+
+    // ---- invites (membership.js) and "Continue with Discord" (discord-auth.js) ----
+    if (urlPath.startsWith('/api/membership')) {
+      const mem = await import('./membership.js');
+      if (method === 'GET' && urlPath === '/api/membership') return jsonResponse(res, mem.status());
+      const body = method === 'POST' ? await parseBody(req) : {};
+      if (method === 'POST' && urlPath === '/api/membership/peek') return jsonResponse(res, mem.peek(body.code));
+      if (method === 'POST' && urlPath === '/api/membership/redeem') { const out = mem.redeem(body.code); return out.ok ? jsonResponse(res, out) : errorResponse(res, out.error, 400); }
+      if (method === 'POST' && urlPath === '/api/membership/invite') {
+        const out = mem.makeInvite({ note: body.note, name: (await getSettings()).profile?.name || '' });
+        return out.error ? errorResponse(res, out.error, 400) : jsonResponse(res, out);
+      }
+    }
+    if (urlPath.startsWith('/api/auth/discord')) {
+      const da = await import('./discord-auth.js');
+      if (method === 'POST' && urlPath === '/api/auth/discord/start') return jsonResponse(res, da.start(WEB_PORT));
+      if (method === 'GET' && urlPath === '/api/auth/discord/status') return jsonResponse(res, da.status(new URL(req.url, 'http://x').searchParams.get('state')));
+      if (method === 'POST' && urlPath === '/api/auth/discord') { try { return jsonResponse(res, await da.complete(await parseBody(req))); } catch (e) { return errorResponse(res, e.message, 400); } }
+    }
     // cast, details and what people think, for the title that is playing (or a given IMDb id)
     if (method === 'GET' && /^\/api\/person\/\d+$/.test(urlPath)) return jsonResponse(res, await getPerson(urlPath.split('/').pop()).catch((e) => ({ error: String(e.message || e) })));
     if (method === 'GET' && /^\/api\/tmdb\/(movie|tv)\/\d+$/.test(urlPath)) { const [, , , kind, tid] = urlPath.split('/'); return jsonResponse(res, await tmdbToImdb(kind, tid).catch((e) => ({ error: String(e.message || e) }))); }

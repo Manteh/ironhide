@@ -1,15 +1,15 @@
 #!/bin/bash
 # Orbie installer.
-#   curl -fsSL https://raw.githubusercontent.com/Manteh/orbie/HEAD/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Manteh/orbie-app/HEAD/install.sh | bash
 # While the repo is private (needs the GitHub CLI, logged in):
-#   gh api repos/Manteh/orbie/contents/install.sh -H "Accept: application/vnd.github.raw" | bash
+#   gh api repos/Manteh/orbie-app/contents/install.sh -H "Accept: application/vnd.github.raw" | bash
 # Downloads the latest release, puts Orbie.app in /Applications (or ~/Applications) and opens it.
 # Everything the app needs (Node, the mpv player, ffmpeg) is inside it: nothing else gets installed.
 # IRONHIDE_DEST=<folder> installs somewhere else; IRONHIDE_NO_OPEN=1 skips opening it.
 set -uo pipefail
 export LC_ALL=en_US.UTF-8
 
-REPO="Manteh/orbie"
+REPO="Manteh/orbie-app"
 
 # ── look ────────────────────────────────────────────────────────────────────
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then

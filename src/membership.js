@@ -1,0 +1,115 @@
+// Orbie is invite only. Membership is a chain of signatures back to the owner, so it needs no server and no database,
+// and it checks offline (the relay on a free plan sleeps and forgets).
+//
+//   invite code  = signed by the person giving it: { by: their key, n: a random id, at: when } + their own proof
+//   proof        = the invite you redeemed + your signature binding your key to it
+//   the chain ends at ROOT (the owner), whose key is built in here
+//
+// Every Orbie already has an Ed25519 key (friend codes come from it); the same key signs invites and acceptances.
+// Limits are kept by each member's own app (3 invites each, the owner has no limit). That keeps strangers out; it is
+// not DRM: someone who rewrites the app could skip the check.
+import { createPrivateKey, createPublicKey, sign, verify, randomBytes } from 'crypto';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import { CONFIG_DIR } from './config.js';
+import { identity } from './social.js';
+
+export const ROOT = process.env.ORBIE_TEST_ROOT || 'vZapy7L6rLm0y8JtWX7lVztwbNnJXC7u0mrL8q_qW5s'; // the owner's public key (raw Ed25519, base64url) // ORBIE_TEST_ROOT: tests only
+export const QUOTA = 3;
+const FILE = join(CONFIG_DIR, 'membership.json');
+const MAX_DEPTH = 24;
+
+const b64u = (b) => Buffer.from(b).toString('base64url');
+const unb64u = (s) => Buffer.from(String(s || ''), 'base64url');
+const SPKI = Buffer.from('302a300506032b6570032100', 'hex'); // DER prefix of an Ed25519 public key
+const pubKey = (raw) => createPublicKey({ key: Buffer.concat([SPKI, unb64u(raw)]), format: 'der', type: 'spki' });
+const rawPub = (spkiB64) => b64u(Buffer.from(spkiB64, 'base64').subarray(12));
+const ok = (raw, msg, sig) => { try { return unb64u(raw).length === 32 && verify(null, Buffer.from(msg), pubKey(raw), unb64u(sig)); } catch { return false; } };
+const ticketMsg = (t) => `orbie-invite|1|${t.by}|${t.n}|${t.at}`;
+const acceptMsg = (t, id) => `orbie-accept|1|${t.n}|${id}`;
+
+function me() {
+  const { pub, priv } = identity();
+  return { id: rawPub(pub), key: createPrivateKey({ key: Buffer.from(priv, 'base64'), format: 'der', type: 'pkcs8' }) };
+}
+function load() { try { return JSON.parse(readFileSync(FILE, 'utf8')); } catch { return {}; } }
+function save(d) { mkdirSync(CONFIG_DIR, { recursive: true }); writeFileSync(FILE, JSON.stringify(d, null, 2), { mode: 0o600 }); }
+
+// is this invite real: signed by its giver, and the giver is a member (all the way back to the owner)?
+function validTicket(t, depth = 0) {
+  if (!t || typeof t !== 'object' || depth > MAX_DEPTH) return false;
+  if (!ok(t.by, ticketMsg(t), t.s)) return false;
+  if (t.by === ROOT) return true;
+  return validProof(t.up, depth + 1) && t.up.id === t.by;
+}
+function validProof(p, depth = 0) {
+  return !!p && typeof p === 'object' && validTicket(p.t, depth) && ok(p.id, acceptMsg(p.t, p.id), p.a);
+}
+
+// Compact binary, so a code stays short enough to paste in a chat: per level, the giver's key (32 bytes), a random id (9),
+// the time (4), a name (1 + up to 40), the signature (64), then the giver's own proof (their key, signature, invite) if any.
+function pack(t) {
+  const name = Buffer.from(String(t.name || '').slice(0, 40), 'utf8').subarray(0, 40);
+  const at = Buffer.alloc(4); at.writeUInt32BE(t.at >>> 0);
+  const head = Buffer.concat([unb64u(t.by), unb64u(t.n), at, Buffer.from([name.length]), name, unb64u(t.s)]);
+  if (!t.up) return Buffer.concat([head, Buffer.from([0])]);
+  return Buffer.concat([head, Buffer.from([1]), unb64u(t.up.id), unb64u(t.up.a), pack(t.up.t)]);
+}
+function unpack(b, o = { i: 0 }, depth = 0) {
+  if (depth > MAX_DEPTH) throw new Error('too deep');
+  const take = (n) => { if (o.i + n > b.length) throw new Error('short'); const x = b.subarray(o.i, o.i + n); o.i += n; return x; };
+  const t = { by: b64u(take(32)), n: b64u(take(9)), at: take(4).readUInt32BE() };
+  t.name = take(take(1)[0]).toString('utf8');
+  t.s = b64u(take(64));
+  if (take(1)[0] === 1) { const id = b64u(take(32)), a = b64u(take(64)); t.up = { id, a, t: unpack(b, o, depth + 1) }; }
+  return t;
+}
+const encode = (t) => 'orbie-' + b64u(pack(t));
+function decode(code) {
+  const raw = String(code || '');
+  // the code may be pasted inside a whole message, or broken over lines by a chat app
+  for (const s of [raw, raw.replace(/\s+/g, '')]) {
+    for (const m of s.matchAll(/orbie-([A-Za-z0-9_-]{100,})/g)) { try { return unpack(unb64u(m[1])); } catch {} }
+  }
+  return null;
+}
+// who gave it: a name travels with the invite (not signed: it is only a label)
+const giver = (t) => (t?.name ? String(t.name).slice(0, 40) : '');
+
+export function status() {
+  const { id } = me(); const d = load();
+  const root = id === ROOT;
+  const member = root || (validProof(d.proof) && d.proof.id === id);
+  const made = d.made || [];
+  return { member, root, invitedBy: member && !root ? giver(d.proof.t) : '', since: d.since || null,
+    quota: root ? null : QUOTA, left: root ? null : Math.max(0, QUOTA - made.length), made: made.map(({ n, at, note }) => ({ n, at, note })) };
+}
+
+// check an invite without using it (the onboarding shows who it is from)
+export function peek(code) {
+  const t = decode(code);
+  if (!t) return { ok: false, error: "That doesn't look like an Orbie invite. Paste the whole code." };
+  if (!validTicket(t)) return { ok: false, error: "This invite isn't valid. Ask for a new one." };
+  return { ok: true, from: giver(t) };
+}
+
+export function redeem(code) {
+  const p = peek(code); if (!p.ok) return p;
+  const t = decode(code), { id, key } = me();
+  if (t.by === id) return { ok: false, error: "That's an invite you made. Send it to a friend instead." };
+  const proof = { t, id, a: b64u(sign(null, Buffer.from(acceptMsg(t, id)), key)) };
+  const d = load(); d.proof = proof; d.since = Date.now(); save(d);
+  return { ok: true, from: p.from };
+}
+
+export function makeInvite({ note = '', name = '' } = {}) {
+  const st = status();
+  if (!st.member) return { error: 'Only members can invite people.' };
+  if (!st.root && st.left <= 0) return { error: `You have used all ${QUOTA} of your invites.` };
+  const { id, key } = me(); const d = load();
+  const t = { by: id, n: b64u(randomBytes(9)), at: Math.floor(Date.now() / 1000), name: String(name || '').slice(0, 40) };
+  t.s = b64u(sign(null, Buffer.from(ticketMsg(t)), key));
+  if (id !== ROOT) t.up = d.proof;
+  (d.made ||= []).push({ n: t.n, at: Date.now(), note: String(note || '').slice(0, 60) }); save(d);
+  return { code: encode(t), left: st.root ? null : st.left - 1 };
+}

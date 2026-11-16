@@ -5,12 +5,12 @@ import { $, $$, esc, icon, avatar, toast, ask, AVATAR_ICONS, AVATAR_COLORS } fro
 
 const SECTIONS = [
   ['profile', 'Profile', 'user'], ['appearance', 'Appearance', 'palette'], ['playback', 'Playback', 'sliders'], ['streams', 'Streams', 'film'],
-  ['connectors', 'Connectors', 'plug'], ['together', 'Friends', 'users'], ['nodes', 'Nodes', 'nodes'], ['updates', 'Updates', 'bolt'], ['about', 'About', 'info'],
+  ['connectors', 'Connectors', 'plug'], ['together', 'Friends', 'users'], ['invites', 'Invites', 'key'], ['nodes', 'Nodes', 'nodes'], ['updates', 'Updates', 'bolt'], ['about', 'About', 'info'],
 ];
 const SUBS = {
   profile: 'Your name and how you look to friends.', appearance: 'Theme, layout and motion.', playback: 'How titles start and which versions are picked.',
   streams: 'Where versions come from and how they are ranked.', connectors: 'Accounts and keys Orbie uses. They stay on this Mac.',
-  together: 'Watch with friends.', nodes: 'Everything Orbie talks to, and whether it answers.', updates: "What's new in each version.", about: 'This install.',
+  together: 'Watch with friends.', invites: 'Orbie is invite only. Bring in people you trust.', nodes: 'Everything Orbie talks to, and whether it answers.', updates: "What's new in each version.", about: 'This install.',
 };
 const seg = (name, opts, cur) => `<div class="seg" data-seg="${name}">${opts.map(([v, l, ic]) => `<button data-v="${v}" class="${String(cur) === String(v) ? 'on' : ''}">${ic ? icon(ic) : ''}${l}</button>`).join('')}</div>`;
 const card = ({ title, desc, body, foot, danger }) => `<section class="scard ${danger ? 'danger' : ''}"><div class="body"><h3>${title}</h3>${desc ? `<p class="desc">${desc}</p>` : ''}${body}</div>${foot ? `<div class="foot">${foot}</div>` : ''}</section>`;
@@ -32,7 +32,7 @@ export default async function settings(el, { section = 'profile' }) {
       <nav class="snav" aria-label="Settings">${SECTIONS.map(([k, l, ic]) => `<a href="#/settings/${k}" class="${k === section ? 'on' : ''}">${icon(ic)}<span>${l}</span></a>`).join('')}</nav></aside>
     <div class="smain"><header class="shead"><h2>${cur[1]}</h2><p>${SUBS[section] || ''}</p></header><div class="scol" id="sbody"></div></div></div></div>`;
   const body = $('#sbody');
-  await ({ profile, appearance, playback, streams, connectors, together: togetherSettings, nodes, updates, about }[section])(body);
+  await ({ profile, appearance, playback, streams, connectors, together: togetherSettings, invites, nodes, updates, about }[section])(body);
 }
 
 // ---------- Profile ----------
@@ -40,6 +40,9 @@ function profile(body) {
   const p = JSON.parse(JSON.stringify(store.settings.profile));
   const draw = () => {
     body.innerHTML =
+      card({ title: 'Discord', desc: 'Use your Discord name and picture. Only those two change: your history, taste, friends and settings stay as they are.',
+        body: `<button class="btn" id="linkDc" style="background:#5865f2;color:#fff;border:0">Link Discord</button>`,
+        foot: '<span>Reads your public profile only. Nothing is posted.</span>' }) +
       card({ title: 'Display name', desc: 'Shown in the menu and the welcome screen.',
         body: `<div class="field"><label for="pname">Name</label><input id="pname" class="input" maxlength="40" value="${esc(p.name)}" style="max-width:340px"></div>`,
         foot: `<span>Up to 40 characters. Saves automatically.</span>${savestat('s1')}` }) +
@@ -48,6 +51,19 @@ function profile(body) {
         foot: `<span>Saves automatically.</span>${savestat('s2')}` });
     const saveName = debounce(() => saveSettings({ profile: { name: p.name } }).then(() => flash(body, 's1')).catch((e) => toast(e.message, 'err')));
     $('#pname', body).oninput = (e) => { p.name = e.target.value; if (p.name.trim()) saveName(); };
+    $('#linkDc', body).onclick = async (e) => { // opens Discord in the browser, then picks up the name and picture
+      const b = e.currentTarget; b.disabled = true; b.textContent = 'Waiting for Discord…';
+      try {
+        const { url, state } = await post('/api/auth/discord/start', {});
+        window.open(url, '_blank');
+        const until = Date.now() + 5 * 60e3;
+        const tick = setInterval(async () => {
+          const st = await api(`/api/auth/discord/status?state=${state}`).catch(() => ({}));
+          if (st.done) { clearInterval(tick); store.settings = await api('/api/settings'); toast(`Linked as ${st.name}`, 'ok'); window.refreshNav?.(); profile(body); }
+          else if ((st.error && st.error !== 'expired') || Date.now() > until || !body.isConnected) { clearInterval(tick); b.disabled = false; b.textContent = 'Link Discord'; if (st.error) toast(st.error, 'err'); }
+        }, 1200);
+      } catch (err) { b.disabled = false; b.textContent = 'Link Discord'; toast(err.message, 'err'); }
+    };
     const saveAv = () => saveSettings({ profile: { avatar: p.avatar } }).then(() => flash(body, 's2')).catch((e) => toast(e.message, 'err'));
     import('../avatar-studio.js').then((m) => m.mountStudio($('#avStudio', body), p.avatar, saveAv, p.name));
     // sign out: on a hosted hub this erases the account; locally it starts over as a new user on this install
@@ -301,6 +317,33 @@ async function togetherSettings(body) {
 }
 
 // ---------- Updates ----------
+// ---------- Invites ----------
+async function invites(body) {
+  const m = await api('/api/membership').catch(() => null);
+  if (!m) { body.innerHTML = card({ title: 'Invites', desc: "Couldn't reach the Orbie service.", body: '' }); return; }
+  const when = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const left = m.root ? 'You can invite as many people as you like.' : `${m.left} of ${m.quota} invites left.`;
+  body.innerHTML =
+    card({ title: 'Invite someone', desc: `Each invite carries your name and works for one person. ${esc(left)}`,
+      body: `<div class="field"><label for="inote">Who is it for? <span style="opacity:.6">(only you see this)</span></label>
+        <input id="inote" class="input" maxlength="60" placeholder="e.g. Alex" style="max-width:340px"></div>
+        <button class="btn primary" id="imake" ${!m.root && !m.left ? 'disabled' : ''}>${icon('key')} Create invite</button>
+        <div id="iout"></div>` }) +
+    card({ title: 'Your membership', desc: m.root ? 'You own this Orbie: every invite traces back to you.' : `Invited by ${esc(m.invitedBy || 'a member')}${m.since ? `, ${when(m.since)}` : ''}.`,
+      body: m.made.length ? `<div class="inv-list">${m.made.slice().reverse().map((x) => `<div class="inv-row">${icon('key')}<b>${esc(x.note || 'Invite')}</b><span>${when(x.at)}</span></div>`).join('')}</div>` : '<p class="desc">No invites created yet.</p>' });
+  $('#imake', body).onclick = async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try {
+      const { code } = await post('/api/membership/invite', { note: $('#inote', body).value.trim() });
+      const msg = `You're invited to Orbie, a private cinema for the people I trust.\nDownload: https://github.com/Manteh/orbie-app\nYour invite: ${code}`;
+      $('#iout', body).innerHTML = `<textarea class="input inv-code" readonly rows="5">${esc(msg)}</textarea><button class="btn" id="icopy">${icon('check')} Copy invite</button>`;
+      const copy = () => navigator.clipboard.writeText(msg).then(() => toast('Invite copied. Send it to them however you like.', 'ok'));
+      $('#icopy', body).onclick = copy; copy();
+      setTimeout(() => invites(body).then(() => { $('#iout', body).innerHTML = `<textarea class="input inv-code" readonly rows="5">${esc(msg)}</textarea>`; }), 50);
+    } catch (err) { toast(err.message, 'err'); b.disabled = false; }
+  };
+}
+
 async function updates(body) {
   const { CHANGELOG } = await import('../changelog.js');
   const when = (iso) => { const d = new Date(iso); return `${d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} at ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`; };

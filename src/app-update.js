@@ -6,7 +6,7 @@ import { mkdirSync, openSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 
-const REPO = 'Manteh/orbie';
+const REPO = 'Manteh/orbie-app';
 const PATH = `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
 let cache = null; // { at, value, viaGh }
 

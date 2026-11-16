@@ -146,12 +146,15 @@ only passes messages between you. **No video ever goes through it.**
 
 ## Getting in
 
-Orbie spreads by invite. If you have one, you also have access to this repository; install with the GitHub CLI
-(it reads the private release for you):
+Download Orbie from the public page, [**Manteh/orbie-app**](https://github.com/Manteh/orbie-app), or paste this into
+Terminal (it installs and opens the app, and running it again updates):
 
 ```bash
-gh api repos/Manteh/orbie/contents/install.sh -H "Accept: application/vnd.github.raw" | bash
+curl -fsSL https://raw.githubusercontent.com/Manteh/orbie-app/HEAD/install.sh | bash
 ```
+
+The first screen asks for an invite. Invites are signed by the person who sends them, all the way back to the owner,
+and every member can pass on three (Settings → Invites).
 
 Then open **Settings → Connectors** and add:
 

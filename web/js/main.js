@@ -277,7 +277,12 @@ document.addEventListener('keydown', (e) => {
   const [settings, list, history] = await Promise.all([api('/api/settings'), api('/api/watchlist').catch(() => []), api('/api/history').catch(() => [])]);
   store.settings = settings; store.history = history; store.watchlist = list; list.forEach((w) => wl.add(w.imdbId));
   applyAppearance(settings.appearance);
-  if (!settings.profile.named) { const { welcome } = await import('./welcome.js'); store.settings = await welcome(settings); }
+  // invite only: no membership yet means the invite comes first (someone already set up only sees that step)
+  const mem = await api('/api/membership').catch(() => ({ member: true }));
+  if (!mem.member || !settings.profile.named) {
+    const { welcome } = await import('./welcome.js');
+    store.settings = await welcome(settings, { invite: !mem.member, onlyInvite: !mem.member && settings.profile.named });
+  }
   matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => applyAppearance(store.settings.appearance));
   $('#app').innerHTML = `<nav id="nav" class="rail" aria-label="Main"></nav><div id="browse" class="hidden"></div><div id="page" class="hidden"></div><div id="np" class="np hidden"></div>`;
   splash(); renderNav(); setupNowPlaying();

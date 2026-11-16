@@ -3,6 +3,9 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { DEFAULT_RELAY } from './relay-default.js';
 
+// Orbie's own TMDB key, so new people only need a debrid key to start (a key of their own in Settings wins).
+const BUILTIN_TMDB = 'a47f1de3154390150544a52e3b9076fe';
+
 export const CONFIG_DIR = process.env.IRONHIDE_HOME || join(homedir(), '.config', 'ironhide');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 
@@ -12,7 +15,7 @@ export function getConfig() {
   try { file = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
   const env = process.env;
   const cfg = {
-    tmdb_api_key: env.TMDB_API_KEY || file.tmdb_api_key || '',
+    tmdb_api_key: env.TMDB_API_KEY || file.tmdb_api_key || BUILTIN_TMDB,
     torbox_api_key: env.TORBOX_API_KEY || file.torbox_api_key || '',
     rd_api_key: env.RD_API_KEY || file.rd_api_key || '',
     ad_api_key: env.AD_API_KEY || file.ad_api_key || '',
