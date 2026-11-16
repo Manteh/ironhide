@@ -345,6 +345,7 @@ impl Ambient {
         // 4x4 boxes -> 40x22; OpenGL rows start at the bottom
         let (ow, oh) = (AW / 4, AH / 4);
         let mut hex = String::with_capacity((ow * oh * 6) as usize);
+        const HEX: &[u8; 16] = b"0123456789abcdef";
         for oy in (0..oh).rev() {
             for ox in 0..ow {
                 let mut c = [0u32; 3];
@@ -352,7 +353,11 @@ impl Ambient {
                     let i = (((oy * 4 + dy) * AW + ox * 4 + dx) * 4) as usize;
                     for k in 0..3 { c[k] += self.buf[i + k] as u32; }
                 } }
-                for k in 0..3 { hex.push_str(&format!("{:02x}", c[k] / 16)); }
+                for k in 0..3 {
+                    let v = (c[k] / 16) as usize;
+                    hex.push(HEX[(v >> 4) & 0xf] as char);
+                    hex.push(HEX[v & 0xf] as char);
+                }
             }
         }
         Some((hex, top as f64 / AH as f64, bot as f64 / AH as f64))
@@ -523,7 +528,7 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
                     if ATTACHED.load(Ordering::Relaxed) {
                         gl.makeCurrentContext();
                         if rc.render::<()>(0, w, h, true).is_ok() {
-                            if AMBI.load(Ordering::Relaxed) && amb_at.elapsed() >= Duration::from_millis(50) {
+                            if AMBI.load(Ordering::Relaxed) && amb_at.elapsed() >= Duration::from_millis(25) {
                                 amb_at = Instant::now();
                                 if amb.is_none() { amb = Ambient::new(); }
                                 if let Some((hx, bt, bb)) = amb.as_mut().and_then(|a| a.sample(w, h)) { js(&app_r, &format!("window.__ihp&&window.__ihp.amb('{hx}',{},{},{bt:.4},{bb:.4})", AW / 4, AH / 4)); }

@@ -619,6 +619,13 @@
   //    on a scene cut. Moving or resizing the picture redraws it at once.
   //  - nothing runs when the picture fills the screen (there is no black to light).
   const ambCv = q('.ihp-amb'), ambCtx = ambCv.getContext('2d');
+  const HEX_LOOKUP = new Uint8Array(65536);
+  for (let i = 0; i < 256; i++) {
+    const s = i.toString(16).padStart(2, '0');
+    HEX_LOOKUP[(s.charCodeAt(0) << 8) | s.charCodeAt(1)] = i;
+    const S = s.toUpperCase();
+    HEX_LOOKUP[(S.charCodeAt(0) << 8) | S.charCodeAt(1)] = i;
+  }
   let ambOn = (() => { try { return localStorage.getItem('ihp.amb') === '1'; } catch { return false; } })(); // the setting from the server replaces this when the player opens
   // your light settings (Picture panel), kept on this Mac
   const AMBS = (() => {
@@ -779,7 +786,8 @@
     A.raf = 0;
     if (!A.tgt || !A.cur || !ambActive()) return;
     const dt = Math.min(0.1, (now - A.last) / 1000); A.last = now;
-    const kk = 1 - Math.exp(-dt / (A.cut ? 0.05 : 0.16));
+    const tau = A.cut ? 0.02 : 0.045;
+    const kk = 1 - Math.exp(-dt / tau);
     const { cur, tgt, img } = A, d = img.data; let moving = 0;
     const dimTo = b('pause') ? 0.4 : 1; A.dim += (dimTo - A.dim) * (1 - Math.exp(-dt / 0.6)); const dm = A.dim;
     for (let i = 0, j = 0; i < cur.length; i += 3, j += 4) {
@@ -791,11 +799,11 @@
     // the cut-out glides to a new size or place (e.g. once the bars are known) instead of jumping
     let holeMoving = 0;
     if (A.hole && A.holeTgt) {
-      const hk = 1 - Math.exp(-dt / 0.14);
+      const hk = 1 - Math.exp(-dt / 0.08);
       for (const key of ['x0', 'y0', 'x1', 'y1']) { const d0 = A.holeTgt[key] - A.hole[key]; A.hole[key] += d0 * hk; holeMoving = Math.max(holeMoving, Math.abs(d0)); }
       A.hole.W = A.holeTgt.W; A.hole.H = A.holeTgt.H; clipHole();
     }
-    if (moving > 0.6 || holeMoving > 0.3 || Math.abs(dimTo - A.dim) > 0.01) A.raf = requestAnimationFrame(ambTick); else A.cut = false;
+    if (moving > 0.4 || holeMoving > 0.3 || Math.abs(dimTo - A.dim) > 0.01) A.raf = requestAnimationFrame(ambTick); else A.cut = false;
   }
 
   const drawAmb = () => ambSync(); // geometry changed (frame, full screen, window size)
@@ -903,7 +911,11 @@
       //    smallest size seen at least 10 times -- a one-off reading never counts;
       //  - it's applied once (one smooth glide) and remembered for the film, so a resume starts cropped with no change.
       if (!A.barLocked) {
-        let l = 0; const nn = Math.min(hex.length / 2, w * h * 3); for (let i = 0; i < nn; i += 7) l += parseInt(hex.substr(i * 2, 2), 16);
+        let l = 0; const nn = Math.min(hex.length / 2, w * h * 3);
+        for (let i = 0; i < nn; i += 7) {
+          const p = i << 1;
+          l += HEX_LOOKUP[(hex.charCodeAt(p) << 8) | hex.charCodeAt(p + 1)];
+        }
         const r = videoRect(), whole = r.x >= -1 && r.y >= -1 && r.x + r.w <= r.W + 1 && r.y + r.h <= r.H + 1;
         if (whole && l / (nn / 7) > 18) {
           // ...and in at least 3 different scenes, so one long static shot (a dark opening) can't decide it
@@ -917,11 +929,32 @@
         }
       }
       const n3 = w * h * 3, src = new Float32Array(n3);
-      for (let i = 0; i < n3; i++) src[i] = parseInt(hex.substr(i * 2, 2), 16);
-      // a scene cut: the whole picture changed, so the light should follow quickly instead of easing
-      if (A.src && A.src.length === n3) { let d = 0; for (let i = 0; i < n3; i++) d += Math.abs(src[i] - A.src[i]); if (d / n3 > 28) { A.cut = true; A.scene++; } }
+      for (let i = 0; i < n3; i++) {
+        const p = i << 1;
+        src[i] = HEX_LOOKUP[(hex.charCodeAt(p) << 8) | hex.charCodeAt(p + 1)];
+      }
+
+      let diff = 0;
+      if (A.src && A.src.length === n3) {
+        let d = 0;
+        for (let i = 0; i < n3; i++) d += Math.abs(src[i] - A.src[i]);
+        diff = d / n3;
+      }
+
+      // Hard cut (major scene transition or lighting shift): snap immediately to match the video cut
+      // Medium cut (angle switch, lighting change): ease quickly (~25-35ms)
+      const isHardCut = diff >= 13;
+      const isMedCut = diff >= 5.5;
+
+      if (isMedCut) {
+        A.cut = true;
+        A.scene++;
+      } else if (diff < 2.5) {
+        A.cut = false;
+      }
+
       A.src = src; A.sw = w; A.sh = h;
-      ambBuild();
+      ambBuild(isHardCut);
     },
     state(s) {
       const geo = 'video-params/aspect' in s || 'width' in s || 'height' in s || 'video-aspect-override' in s;
