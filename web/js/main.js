@@ -246,27 +246,6 @@ async function navigate() {
 async function refreshNodes() { try { store.nodes = await api('/api/nodes'); renderNav(); } catch {} }
 window.refreshNodes = refreshNodes;
 
-function splash() {
-  const g = $('#gate');
-  if (!g) return;
-  if (sessionStorage.getItem('ih-in')) return g.remove();
-  sessionStorage.setItem('ih-in', '1');
-  const name = esc(store.settings?.profile?.name || 'SHIMARA');
-  g.innerHTML = `
-    <div class="gate-content">
-      <div class="gate-orb-wrap">
-        <img class="gate-orb" src="/img/orbie-orb.png" alt="" width="68" height="68" decoding="async">
-      </div>
-      <b>Welcome back, ${name}</b>
-      <span>Private access</span>
-    </div>
-  `;
-  setTimeout(() => {
-    g.classList.add('out');
-    setTimeout(() => g.remove(), 700);
-  }, 1300);
-}
-
 route('/', 'browse', 'home');
 route('/feed/:feed', 'browse', 'feed');
 route('/continue', 'browse', 'continue');
@@ -300,7 +279,7 @@ document.addEventListener('keydown', (e) => {
   }
   matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => applyAppearance(store.settings.appearance));
   $('#app').innerHTML = `<nav id="nav" class="rail" aria-label="Main"></nav><div id="browse" class="hidden"></div><div id="page" class="hidden"></div><div id="np" class="np hidden"></div>`;
-  splash(); renderNav(); setupNowPlaying();
+  renderNav(); setupNowPlaying();
   window.pollRemote = pollRemote; setInterval(pollRemote, 2000); pollRemote();
   connectSocial();
   import('./roomplay.js').then((m) => m.watchRoom());
@@ -316,4 +295,7 @@ document.addEventListener('keydown', (e) => {
   import('./cursor.js').then((m) => m.initCursor());
   window.addEventListener('hashchange', navigate);
   navigate(); refreshNodes(); setInterval(refreshNodes, 30000);
+  // first time in: the manifesto, full screen, once (after the welcome-back moment)
+  let seenManifesto = true; try { seenManifesto = !!localStorage.getItem('orbie.manifesto.seen'); } catch {}
+  if (!seenManifesto) setTimeout(() => import('./pages/manifesto.js').then((m) => m.openManifesto({ first: true })).catch(() => {}), 2100);
 })();
