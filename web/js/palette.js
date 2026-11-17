@@ -13,6 +13,7 @@ const COMMANDS = [
   ['Continue watching', '#/continue', 'bookmark'], ['Movies', '#/feed/trending_movies', 'film'], ['Series', '#/feed/trending_shows', 'tv'],
   ['Popular', '#/feed/popular_movies', 'film'], ['Most watched', '#/feed/watched_weekly', 'film'], ['Upcoming', '#/feed/anticipated', 'film'], ['Box office', '#/feed/boxoffice', 'film'],
   ['Taste Lab: rate and compare', '#/taste', 'heart'], ['Your taste and profile', '#/profile', 'user'], ['Open settings', '#/settings/profile', 'user'], ['Playback preferences', '#/settings/playback', 'sliders'], ['Open connectors', '#/settings/connectors', 'plug'],
+  ['A Sanctuary for Cinema: The Manifesto', '#/manifesto', 'film'],
   // every Settings section by name, and the words people use for what's in it
   ['Settings: Profile (name, avatar)', '#/settings/profile', 'user'], ['Settings: Appearance (theme, accent, posters)', '#/settings/appearance', 'palette'],
   ['Settings: Playback (player, next episode, skip intro)', '#/settings/playback', 'sliders'], ['Settings: Streams (quality, languages, sizes)', '#/settings/streams', 'film'],
@@ -115,7 +116,7 @@ export function openPalette(prefill = '', opts = {}) {
     if (rt.length) html += `<section><h5>Jump back in</h5><div class="sx-strip">${rt.slice(0, 8).map((r) => { items.push({ kind: 'title', r }); return `<div class="sx-card" data-i="${items.length - 1}"><i style="background-image:url('${esc(r.poster || posterOf(r.imdbId))}')"></i><b>${esc(r.title)}</b><small>${esc(r.year || '')}</small></div>`; }).join('')}</div></section>`;
     html += `<section><h5>Try</h5><div class="sx-recent">${TRY.map((q) => { items.push({ kind: 'try', q }); return `<span class="sx-rq try" data-i="${items.length - 1}">${icon('search')}${esc(q)}</span>`; }).join('')}</div></section>`;
     html += `<section><h5>Go to</h5><div class="sx-cmds">${cmds.map((c) => { items.push(c); return `<div class="sx-cmd" data-i="${items.length - 1}">${icon(c.ic)}<span>${esc(c.label)}</span></div>`; }).join('')}</div></section>`;
-    out.innerHTML = html; sel = 0; paint(); bind();
+    out.__h = ''; out.innerHTML = html; sel = 0; paint(); bind();
     $$('[data-x]', out).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); forgetQ(b.dataset.x); home(); }));
   }
 
@@ -145,12 +146,15 @@ export function openPalette(prefill = '', opts = {}) {
     const pplHtml = ppl.map((p) => { items.push({ kind: 'person', p }); return `<div class="sx-pr" data-i="${items.length - 1}"><i style="background-image:url('${esc(p.photo)}')"></i><b>${mark(p.name, hq)}</b><small>${esc(p.dept)}</small></div>`; }).join('');
     const cmdHtml = cmds.map((c) => { items.push(c); return `<div class="sx-cmd" data-i="${items.length - 1}">${icon(c.ic)}<span>${esc(c.label)}</span></div>`; }).join('');
     const label = data?.intent?.label;
-    out.innerHTML = (label ? `<div class="sx-intent">${icon('sliders')} ${esc(label)}</div>` : '')
+    const htmlNow = (label ? `<div class="sx-intent">${icon('sliders')} ${esc(label)}</div>` : '')
       + (topHtml || listHtml ? `<div class="sx-grid">${topHtml ? `<div class="sx-l">${topHtml}</div>` : ''}<div class="sx-r">${listHtml ? `<section><h5>${data?.personFirst ? 'Titles' : 'More results'}</h5><div class="sx-list">${listHtml}</div></section>` : ''}${pplHtml ? `<section><h5>People</h5><div class="sx-people">${pplHtml}</div></section>` : ''}</div></div>` : '')
       + (cmdHtml ? `<section><h5>Go to</h5><div class="sx-cmds">${cmdHtml}</div></section>` : '')
       + (!items.length ? (pending ? '<div class="sx-empty">Searching…</div>' : `<div class="sx-empty">Nothing for “${esc(q)}”. Try fewer words, or something like “${esc(TRY[Math.floor(Math.random() * TRY.length)])}”.</div>`) : '');
-    sel = Math.min(sel, Math.max(0, items.length - 1)); paint(); bind();
-    fillApart();
+    sel = Math.min(sel, Math.max(0, items.length - 1));
+    out.classList.remove('stale');
+    // only touch the page when the answer is actually different: rebuilding identical results is what made posters blink
+    if (out.__h !== htmlNow) { out.__h = htmlNow; out.innerHTML = htmlNow; bind(); }
+    paint(); fillApart();
   }
   const castCache = new Map();
   function fillApart() {
@@ -165,9 +169,11 @@ export function openPalette(prefill = '', opts = {}) {
 
   async function run(now = false) {
     const q = input.value.trim(), sq = override || q, id = ++my;
-    if (!q) { ctrl?.abort(); spin.hidden = true; override = ''; home(); return; }
+    if (!q) { ctrl?.abort(); spin.hidden = true; override = ''; last = null; out.classList.remove('stale'); home(); return; }
     if (cache.has(sq.toLowerCase())) { last = cache.get(sq.toLowerCase()); spin.hidden = true; render(q, last, false); return; }
-    render(q, null, true); // instant: local matches while the server works
+    // First letters: show what this device already knows at once. After that, keep the results on screen (a touch dimmer)
+    // until the new answer is here, instead of swapping them for a thinner list and back again on every key.
+    if (last) out.classList.add('stale'); else render(q, null, true);
     clearTimeout(timer);
     timer = setTimeout(async () => {
       ctrl?.abort(); ctrl = new AbortController(); spin.hidden = false;

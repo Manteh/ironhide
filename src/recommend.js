@@ -143,6 +143,21 @@ export function tasteHint(genreNames = [], lang = '') { if (!lastProf) return 0;
 export const GENRES = GENRE_IDS;
 export { canonGenres };
 export async function warmProfile() { if (!lastProf) await buildProfile().catch(() => {}); }
+// Which titles belong to the same franchise: a TMDB collection, or a two-word phrase shared by two or more of your titles ("dark knight").
+function franchiseMap(titleFeats) {
+  const bg = new Map();
+  for (const f of titleFeats.values()) for (const g of new Set(bigrams(f.title))) bg.set(g, (bg.get(g) || 0) + 1);
+  const of = new Map(), counts = new Map();
+  for (const [id, f] of titleFeats) {
+    let key = f.collection ? `c:${f.collection}` : null;
+    if (!key) { const shared = bigrams(f.title).filter((g) => (bg.get(g) || 0) >= 2).sort((a, b) => bg.get(b) - bg.get(a))[0]; if (shared) key = `b:${shared}`; }
+    of.set(id, key); if (key) counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return { of, counts };
+}
+// every franchise key a title could be known by (to match a candidate against franchises you like or dislike)
+const franchiseKeys = (f) => [f.collection ? `c:${f.collection}` : null, ...bigrams(f.title).map((g) => `b:${g}`)].filter(Boolean);
+
 async function buildProfile() {
   const { sig, taste, hist, shelf } = await signals();
   const ids = [...sig.keys()].sort((a, b) => Math.abs(sig.get(b).w) - Math.abs(sig.get(a).w)).slice(0, 80);
@@ -151,9 +166,12 @@ async function buildProfile() {
     await Promise.all(ids.slice(i, i + 8).map(async (id) => { try { const f = await featuresByImdb(id); if (f) titleFeats.set(id, f); } catch {} }));
   }
   const acc = new Map(); // feature -> { sum, n, pos }
+  // Six Transformers films are one franchise, not six separate pieces of evidence: each title counts for 1/sqrt(size of its franchise),
+  // so a long series can't make its cast, themes and director look like your whole taste.
+  const { of: frOf, counts: frN } = franchiseMap(titleFeats);
   for (const [id, f] of titleFeats) {
-    const w = sig.get(id).w;
-    for (const k of featureKeys(f)) { const a = acc.get(k) || { sum: 0, n: 0, pos: 0 }; a.sum += w; a.n++; if (w > 0.3) a.pos++; acc.set(k, a); }
+    const w = sig.get(id).w, fk = frOf.get(id), share = fk ? 1 / Math.sqrt(frN.get(fk)) : 1;
+    for (const k of featureKeys(f)) { const a = acc.get(k) || { sum: 0, n: 0, pos: 0 }; a.sum += w * share; a.n += share; if (w > 0.3) a.pos += share; acc.set(k, a); }
   }
   // how distinctive a feature is: "Drama" is on half of everything, "folk horror" isn't (inverse document frequency)
   const N = titleFeats.size || 1, idf = new Map();
@@ -163,21 +181,32 @@ async function buildProfile() {
   for (const [k, a] of acc) {
     // genres and form settle quickly; themes and people need repeated evidence (one show's voice cast is not a taste)
     const shrink = 'gtld'.includes(k[0]) ? 1.5 : a.pos >= 2 ? 2.5 : 6;
-    prof.set(k, a.sum / (a.n + shrink));
+    // dislikes register a little faster than likes: people know what they don't want sooner than what they do
+    prof.set(k, a.sum / (a.n + (a.sum < 0 ? shrink * 0.65 : shrink)));
   }
   lastProf = prof; lastIdf = { idf, maxIdf };
   return { prof, sig, titleFeats, taste, hist, shelf, acc };
 }
 
 function affinity(prof, f) {
-  let s = 0, wsum = 0, best = null;
+  let s = 0, wsum = 0, best = null, worst = 0;
   for (const k of featureKeys(f)) {
     const id = lastIdf.idf.get(k), rare = id ? 0.55 + 0.9 * (id / lastIdf.maxIdf) : 1;
     const kw = (KIND_W[k[0]] || 0.5) * rare, v = prof.get(k) || 0;
-    s += v * kw; wsum += kw;
+    // a dislike weighs more than an equal like: what you avoid is a stronger signal than what you merely enjoy
+    s += (v < 0 ? v * 1.5 : v) * kw; wsum += kw;
     if (v > 0.12 && (!best || v * kw > best.v)) best = { k, v: v * kw };
+    if (v < 0 && v * kw < worst && 'gkm'.includes(k[0])) worst = v * kw; // the single strongest thing it has that you tend to avoid
   }
-  return { a: wsum ? s / Math.sqrt(wsum) : 0, best };
+  return { a: wsum ? s / Math.sqrt(wsum) : 0, best, worst };
+}
+// person ids for "more from filmmakers you like" (names in, TMDB ids out, remembered for the session)
+const personIds = new Map();
+async function personId(name) {
+  if (personIds.has(name)) return personIds.get(name);
+  let id = 0;
+  try { const r = (await getJson(`${TMDB}/search/person?api_key=${key()}&query=${encodeURIComponent(name)}`)).results || []; id = (r.find((p) => p.known_for_department === 'Directing') || r[0])?.id || 0; } catch {}
+  personIds.set(name, id); return id;
 }
 const bayes = (vote, votes) => (votes * vote + 300 * 6.6) / (votes + 300); // pulls few-vote ratings toward the average
 
@@ -203,8 +232,12 @@ const bigrams = (t) => { const w = words(t); const out = []; for (let i = 0; i <
 export async function recommend({ seed = 0, limit = 48 } = {}) {
   if (!key()) return [];
   if (cache.out && cache.seed === seed && Date.now() - cache.at < 10 * 60e3) return cache.out;
-  const { prof, sig, titleFeats } = await buildProfile();
+  const { prof, sig, titleFeats, acc } = await buildProfile();
   const R = rnd(Number(seed) + 7), st = await stats();
+  // franchises you turned down (or rated low) as a whole, and the ones you love: a sequel of something you said no to is not a good guess,
+  // unless you also love other entries of it
+  const negFran = new Set(), posFran = new Set();
+  for (const [id, f] of titleFeats) { const w = sig.get(id)?.w || 0; const set = w <= -0.5 ? negFran : w >= 0.5 ? posFran : null; if (set) franchiseKeys(f).forEach((k) => set.add(k)); }
   const exclude = new Set([...sig.keys()]);
   const seen = new Set([...titleFeats.values()].map((f) => `${f.kind}:${f.tmdbId}`));
   const today = new Date().toISOString().slice(0, 10), thisYear = new Date().getFullYear();
@@ -226,6 +259,12 @@ export async function recommend({ seed = 0, limit = 48 } = {}) {
     const id = gid(g, kind); if (!id) return;
     for (const it of await listPage(`${TMDB}/discover/${kind}?api_key=${key()}&with_genres=${id}&sort_by=vote_count.desc&vote_average.gte=7&page=${1 + Math.floor(R() * 3)}`)) add(kind, it, null, `genre:${g}`);
   })));
+  // filmmakers you keep coming back to (directors with at least two titles you rated well): their best known work you haven't seen
+  const topMakers = [...prof.entries()].filter(([k, v]) => k.startsWith('m:') && v > 0.1 && (acc.get(k)?.pos || 0) >= 1.5).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k.slice(2));
+  await Promise.all(topMakers.map(async (name) => {
+    const pid = await personId(name); if (!pid) return;
+    for (const it of await listPage(`${TMDB}/discover/movie?api_key=${key()}&with_people=${pid}&sort_by=vote_count.desc`)) add('movie', it, null, `maker:${name}`);
+  }));
   for (const kind of ['movie', 'tv']) for (const it of await listPage(`${TMDB}/trending/${kind}/week?api_key=${key()}`)) add(kind, it, null, 'trending');
   // discovery: acclaimed titles in genres you haven't shown much interest in (but don't dislike)
   const quiet = Object.entries(GENRE_IDS).filter(([id, n]) => +id < 10000 && !['Documentary', 'Music', 'TV Movie'].includes(n) && Math.abs(prof.get(`g:${n}`) || 0) < 0.12).map(([id]) => id);
@@ -254,14 +293,19 @@ export async function recommend({ seed = 0, limit = 48 } = {}) {
       try {
         const f = await featuresByTmdb(p.kind, p.id);
         if (!f.imdbId || exclude.has(f.imdbId)) return;
-        const { a, best } = affinity(prof, f);
+        let { a, best, worst } = affinity(prof, f);
         const qb = bayes(f.vote, f.votes);
+        const fk = franchiseKeys(f);
+        const fNeg = fk.some((k) => negFran.has(k) && !posFran.has(k));
         // quality floor: obscure or poorly rated titles only get through on a very strong taste match
-        if ((f.votes < 250 || qb < 6.5) && a < 0.55) return;
+        if ((f.votes < 400 || qb < 6.6) && a < 0.6) return;
+        // a franchise you turned down, or a genre/theme you reliably avoid, is a near veto
+        if (fNeg && a < 0.9) return;
+        if (worst < -0.35 && a < 0.7) return;
         const fromW = p.from.reduce((s2, x) => s2 + Math.max(0, x.w), 0);
         const fresh = f.year && +f.year >= thisYear - 1 ? 0.12 : 0;
         const x = st[f.imdbId]; const fb = x ? (x.opened ? 0.12 : -Math.min(0.4, 0.08 * Math.max(0, x.shown - 2))) : 0;
-        const score = 1.0 * a + 0.5 * Math.min(1.6, fromW) + 0.55 * ((qb - 6) / 3) + fresh + fb + (R() - 0.5) * 0.12;
+        const score = 1.0 * a + 0.5 * Math.min(1.6, fromW) + 0.7 * ((qb - 6) / 3) + fresh + fb + (worst < 0 ? worst * 0.8 : 0) - (fNeg ? 0.5 : 0) + (p.src.startsWith('maker:') ? 0.25 : 0) + (R() - 0.5) * 0.12;
         const fw = words(f.title); const fran = f.collection ? `c:${f.collection}` : bigrams(f.title).find((g) => knownBigrams.has(g)) || (fw[0] && fw[0].length > 3 ? `w:${fw[0]}` : bigrams(f.title)[0]) || f.imdbId;
         scored.push({ f, p, score, best, a, qb, fran, explore: p.src === 'explore' && a < 0.35 });
       } catch {}
@@ -289,6 +333,7 @@ export async function recommend({ seed = 0, limit = 48 } = {}) {
     let why;
     if (explore) why = `Something different: acclaimed ${f.genres[0] || 'pick'}`;
     else if (fav && fav.w > 0.45) why = fav.rated >= 5 ? `Because you loved ${fav.title}` : `Because you liked ${fav.title}`;
+    else if (p.src?.startsWith('maker:')) why = `More from ${p.src.slice(6)}`;
     else if (best?.k.startsWith('m:')) why = `From ${best.k.slice(2)}`;
     else if (best?.k.startsWith('p:')) why = `With ${best.k.slice(2)}`;
     else if (best?.k.startsWith('k:')) why = `For your love of ${best.k.slice(2)}`;

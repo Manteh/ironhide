@@ -652,8 +652,9 @@ export async function openDossier({ type, id }) {
     s.pack ? '<span class="badge">Season pack</span>' : '',
     s.cached ? '' : '<span class="badge warn">Download</span>',
   ].filter(Boolean).slice(0, max).join('');
-  const headline = (s) => [s.source, s.codec, s.tenbit ? '10-bit' : ''].filter(Boolean).join(' · ') || (s.group ? `Release by ${s.group}` : 'Stream');
-  const plain = (s) => [langLine(s), s.audio && !s.audio.includes(' sound') ? '' : s.audio, s.service, s.fixes].filter(Boolean).join(' · ');
+  const specTitle = (s) => [tierLabel(s.resolution), s.source, s.codec, (s.hdr || []).join(' '), s.audio, s.size].filter(Boolean).join(' · ') || 'Stream';
+  const headline = (s) => [s.source, s.codec, s.tenbit ? '10-bit' : ''].filter(Boolean).join(' · ') || 'Stream';
+  const plain = (s) => [langLine(s), s.audio && !s.audio.includes(' sound') ? '' : s.audio, s.service].filter(Boolean).join(' · ');
   // near-identical copies (same picture, sound, language, size) become one row; the best-seeded working copy plays
   function grouped(list) {
     const m = new Map();
@@ -789,9 +790,9 @@ export async function openDossier({ type, id }) {
             <span class="vx3-why">${reasons.map((r) => `<span>${icon('check')}${esc(r)}</span>`).join('')}</span></div>
         </div>
         <div class="vx3-meta"><b>${esc(rec.size || '')}</b>${seedBars(rec.seeds)}</div>
-        <button class="btn primary vx3-play" data-p="${rec.index}" title="${esc(rec.quality)}">${icon('play')} Play</button>
+        <button class="btn primary vx3-play" data-p="${rec.index}" title="${esc(specTitle(rec))}">${icon('play')} Play</button>
       </div>
-      ${pk.length ? `<div class="vx3-alts">${pk.map(({ s, labels, why: w, ic }) => `<button class="vx-pick vx3-alt" data-p="${s.index}" title="${esc(s.quality)}">
+      ${pk.length ? `<div class="vx3-alts">${pk.map(({ s, labels, why: w, ic }) => `<button class="vx-pick vx3-alt" data-p="${s.index}" title="${esc(specTitle(s))}">
         <span class="vx3-al">${icon(ic)}${esc(labels.join(' · '))}</span>
         <span class="vx3-av"><i class="vx2-q sm ${qcls(s)}">${esc(tierLabel(s.resolution))}</i><b>${esc(headline(s))}</b></span>
         <small>${esc(w)}</small></button>`).join('')}</div>` : ''}
@@ -801,8 +802,8 @@ export async function openDossier({ type, id }) {
         ${fl.map(([k, l]) => `<button data-f="${k}" class="vx-f tog ${st.f.has(k) ? 'on' : ''}">${st.f.has(k) ? icon('check') : ''}${l}</button>`).join('')}</div>
       <div class="vx2-table">
         <div class="vx2-hd">${sortHead('best', 'Version', 'c-v')}<span class="vx2-th c-p">Picture</span><span class="vx2-th c-s">Sound</span><span class="vx2-th c-l">Language</span>${sortHead('size', 'Size', 'c-z')}${sortHead('seeds', 'Seeders', 'c-d')}<span class="c-a"></span></div>
-        ${shown.length ? shown.map((x) => `<div class="vx-opt vx2-row ${x.broken ? 'broken' : ''}" title="${esc(x.quality)}" ${x.broken ? '' : `data-p="${x.index}" role="button" tabindex="0"`}>
-          <span class="c-v"><i class="vx2-q sm ${qcls(x)}">${esc(tierLabel(x.resolution))}</i><span class="vx2-src"><b>${esc([x.source, x.codec].filter(Boolean).join(' · ') || 'Stream')}</b><small>${esc([x.service, x.group, x.fixes, x.pack ? 'season pack' : '', x.copies > 1 ? `${x.copies} sources` : ''].filter(Boolean).join(' · '))}</small></span></span>
+        ${shown.length ? shown.map((x) => `<div class="vx-opt vx2-row ${x.broken ? 'broken' : ''}" title="${esc(specTitle(x))}" ${x.broken ? '' : `data-p="${x.index}" role="button" tabindex="0"`}>
+          <span class="c-v"><i class="vx2-q sm ${qcls(x)}">${esc(tierLabel(x.resolution))}</i><span class="vx2-src"><b>${esc([x.source, x.codec].filter(Boolean).join(' · ') || 'Stream')}</b><small>${esc([x.service, x.pack ? 'season pack' : '', x.copies > 1 ? `${x.copies} sources` : ''].filter(Boolean).join(' · '))}</small></span></span>
           <span class="c-p">${pic(x)}</span><span class="c-s">${snd(x)}</span><span class="c-l">${lang(x)}</span>
           <span class="c-z">${sizeCell(x)}</span><span class="c-d">${seedBars(x.seeds)}</span>
           <span class="c-a">${x.broken ? '<span class="badge warn" title="The debrid server refused this one. It gets another chance in 30 minutes.">Not working</span>' : `<span class="vx2-go">${icon('play')}</span>`}</span></div>`).join('') : '<div class="note" style="padding:18px 4px">Nothing matches these filters.</div>'}

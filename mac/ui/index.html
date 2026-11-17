@@ -71,15 +71,12 @@ void main() {
   float d = length(q);
   float dpx = length(p - uC);
 
-  // the room: near-black with a violet haze around the orb, and a little dust in the light
+  // the room: near-black with a violet haze around the orb
   vec3 bg = vec3(0.027, 0.027, 0.05);
   float out1 = max(d - 1.0, 0.0);
   bg += vec3(0.42, 0.28, 1.0) * exp(-out1 * 2.4) * 0.32 * uGlow;
   bg += vec3(0.75, 0.2, 0.65) * exp(-out1 * 0.7) * 0.07 * uGlow;
   bg += vec3(0.25, 0.2, 0.6) * exp(-dpx / (uRes.y * 0.55)) * 0.06;
-  vec2 cell = floor(p / 3.0);
-  float star = step(0.9975, hash2(cell)) * (0.5 + 0.5 * sin(uT * 2.0 + hash2(cell + 7.0) * 30.0));
-  bg += star * 0.22 * exp(-dpx / (uRes.y * 0.5));
 
   // the shockwave: a thin ring of light that splits into colours as it travels
   float w = max(uR * 0.05, 3.0);
@@ -131,7 +128,6 @@ void main() {
 
   col = 1.0 - exp(-col * 1.3);                       // filmic roll-off: bright stays bright without clipping
   col = mix(vec3(0.027, 0.027, 0.051), col, uFade);  // fade to the cosmic midnight background
-  col += (hash2(p + fract(uT)) - 0.5) / 255.0;       // dither: no banding in the dark gradients
   gl_FragColor = vec4(col, 1.0);
 }
 </script>
@@ -141,6 +137,10 @@ void main() {
   [...'rbie'].forEach((ch) => { const s = document.createElement('span'); s.textContent = ch; rest.appendChild(s); });
   const letters = [...rest.children];
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // First launch only: instead of dissolving, the orb glides to where the manifesto's orb sits and the manifesto takes over from there.
+  const FIRST = (() => { try { return !localStorage.getItem('ihIntro4'); } catch { return false; } })();
+  const GLIDE = 800;
+  const heroTarget = () => { const small = W <= 700, css = small ? 240 : 340; return { cx: W / 2, cy: Math.max(56 + css / 2, H * 0.38), R: css * 0.318 }; }; // mirrors .hero in web/js/pages/manifesto.js
 
   // ---- WebGL ----
   const gl = cv.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'high-performance' });
@@ -178,14 +178,14 @@ void main() {
   const outCubic = (x) => 1 - Math.pow(1 - x, 3);
   const inCubic = (x) => x * x * x;
   const lerp = (a, b, x) => a + (b - a) * x;
-  const INTRO = 2500;
+  const INTRO = 3200; // the intro is done once the letters are in
   const FREEZE = (() => { const v = new URLSearchParams(location.search).get('t'); return v == null ? null : Number(v); })(); // ?t=1.6 holds the intro at that second (for checking frames)
 
   let begun = 0, dive = 0, swirlT = 3, lastNow = 0, lettersShown = false;
   function frame(now) {
     if (W !== innerWidth || H !== innerHeight) size();
     if (!W || !H) return requestAnimationFrame(frame);
-    if (!begun) begun = now;
+    if (!begun) { begun = now; if (!soundStarted && !reduce) { soundStarted = true; playSchedule(SND); } }
     const t = (window.__freeze ?? FREEZE) != null ? (window.__freeze ?? FREEZE) : reduce ? 9 : (now - begun) / 1000;
     const dt = lastNow ? Math.min(0.05, (now - lastNow) / 1000) : 0; lastNow = now;
 
@@ -195,29 +195,25 @@ void main() {
     const r0 = Math.min(W, H) * 0.21; // big, in the middle
 
     const bloom = outExpo(span(t, 0.28, 1.25));
-    const glide = inOut(span(t, 1.42, 2.12));
-    let R = lerp(lerp(2.2, r0, bloom), fr, glide);
-    const cx = lerp(W / 2, fx, glide), cy = lerp(H / 2, fy, glide);
-    swirlT = (window.__freeze ?? FREEZE) != null ? 3 + (window.__freeze ?? FREEZE) * 1.4 : swirlT + dt * lerp(3.2, 0.55, span(t, 0.6, 2.2)); // the light inside: fast while it forms, calm after
+    const shrink = inOut(span(t, 1.3, 1.85)); // scales down where it is, in the middle
+    const glide = inOut(span(t, 1.8, 2.45));  // then slides left into the "o" while the other letters appear behind it
+    let R = lerp(lerp(2.2, r0, bloom), fr, shrink);
+    let cx = lerp(W / 2, fx, glide), cy = lerp(H / 2, fy, glide);
+    swirlT = (window.__freeze ?? FREEZE) != null ? 3 + (window.__freeze ?? FREEZE) * 1.4 : swirlT + dt * lerp(3.2, 0.55, span(t, 0.6, 2.2)) * (dive ? Math.max(0, 1 - (now - dive) / GLIDE) : 1); // the light inside: fast while it forms, calm after
     let glow = lerp(0, 1.5, span(t, 0, 0.35)) - 0.55 * span(t, 0.6, 1.4);
     glow += 0.1 * Math.sin(now / 900) * span(t, 2.4, 3.2); // breathing while it waits
     const fill = lerp(0.35, 1, span(t, 0.2, 1));
-    const wave = span(t, 1.42, 2.3);
-    const ring = lerp(r0, Math.hypot(W, H) * 0.95, outCubic(wave));
+    const wave = span(t, 1.8, 2.7);
+    const ring = lerp(fr * 2, Math.hypot(W, H) * 0.95, outCubic(wave));
     let ringA = wave > 0 && wave < 1 ? Math.sin(Math.PI * Math.min(1, wave * 1.15)) * (1 - wave) * 1.6 : 0;
     let fade = 1;
 
     if (dive) {
-      const k = clamp((now - dive) / 450);
-      // Keep the orb crisp at its native slot size (no ballooning or blown-up textures)
-      R = fr;
-      // Soft energetic pulse of light from within
-      glow = lerp(glow, 2.0, Math.sin(k * Math.PI));
-      ringA = 0;
-      // Clean dissolve into the app background
-      fade = 1 - span(k, 0.12, 1);
+      // slide to the middle and hold there: the app paints this same orb on its first frame and dissolves it only once the main screen has loaded
+      const e = inOut(clamp((now - dive) / GLIDE)), T = FIRST ? heroTarget() : { cx: W / 2, cy: H / 2, R: fr };
+      cx = lerp(fx, T.cx, e); cy = lerp(fy, T.cy, e); R = lerp(fr, T.R, e); glow = lerp(glow, 1.0, e); ringA = 0;
     }
-    if (!lettersShown && t > 1.72) { lettersShown = true; if ((window.__freeze ?? FREEZE) != null) letters.forEach((l, i) => { const k = clamp((t - 1.72 - i * 0.085) / 0.5); l.style.opacity = k; l.style.transform = `translateY(${(1 - k) * 0.18}em)`; }); else showLetters(); }
+    if (!lettersShown && t > 2.15) { lettersShown = true; if ((window.__freeze ?? FREEZE) != null) letters.forEach((l, i) => { const k = clamp((t - 2.15 - i * 0.085) / 0.5); l.style.opacity = k; l.style.transform = `translateY(${(1 - k) * 0.18}em)`; }); else showLetters(); }
 
     if (prog) {
       gl.uniform2f(U.uRes, cv.width, cv.height);
@@ -231,7 +227,7 @@ void main() {
       gl.uniform1f(U.uFade, fade);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
-    if (!(dive && now - dive > 480)) requestAnimationFrame(frame);
+    requestAnimationFrame(frame); // keep painting the orb until the app takes over
   }
   requestAnimationFrame(frame);
   window.__frame = frame; // for checking frames: __freeze = 1.6; __frame(performance.now())
@@ -244,6 +240,38 @@ void main() {
   }
   if (reduce) { lettersShown = true; letters.forEach((l) => (l.style.opacity = 1)); }
 
+
+  // ---- sound: small synthesized sounds, quiet and short (WebAudio, no files). Silent if the window blocks audio before a click. localStorage 'orbie.sounds' = '0' turns it off. ----
+  function playSchedule(events) { // events: [at, kind, ...args] on the animation's clock; plays what is still ahead
+    try { if (localStorage.getItem('orbie.sounds') === '0') return; } catch {}
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    const ctx = new AC(), t0 = performance.now();
+    const run = () => {
+      const el = (performance.now() - t0) / 1000, T0 = ctx.currentTime - el;
+      const out = ctx.createGain(); out.gain.value = 0.5; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5200;
+      const dly = ctx.createDelay(); dly.delayTime.value = 0.19; const fb = ctx.createGain(); fb.gain.value = 0.32; const wet = ctx.createGain(); wet.gain.value = 0.28;
+      out.connect(lp); lp.connect(ctx.destination); lp.connect(dly); dly.connect(fb); fb.connect(dly); dly.connect(wet); wet.connect(ctx.destination);
+      for (const [at, kind, a, b, d, v] of events) {
+        if (at < el) continue;
+        if (kind === 'tone') { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(a, T0 + at); if (b !== a) o.frequency.exponentialRampToValueAtTime(b, T0 + at + d);
+          g.gain.setValueAtTime(0.0001, T0 + at); g.gain.exponentialRampToValueAtTime(v, T0 + at + Math.min(0.04, d / 4)); g.gain.exponentialRampToValueAtTime(0.0001, T0 + at + d); o.connect(g); g.connect(out); o.start(T0 + at); o.stop(T0 + at + d + 0.05); }
+        else { const len = Math.floor(ctx.sampleRate * d), buf = ctx.createBuffer(1, len, ctx.sampleRate), data = buf.getChannelData(0); for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+          const src = ctx.createBufferSource(); src.buffer = buf; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.2; bp.frequency.setValueAtTime(a, T0 + at); bp.frequency.exponentialRampToValueAtTime(b, T0 + at + d);
+          const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, T0 + at); g.gain.exponentialRampToValueAtTime(v, T0 + at + d * 0.45); g.gain.exponentialRampToValueAtTime(0.0001, T0 + at + d); src.connect(bp); bp.connect(g); g.connect(out); src.start(T0 + at); }
+      }
+      setTimeout(() => ctx.close && ctx.close(), 9000);
+    };
+    Promise.resolve(ctx.resume && ctx.resume()).catch(() => {}).then(() => {
+      if (ctx.state === 'running') return run();
+      const go = () => { removeEventListener('pointerdown', go, true); removeEventListener('keydown', go, true); Promise.resolve(ctx.resume()).then(() => ctx.state === 'running' && run()).catch(() => {}); };
+      addEventListener('pointerdown', go, true); addEventListener('keydown', go, true);
+    });
+  }
+  const SND = [[0.28, 'tone', 196, 784, 0.8, 0.2], [0.28, 'tone', 199, 790, 0.8, 0.12], [0.3, 'air', 300, 2400, 0.8, 0.07],   // it blooms
+    [1.3, 'tone', 523, 262, 0.35, 0.25], [1.3, 'tone', 82, 55, 0.4, 0.3],                                              // it shrinks: a soft round pop
+    [1.8, 'air', 500, 1800, 0.65, 0.09],                                                                                // it slides
+    ...[880, 1047, 1319, 1568].map((f, i) => [2.15 + i * 0.085, 'tone', f, f, 0.45, 0.13])];                           // the letters, one note each
+  let soundStarted = false;
   // ---- talking to the app ----
   const slow = setTimeout(() => m.classList.add('slow'), 3800);
   window.__ihStatus = (t) => { $('s').textContent = t; };
@@ -255,13 +283,19 @@ void main() {
       const t = begun ? performance.now() - begun : 0;
       if (t < INTRO) return setTimeout(go, INTRO - t);
       clearTimeout(slow); m.classList.remove('slow');
-      dive = performance.now();
-      $('lockup').animate([
-        { opacity: 1, transform: 'none' },
-        { opacity: 0, transform: 'translateY(-8px) scale(0.98)' }
-      ], { duration: 420, fill: 'forwards', easing: 'cubic-bezier(.22, 1, .36, 1)' });
-      if (!prog) document.body.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
-      setTimeout(() => location.replace(url), 450);
+      if (!prog) { $('lockup').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' }); setTimeout(() => location.replace(url), 450); return; }
+      // Hand over exactly what is on screen: the app redraws the orb and the word on its first frame and holds them until the main screen has loaded.
+      if (FIRST) { try { localStorage.setItem('ihIntro4', '1'); } catch {} }
+      const rr = letters.map((l) => l.getBoundingClientRect()), sr = slot.getBoundingClientRect();
+      let to = url;
+      try {
+        const u = new URL(url); u.searchParams.set(FIRST ? 'intro' : 'boot', '1'); u.searchParams.set('s', swirlT.toFixed(4));
+        u.searchParams.set('ph', ((performance.now() / 900) % (Math.PI * 2)).toFixed(4)); // where the glow's breathing is
+        u.searchParams.set('lx', rr.map((r) => r.left.toFixed(2)).join(',')); u.searchParams.set('lt', rr[0].top.toFixed(2));
+        u.searchParams.set('vw', String(innerWidth)); u.searchParams.set('vh', String(innerHeight)); u.searchParams.set('ox', (sr.left + sr.width / 2).toFixed(2)); u.searchParams.set('oy', (sr.top + sr.height / 2).toFixed(2));
+        to = u.toString();
+      } catch {}
+      location.replace(to);
     };
     go();
   };

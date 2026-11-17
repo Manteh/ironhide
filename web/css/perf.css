@@ -215,16 +215,30 @@ html:not(.ihp-on) .wp:not(:fullscreen) { top: var(--bar-h, 38px); }
 /* ---- collections: mood chips, "See all", hub tiles, shelf page heading ---- */
 .moods { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 22px; }
 .moods > span { font-size: 13px; color: var(--muted); margin-right: 4px; }
-.moods button { height: 34px; padding: 0 15px; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.045); color: var(--text-2); font: inherit; font-size: 13.5px; font-weight: 560; cursor: pointer; transition: background .18s var(--ease), color .18s, border-color .18s, transform .18s var(--ease); }
-.moods button:hover { background: rgba(255,255,255,.09); color: var(--text); }
-.moods button:active { transform: scale(.96); }
-.moods button.on { background: var(--text, #f4f4f5); color: #111; border-color: transparent; }
+.moods button { height: 34px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.045); color: var(--text-2); font: inherit; font-size: 13.5px; font-weight: 560; cursor: pointer; transition: background .22s cubic-bezier(.16, 1, .3, 1), color .22s cubic-bezier(.16, 1, .3, 1), border-color .22s cubic-bezier(.16, 1, .3, 1), transform .22s cubic-bezier(.16, 1, .3, 1), box-shadow .22s cubic-bezier(.16, 1, .3, 1); will-change: transform; }
+.moods button:hover { background: rgba(255,255,255,.09); color: var(--text); border-color: rgba(255,255,255,.18); }
+.moods button:active { transform: scale(.93); }
+.moods button.on { background: var(--text, #f4f4f5); color: #111; border-color: transparent; box-shadow: 0 4px 18px rgba(255, 255, 255, .16); }
+
+.fy-shelves { transition: opacity .22s cubic-bezier(.16, 1, .3, 1), transform .22s cubic-bezier(.16, 1, .3, 1); will-change: opacity, transform; }
+.fy-shelves.fy-switching { opacity: 0.22; transform: translateY(-4px) scale(0.995); pointer-events: none; }
+
+@keyframes fyRise {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.fy-enter .fy-row { animation: fyRise .5s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--r-i, 0) * 60ms); }
+.fy-enter .fy-scroll .bc { animation: fyRise .52s cubic-bezier(.16, 1, .3, 1) both !important; animation-delay: calc(var(--r-i, 0) * 60ms + var(--i, 0) * 26ms) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fy-shelves, .fy-enter .fy-row, .fy-enter .fy-scroll .bc { animation: none !important; transition: none !important; }
+}
 .fy-row > header .fy-all { margin-left: auto; font-size: 13px; color: var(--muted); text-decoration: none; opacity: 0; transition: opacity .18s; }
 .fy-row:hover > header .fy-all, .fy-row > header .fy-all:focus-visible { opacity: 1; } .fy-row > header .fy-all:hover { color: var(--text); }
 .fy-row.seasonal > header h3::before { content: '●'; font-size: 9px; color: var(--accent, #f0a04b); margin-right: 9px; vertical-align: 3px; }
 .col-grp { grid-column: 1 / -1; min-width: 0; margin: 6px 0 34px; } .col-grp h3 { margin: 0 0 14px; font-size: 19px; font-weight: 680; letter-spacing: -.015em; }
-.col-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; align-items: stretch; }
-.col-tile { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 5px; padding: 18px 18px 17px; border-radius: 18px; text-decoration: none; color: var(--text); background: linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.025)); border: 1px solid rgba(255,255,255,.07); transition: transform .25s var(--ease), background .2s, border-color .2s; }
+.col-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; align-items: stretch; }
+.col-tile { position: relative; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; min-height: 168px; padding: 16px 18px 16px; overflow: hidden; border-radius: 18px; text-decoration: none; color: var(--text); background: linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.025)); border: 1px solid rgba(255,255,255,.07); transition: transform .25s var(--ease), background .2s, border-color .2s; }
 .col-tile:hover { transform: translateY(-3px); background: linear-gradient(160deg, rgba(255,255,255,.11), rgba(255,255,255,.04)); border-color: rgba(255,255,255,.16); }
 .col-tile b { font-size: 15.5px; font-weight: 660; } .col-tile small { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
 .col-tile em { position: absolute; top: 14px; right: 14px; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
@@ -308,3 +322,14 @@ html.onboarding #ihbar .l, html.onboarding #ihbar .r { visibility: hidden; }
 html.onboarding #ihbar .c { font-size: 0; } html.onboarding #ihbar .c::after { content: 'Welcome to Orbie'; font-size: 13px; opacity: .6; }
 .inv-row em { font-style: normal; font-size: 12.5px; padding: 2px 9px; border-radius: 99px; }
 .inv-joined { color: #5ee39b; background: rgba(52, 199, 120, .14); } .inv-wait { color: var(--muted); background: rgba(255, 255, 255, .05); }
+/* Collections tiles: a fan of three posters on the right so each shelf shows what it is about */
+.col-txt { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 4px; max-width: 62%; }
+.col-fan { position: absolute; right: 14px; top: 14px; bottom: 14px; width: 46%; pointer-events: none; opacity: 0; transition: opacity .5s ease; }
+.col-fan.on { opacity: 1; }
+.col-fan i { position: absolute; bottom: 0; height: 88%; aspect-ratio: 2 / 3; border-radius: 9px; background: rgba(255,255,255,.06) center / cover; box-shadow: 0 10px 26px -8px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.1); transition: transform .35s var(--ease); }
+.col-fan i:nth-child(1) { right: 52%; transform: rotate(-7deg) scale(.88); transform-origin: bottom right; }
+.col-fan i:nth-child(2) { right: 26%; z-index: 1; transform: scale(.96); }
+.col-fan i:nth-child(3) { right: 0; transform: rotate(7deg) scale(.88); transform-origin: bottom left; }
+.col-tile:hover .col-fan i:nth-child(1) { transform: rotate(-10deg) translateY(-3px) scale(.88); } .col-tile:hover .col-fan i:nth-child(3) { transform: rotate(10deg) translateY(-3px) scale(.88); } .col-tile:hover .col-fan i:nth-child(2) { transform: translateY(-5px) scale(.96); }
+.col-tile::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(10,12,22,.55), transparent 55%); }
+.col-tile em { z-index: 2; }

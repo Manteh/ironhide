@@ -105,3 +105,6 @@ body.np-on #browse, body.np-on #page { padding-bottom: 88px; }
 a.dx-score { color: inherit; text-decoration: none; cursor: pointer; } a.dx-score:hover { filter: brightness(1.15); }
 /* a little less padding so the actions fit one row next to the poster */
 .dx-acts .btn.dx-sec2 { padding: 0 14px !important; }
+
+/* The orange ring around a card you select: the card already lifts and gets a soft white edge on its poster when it is focused, so the extra outline is dropped. */
+.bc:focus-visible, .bc:focus { outline: none !important; }

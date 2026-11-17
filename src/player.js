@@ -181,12 +181,17 @@ function sh(s) {
 
 export async function playDetached(stream, subs = [], onFinish, resumeFrom, title) {
   const progressFile = PROGRESS_FILE;
+  // Cancel pressed while this was still finding peers or resolving the link: stop before anything starts playing
+  const token0 = getPlayState().token, cancelled = () => getPlayState().cancelled === token0;
+  const aborted = () => ({ status: 'cancelled', progressFile: null });
+  if (cancelled()) return aborted();
   // No debrid link (expired key, uncached, or never set up): stream the torrent from its peers and play the local URL the same way
   let torrent = null;
   if (stream.magnet && !stream.url) {
     setPlayState({ phase: 'launching', detail: 'Finding peers (no debrid)' });
     try { torrent = await startTorrent(stream.magnet, { fileIdx: stream.fileIdx }); }
-    catch (e) { setPlayState({ phase: 'error', detail: e.message, retry: true }); return { status: 'error', progressFile: null }; }
+    catch (e) { if (cancelled()) return aborted(); setPlayState({ phase: 'error', detail: e.message, retry: true }); return { status: 'error', progressFile: null }; }
+    if (cancelled()) { torrent.stop(); return aborted(); }
     const done = onFinish; onFinish = (p) => { torrent.stop(); done?.(p); };
     stream = { ...stream, isRD: true, url: torrent.url };
   }
@@ -196,6 +201,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
 
   if (stream.isRD && stream.url) {
     const res = await fetch(stream.url, { redirect: 'manual' });
+    if (cancelled()) { torrent?.stop(); return aborted(); }
     const location = res.headers.get('location') || (res.status < 300 ? stream.url : null);
     // the debrid link is dead (expired key, not cached): if we know the torrent, stream it from its peers instead
     const viaPeers = () => stream.infoHash && !torrent ? playDetached({ ...stream, isRD: false, url: null, magnet: magnetFor(stream.infoHash) }, subs, onFinish, resumeFrom, title) : null;
@@ -203,6 +209,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
     if (/failed_|error|denied/i.test(location)) { const r = await viaPeers(); if (r) return r; setPlayState({ phase: 'error', detail: 'Stream is not cached' }); return { status: 'not_cached', progressFile: null }; }
     // through the local caching proxy: one redirect lookup instead of one per seek, and track switches re-read from memory
     const playUrl = await proxied(location);
+    if (cancelled()) { torrent?.stop(); return aborted(); }
     setPlayState({ phase: 'launching', detail: 'Starting the player' });
 
     const mpvArgs = [
@@ -241,6 +248,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
     return { status: 'playing', progressFile, cancel: () => { clearInterval(interval); torrent?.stop(); } };
 
   } else if (stream.magnet) {
+    if (cancelled()) return aborted();
     const wtArgs = [stream.magnet, '--mpv'];
     if (stream.fileIdx != null) wtArgs.push('--select', String(stream.fileIdx));
     if (resumeFrom > 0) wtArgs.push('--player-args', `--start=${Math.floor(resumeFrom)}`);
@@ -253,6 +261,7 @@ export async function playDetached(stream, subs = [], onFinish, resumeFrom, titl
     return { status: 'playing', progressFile, cancel: () => clearInterval(interval) };
 
   } else if (stream.torrentLink) {
+    if (cancelled()) return aborted();
     const tlArgs = [stream.torrentLink, '--mpv'];
     if (stream.fileIdx != null) tlArgs.push('--select', String(stream.fileIdx));
     if (resumeFrom > 0) tlArgs.push('--player-args', `--start=${Math.floor(resumeFrom)}`);
@@ -293,8 +302,7 @@ export async function presentWhenReady(token) {
   }
   if (stale()) return;
   if (!seenWindow || !ipcRunning()) { setPlayState({ phase: 'error', detail: 'The player did not start' }); return; }
-  setPlayState({ phase: 'playing', detail: 'Opening fullscreen' });
-  await setProp('fullscreen', true).catch(() => {});
+  setPlayState({ phase: 'playing', detail: 'Starting playback' });
   await setProp('pause', false).catch(() => {});
   // bring to front: toggling ontop raises the window without needing extra permissions
   await setProp('ontop', true).catch(() => {});

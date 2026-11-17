@@ -56,8 +56,8 @@
 /* ---------- Settings: Streams ---------- */
 .st-row { display: grid; gap: 3px; padding: 14px 0; border-top: 1px solid var(--border); } .st-row:first-child { border-top: 0; padding-top: 4px; } .st-row > b { font-size: 14px; font-weight: 600; } .st-row > span { font-size: 12.5px; color: var(--muted); }
 .st-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
-.st-chip { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font-size: 13px; font-weight: 550; cursor: pointer; } .st-chip:hover { background: var(--hover); color: var(--text); }
-.st-chip.on { border-color: var(--border-strong); background: var(--surface-2); color: var(--text); } .st-chip em { display: grid; place-items: center; width: 18px; height: 18px; margin-left: -4px; border-radius: 50%; background: var(--text); color: var(--bg); font-size: 11px; font-style: normal; font-weight: 700; }
+.st-chip { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px; border-radius: 10px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.05); color: var(--text-2); font-size: 13px; font-weight: 550; cursor: pointer; transition: background .15s, border-color .15s; } .st-chip:hover { background: rgba(255,255,255,.1); color: var(--text); }
+.st-chip.on { border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.14); color: #fff; } .st-chip em { display: grid; place-items: center; width: 18px; height: 18px; margin-left: -4px; border-radius: 50%; background: var(--text); color: var(--bg); font-size: 11px; font-style: normal; font-weight: 700; }
 .st-chip.hide.on { color: #ff9b9b; border-color: rgba(255,123,123,.4); background: rgba(255,123,123,.1); text-decoration: line-through; }
 .st-sel { width: 250px; max-width: 100%; }
 

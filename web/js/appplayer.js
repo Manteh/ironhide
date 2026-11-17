@@ -729,7 +729,7 @@
     // measurement, and that last, partly black row isn't counted -- so crop one more row's worth, or a hairline shows.
     const over = 1 / 88, ct = bt > 0 ? bt + over : 0, cb = bb > 0 ? bb + over : 0;
     const cx0 = v.x, cx1 = v.x + v.w, cy0 = v.y + v.h * ct, cy1 = v.y + v.h * (1 - cb);
-    const LW = 160, LH = Math.max(1, Math.round(LW * H / W)), k = LW / W;
+    const LW = 96, LH = Math.max(1, Math.round(LW * H / W)), k = LW / W;
     if (A.LW !== LW || A.LH !== LH) { A.LW = LW; A.LH = LH; ambCv.width = LW; ambCv.height = LH; A.img = ambCtx.createImageData(LW, LH); A.cur = null; }
     const tgt = new Float32Array(LW * LH * 3);
     const M = Math.max(W, H), RE = AMBS.reach, D = Math.max(60, 0.1 * M * RE), far = 0.3 * M * RE, cutoff = 0.32 * M * RE; // how far the light carries (screen px)
@@ -786,7 +786,7 @@
     A.raf = 0;
     if (!A.tgt || !A.cur || !ambActive()) return;
     const dt = Math.min(0.1, (now - A.last) / 1000); A.last = now;
-    const tau = A.cut ? 0.02 : 0.045;
+    const tau = A.cut ? 0.012 : 0.03;
     const kk = 1 - Math.exp(-dt / tau);
     const { cur, tgt, img } = A, d = img.data; let moving = 0;
     const dimTo = b('pause') ? 0.4 : 1; A.dim += (dimTo - A.dim) * (1 - Math.exp(-dt / 0.6)); const dm = A.dim;
@@ -878,11 +878,11 @@
       tab('pic'); root.classList.remove('pn');
       document.documentElement.classList.add('ihp-on'); playing = true; wake(); requestAnimationFrame(frame);
       loadIntro();
+      for (const ms of [500, 2500]) setTimeout(() => import('/js/main.js').then((m) => m.refreshHistory?.()).catch(() => {}), ms); // it's in the history from the moment it starts
       setAmb(ambOn); // tells the native side whether to send colours
       try { const p = JSON.parse(localStorage.getItem('ihp.pic') || 'null'); if (p) setTimeout(() => applyPicture(p), 500); } catch {}
       try { const sh = localStorage.getItem('ihp.shader'); setTimeout(() => applyShader(SHADERS[sh] ? sh : 'Off', true), 700); } catch {}
-      // the way you left it: full screen if you were watching full screen
-      try { if (localStorage.getItem('ihp.fs') === '1' && !fsNow()) setTimeout(() => { if (!fsNow()) call('player_fullscreen'); }, 350); } catch {}
+      try { localStorage.removeItem('ihp.fs'); } catch {}
       // a series: "Black Doves · S1 E2 · The Episode Name" instead of the file's "Black Doves S01E02"
       window.__ihpEpTitle = '';
       setTimeout(() => fetch('/api/info/now').then((r) => r.json()).then((d) => { const e = d?.episode; if (e && d.title) window.__ihpEpTitle = `${d.title} · S${e.season} E${e.episode}${e.name && !/^Episode \d+$/.test(e.name) ? ' · ' + e.name : ''}`; }).catch(() => {}), 1500);
@@ -897,10 +897,11 @@
       if (error) import('/js/ui.js').then(({ toast }) => toast?.(error, 'err')).catch(() => {});
       // finished an episode? offer the next one (the daemon saves the position a moment after the player closes)
       else for (const ms of [1500, 4000]) setTimeout(() => import('/js/nextup.js').then((m) => m.offerAfterMpv()).catch(() => {}), ms);
+      // and bring the Continue watching row up to date: the daemon writes the position a moment after the player closes, so ask a few times
+      for (const ms of [700, 2000, 4500]) setTimeout(() => import('/js/main.js').then((m) => m.refreshHistory?.()).catch(() => {}), ms);
     },
     fs(on) {
       window.__ihFs = !!on; fsTrack(); drawAmb();
-      if (playing) try { localStorage.setItem('ihp.fs', on ? '1' : '0'); } catch {} // so a resume (or a restart) opens the same way
     },
     amb(hex, w, h, bt = 0, bb = 0) {
       if (!ambOn) return;
@@ -943,8 +944,8 @@
 
       // Hard cut (major scene transition or lighting shift): snap immediately to match the video cut
       // Medium cut (angle switch, lighting change): ease quickly (~25-35ms)
-      const isHardCut = diff >= 13;
-      const isMedCut = diff >= 5.5;
+      const isHardCut = diff >= 9;
+      const isMedCut = diff >= 3.5;
 
       if (isMedCut) {
         A.cut = true;

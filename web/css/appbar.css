@@ -42,3 +42,6 @@ html.ihp-on #ihbar { display: none; }
 #ihbar button.btn-sanctuary .top-orb-img { width: 17px; height: 17px; border-radius: 50%; display: block; filter: drop-shadow(0 0 5px rgba(165, 130, 255, 0.75)); transition: transform .3s cubic-bezier(.34,1.5,.64,1), filter .3s; pointer-events: none; }
 #ihbar button.btn-sanctuary:hover .top-orb-img { transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(185, 150, 255, 1)); }
 #ihbar button.btn-sanctuary.on { background: rgba(255, 255, 255, 0.12); }
+
+/* The header must not show the page through it: more opaque, properly blurred, and its own compositing layer so the posters' 3D layers cannot draw over the blur. */
+#ihbar { background: rgba(7, 7, 13, 0.94) !important; -webkit-backdrop-filter: blur(40px) saturate(1.5) !important; backdrop-filter: blur(40px) saturate(1.5) !important; transform: translateZ(0); isolation: isolate; will-change: transform; box-shadow: 0 1px 0 rgba(255, 255, 255, .06), 0 10px 30px -12px rgba(0, 0, 0, .7); }

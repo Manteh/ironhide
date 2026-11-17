@@ -89,3 +89,6 @@ mark { background: none; color: #fff; font-weight: 750; text-decoration: underli
 .sx-intent { background: rgba(255,255,255,.06); }
 .sx-foot { padding: 9px 18px; border-top-color: rgba(255,255,255,.06); color: rgba(255,255,255,.4); font-size: 11.5px; }
 .sx-foot kbd, .sx-q kbd { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.06); }
+
+/* results stay put while the next answer is on its way */
+.sx-body { transition: opacity .15s ease; } .sx-body.stale { opacity: .72; }

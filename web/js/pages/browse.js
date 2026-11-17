@@ -23,7 +23,7 @@ const keep = (k, v) => { try { localStorage.setItem('br-' + k, JSON.stringify(v)
 const FEED_NAME = { new: 'New', toprated: 'Top rated', gems: 'Hidden gem', surprise: 'Surprise', trending_movies: 'Trending', trending_shows: 'Trending series', popular_movies: 'Popular', popular_shows: 'TV hit', watched_weekly: 'Most watched', anticipated: 'Upcoming', boxoffice: 'Box office' };
 
 let root, feeds = [], genres = [], cineGenres = [], colMeta = { groups: [], moods: [], collections: [] }, lastTaste = [], lastCols = [];
-const st = { tkind: ls('tkind', ''), tab: 'home', genre: '', items: [], more: false, busy: false, token: 0, kind: ls('kind', 'movie'), sort: ls('sort', 'default'), min: ls('min', 0), endless: false, epage: 0, hideSeen: ls('hide', false), mood: ls('mood', ''), year: '', seed: Math.floor(Date.now() / 1800000) };
+const st = { tkind: ls('tkind', ''), tab: 'home', genre: '', items: [], more: false, busy: false, token: 0, moodToken: 0, kind: ls('kind', 'movie'), sort: ls('sort', 'default'), min: ls('min', 0), endless: false, epage: 0, hideSeen: ls('hide', false), mood: ls('mood', ''), year: '', seed: Math.floor(Date.now() / 1800000) };
 const feedMeta = (id) => feeds.find((f) => f.id === id) || {};
 const typeOf = (it) => (it.type === 'tv' || it.type === 'series' ? 'series' : 'movie');
 // the feed id to ask for, given the Movies / Series switch
@@ -155,6 +155,8 @@ export function continueItems(history, max = 40) {
       const ns = h.nextEp?.season ?? h.season, ne = h.nextEp?.episode ?? h.episode + 1; // the server checked the episode list; older entries just add one
       out.push({ imdbId: h.imdbId, type: 'series', title: h.title, poster: posterOf(h.imdbId), season: ns, episode: ne, tag: `Next · S${pad(ns)}E${pad(ne)}`, pct: 0 });
     }
+    // just pressed play: it belongs in Continue watching straight away, before any progress has been saved
+    else if (pct <= 3 && Date.now() - Date.parse(h.watchedAt || 0) < 2 * 864e5) out.push({ imdbId: h.imdbId, type: tv ? 'series' : 'movie', title: h.title, poster: posterOf(h.imdbId), season: h.season, episode: h.episode, tag: tv ? `S${pad(h.season)}E${pad(h.episode)}` : 'Just started', pct: 0, left: '' });
     else if (pct > 3 && pct < 90) out.push({ imdbId: h.imdbId, type: tv ? 'series' : 'movie', title: h.title, poster: posterOf(h.imdbId), season: h.season, episode: h.episode, tag: tv ? `S${pad(h.season)}E${pad(h.episode)}` : 'Resume', pct, left: leftLabel(h) });
   }
   return out.slice(0, max);
@@ -275,7 +277,7 @@ async function loadTab(reset = true) {
   else if (st.tab === 'collections') {
     const m = await api('/api/collections').catch(() => null); if (my !== st.token) return;
     if (m) colMeta = m;
-    st.busy = false; st.more = false; paintTools(); grid.innerHTML = hubHtml(colMeta) || '<div class="empty">Collections need a TMDB key in Settings.</div>'; more.innerHTML = ''; return;
+    st.busy = false; st.more = false; paintTools(); grid.innerHTML = hubHtml(colMeta) || '<div class="empty">Collections need a TMDB key in Settings.</div>'; more.innerHTML = ''; paintCovers(colMeta, grid); return;
   }
   else if (st.tab === 'home') {
     const [fy, secs, cols] = await Promise.all([api(`/api/catalog/foryou?seed=${st.seed}`).catch(() => []), api(`/api/foryou/sections?seed=${st.seed}`).catch(() => ({ sections: [] })), api(colsUrl()).catch(() => ({ sections: [] }))]);
@@ -593,9 +595,10 @@ function paintCont() {
   if (st.tab !== 'home') { el.classList.add('hidden'); el.innerHTML = ''; return; }
   el.classList.remove('hidden');
   const h = new Date().getHours(), hi = h < 5 ? 'Still up' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening', name = store.settings?.profile?.name || '', top = list[0];
-  const what = top ? `${esc(top.title)}${top.left ? ` · ${esc(top.left)}` : ''}${top.tag && top.tag !== 'Resume' ? ` · ${esc(top.tag.replace('Next · ', ''))}` : ''}` : '';
-  el.innerHTML = `<div class="greet"><div><h1>${hi}${name ? `, ${esc(name)}` : ''}</h1><p>${top ? `${top.pct ? 'Pick up where you left off' : 'Up next'}: <b>${what}</b>` : 'What are we watching tonight?'}</p></div>
-    <div class="greet-b">${top ? `<button class="pill" data-gplay data-id="${esc(top.imdbId)}" data-type="${esc(top.type)}" data-title="${esc(top.title)}" ${top.season ? `data-season="${top.season}" data-episode="${top.episode}"` : ''}>${icon('play')} ${top.pct ? 'Resume' : 'Play'}</button>` : ''}<button class="pill ghost2" data-gsearch>${icon('search')} Search</button></div></div>
+  // one tidy row: the greeting and a single quiet line on the left, Resume and Search together on the right. (The first card of the row below already is what you were watching, so it is not repeated.)
+  const rest = top ? [top.season ? `S${pad(top.season)}E${pad(top.episode)}` : '', top.left ? esc(top.left) : ''].filter(Boolean).join(' · ') : '';
+  el.innerHTML = `<div class="greet"><div class="greet-l"><h1>${hi}${name ? `, ${esc(name)}` : ''}</h1><p>${top ? `${top.pct ? 'Pick up where you left off' : 'Up next'}: <b>${esc(top.title)}</b>${rest ? ` · ${rest}` : ''}` : 'What are we watching tonight?'}</p></div>
+    <div class="greet-b">${top ? `<button class="pill" data-gplay data-id="${esc(top.imdbId)}" data-type="${esc(top.type)}" data-title="${esc(top.title)}" ${top.season ? `data-season="${top.season}" data-episode="${top.episode}"` : ''}>${icon('play')} ${top.pct ? 'Resume' : 'Play'}</button>` : ''}<button class="pill ghost2 sq" data-gsearch aria-label="Search" title="Search (⌘K)">${icon('search')}</button></div></div>
     ${list.length ? `<header><h2>Continue watching</h2><a href="#/continue">See all</a></header><div class="cont-row">${list.map((it, i) => card(it, i)).join('')}</div>` : ''}
     ${newEps.length ? `<header><h2>New episodes</h2><span class="cont-sub">Shows you were caught up on</span></header><div class="cont-row">${newEps.map((n, i) => card({ imdbId: n.imdbId, type: 'series', title: n.title, poster: n.poster, season: n.season, episode: n.episode, tag: `${n.count > 1 ? `${n.count} new · ` : 'New · '}S${pad(n.season)}E${pad(n.episode)}` }, i)).join('')}</div>` : ''}`;
 }
@@ -613,23 +616,67 @@ function moodChips() {
   const ms = colMeta.moods || []; if (!ms.length) return '';
   return `<div class="moods" role="group" aria-label="Tonight I want"><span>Tonight I want</span>${ms.map((m) => `<button data-mood="${m.id}" class="${st.mood === m.id ? 'on' : ''}" aria-pressed="${st.mood === m.id}">${esc(m.label)}</button>`).join('')}</div>`;
 }
-function paintRows(taste, cols = lastCols) {
+function paintRows(taste, cols = lastCols, animate = false) {
   const el = $('#fyRows', root); if (!el) return;
   const hid = hiddenIds(), clean = (l) => l.map((x) => ({ ...x, items: x.items.filter((i) => !hid.has(i.imdbId)) })).filter((x) => x.items.length);
   const sections = weave(clean(taste), clean(cols));
-  el.innerHTML = (sections.length ? moodChips() : '') + sections.map((sec) => `<section class="fy-row${sec.seasonal ? ' seasonal' : ''}"><header><h3>${esc(sec.title)}</h3>${sec.sub ? `<span>${esc(sec.sub)}</span>` : ''}${sec.more ? `<a class="fy-all" href="${esc(sec.more)}">See all</a>` : ''}</header>
-    <div class="fy-scroll">${sec.items.map((it, i) => card(it, i)).join('')}</div></section>`).join('') + (sections.length ? '<header class="fy-more"><h3>More for you</h3><span>Sort and filter apply here</span></header>' : '');
+  if (!sections.length) { el.innerHTML = ''; return; }
+
+  const shelvesHtml = sections.map((sec, rIdx) => `<section class="fy-row${sec.seasonal ? ' seasonal' : ''}" style="--r-i:${rIdx}"><header><h3>${esc(sec.title)}</h3>${sec.sub ? `<span>${esc(sec.sub)}</span>` : ''}${sec.more ? `<a class="fy-all" href="${esc(sec.more)}">See all</a>` : ''}</header>
+    <div class="fy-scroll">${sec.items.map((it, i) => card(it, i)).join('')}</div></section>`).join('');
+
+  let shelvesEl = el.querySelector('.fy-shelves');
+  let moodsEl = el.querySelector('.moods');
+
+  if (!moodsEl || !shelvesEl) {
+    el.innerHTML = moodChips() +
+      `<div class="fy-shelves${animate ? ' fy-enter' : ''}">${shelvesHtml}</div>` +
+      '<header class="fy-more"><h3>More for you</h3><span>Sort and filter apply here</span></header>';
+    return;
+  }
+
+  moodsEl.querySelectorAll('button[data-mood]').forEach((b) => {
+    const on = b.dataset.mood === st.mood;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+
+  shelvesEl.classList.remove('fy-switching');
+  if (animate) {
+    shelvesEl.classList.remove('fy-enter');
+    shelvesEl.innerHTML = shelvesHtml;
+    void shelvesEl.offsetWidth;
+    shelvesEl.classList.add('fy-enter');
+  } else {
+    shelvesEl.innerHTML = shelvesHtml;
+  }
 }
 // swap only the collection shelves (a mood was picked), keeping the hero and the grid below untouched
-async function refreshCols() {
-  const my = st.token, cols = await api(colsUrl()).catch(() => ({ sections: [] }));
-  if (my !== st.token || st.tab !== 'home') return;
-  lastCols = cols.sections || []; paintRows(lastTaste, lastCols);
+async function refreshCols(animate = false) {
+  const myMood = ++st.moodToken;
+  const my = st.token;
+  const cols = await api(colsUrl()).catch(() => ({ sections: [] }));
+  if (my !== st.token || myMood !== st.moodToken || st.tab !== 'home') return;
+  lastCols = cols.sections || [];
+  paintRows(lastTaste, lastCols, animate);
 }
 // the Collections tab: every shelf, grouped
 function hubHtml(m) {
   const by = (g) => m.collections.filter((c) => c.group === g.id && (!c.seasonal || c.live));
-  return m.groups.map((g) => ({ g, list: by(g) })).filter((x) => x.list.length).map(({ g, list }) => `<section class="col-grp"><h3>${esc(g.label)}</h3><div class="col-tiles">${list.map((c) => `<a class="col-tile${c.seasonal ? ' live' : ''}" href="#/feed/col_${c.id}"><b>${esc(c.title)}</b><small>${esc(c.sub || '')}</small>${c.seasonal ? '<em>Now</em>' : c.kind === 'tv' ? '<em>Series</em>' : ''}</a>`).join('')}</div></section>`).join('');
+  return m.groups.map((g) => ({ g, list: by(g) })).filter((x) => x.list.length).map(({ g, list }) => `<section class="col-grp"><h3>${esc(g.label)}</h3><div class="col-tiles">${list.map((c) => `<a class="col-tile${c.seasonal ? ' live' : ''}" data-col="${c.id}" href="#/feed/col_${c.id}"><div class="col-fan"><i></i><i></i><i></i></div><div class="col-txt"><b>${esc(c.title)}</b><small>${esc(c.sub || '')}</small></div>${c.seasonal ? '<em>Now</em>' : c.kind === 'tv' ? '<em>Series</em>' : ''}</a>`).join('')}</div></section>`).join('');
+}
+// fill the tiles' poster fans group by group, so the page paints at once and the posters fade in as they arrive
+async function paintCovers(m, scope) {
+  const groups = m.groups.map((g) => m.collections.filter((c) => c.group === g.id && (!c.seasonal || c.live)).map((c) => c.id)).filter((l) => l.length);
+  for (const ids of groups) {
+    const got = await api(`/api/collections/covers?ids=${ids.join(',')}`).catch(() => ({}));
+    if (!scope.isConnected) return;
+    for (const id of ids) {
+      const tile = scope.querySelector(`[data-col="${id}"] .col-fan`); if (!tile) continue;
+      (got[id] || []).forEach((u, i) => { const im = tile.children[i]; if (im) im.style.backgroundImage = `url('${u}')`; });
+      tile.classList.add('on');
+    }
+  }
 }
 function paintChrome() {
   paintCont();
@@ -670,7 +717,21 @@ export async function mount(el) {
     if (e.target.closest('[data-gsearch]')) { import('../palette.js').then((m) => m.openPalette()); return; }
     if (e.target.closest('[data-hero-play]')) { const h = e.target.closest('.hero2'); quickPlay({ imdbId: h.dataset.id, type: h.dataset.type, title: h.dataset.title, ...(h.dataset.season ? { season: +h.dataset.season, episode: +h.dataset.episode } : {}) }); return; }
     const mb = e.target.closest('[data-mood]');
-    if (mb) { st.mood = st.mood === mb.dataset.mood ? '' : mb.dataset.mood; keep('mood', st.mood); st.seed = Math.floor(Date.now() / 1800000) + (st.mood ? 7 : 0); paintRows(lastTaste, lastCols); refreshCols(); return; }
+    if (mb) {
+      const next = st.mood === mb.dataset.mood ? '' : mb.dataset.mood;
+      st.mood = next;
+      keep('mood', st.mood);
+      st.seed = Math.floor(Date.now() / 1800000) + (st.mood ? 7 : 0);
+      root.querySelectorAll('.moods button[data-mood]').forEach((b) => {
+        const on = b.dataset.mood === st.mood;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      const sh = root.querySelector('.fy-shelves');
+      if (sh) sh.classList.add('fy-switching');
+      refreshCols(true);
+      return;
+    }
     const fx = e.target.closest('[data-forget]');
     if (fx) { e.stopPropagation(); const c = fx.closest('.bc'); forgetTitle(c.dataset.id, c.dataset.title); return; }
     const c = e.target.closest('.bc[data-id]'); if (!c) return;

@@ -31,7 +31,7 @@ const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 
 // Rooms you were in stay here, paused where the picture stopped, so you can come back any time (even after everyone closed their browsers)
 const savedCard = (s) => {
   const list = (s.savedRooms || []).filter((x) => !x.current); if (!list.length) return '';
-  const row = (x) => `<div class="sr">
+  const row = (x) => `<div class="sr" style="--bg:url('${x.media ? esc(x.media.poster || posterOf(x.media.imdbId)) : ''}')">
     <span class="sr-p" style="background-image:url('${x.media ? esc(x.media.poster || posterOf(x.media.imdbId)) : ''}')"></span>
     <div class="sr-i"><b>${esc(x.name)}</b><span>${x.media ? `${esc(x.media.title)} · paused at <em>${fmtTime(x.pos)}</em>` : 'Nothing picked yet'}</span><span>${x.members.length} ${x.members.length === 1 ? 'person' : 'people'} · ${ago(x.savedAt)}</span>
       <div class="sr-av">${x.members.slice(0, 6).map((m) => avatar({ avatar: m.avatar }, 22)).join('')}</div></div>
@@ -41,23 +41,64 @@ const savedCard = (s) => {
 
 export default async function together(el) {
   el.innerHTML = `<div class="page together">
-    <div class="page-head"><div><h1 class="title">Friends</h1><div class="sub" id="tgSub"></div></div><span id="tgLink" class="badge"></span></div>
+    <section class="tg-hero">
+      <div class="tg-copy">
+        <div class="tg-eyebrow">Together</div>
+        <h1 class="tg-h1" id="tgTitle">Watch with the people you trust.</h1>
+        <div class="sub" id="tgSub"></div>
+        <div class="tg-cta" id="tgCta"></div>
+        <span id="tgLink" class="badge"></span>
+      </div>
+      <div class="tg-stage" id="tgStage" aria-hidden="true"></div>
+    </section>
     <div id="tgSetup"></div>
     <div class="tg-grid"><aside class="tg-friends" id="tgFriends"></aside><section class="tg-room" id="tgRoom"></section></div></div>`;
-  const last = {}; let unChat = null, inviteNext = null;
+  const last = {}; let unChat = null, inviteNext = null; const T0 = performance.now();
+  { const root = el.firstElementChild; root.classList.add('enter'); setTimeout(() => root.classList.remove('enter'), 1500); } // cards fade in once, on arrival; never again when the page updates
+
+  // The stage: the orb in the middle, the people who are here circling it. Friends who are online, or the room's members once you are in one.
+  function ring(list, r, cls, label, d) {
+    const n = list.length;
+    return `<div class="tg-ring ${cls}" style="--r:${r}px;--d:${d}s">${list.map((p, i) => `<div class="tg-p ${p.ready ? 'ready' : ''} ${p.away ? 'away' : ''}" style="--i:${i};--n:${n}"><div class="tg-pi"><span class="tg-av">${avatar({ avatar: p.avatar }, 52)}</span><b>${esc(p.name)}</b>${label(p) ? `<small>${esc(label(p))}</small>` : ''}</div></div>`).join('')}</div>`;
+  }
+  function hero(s) {
+    const inR = !!s.room, live = s.relay.status === 'online';
+    const ppl = inR ? s.room.members : s.friends.filter((f) => f.online);
+    const key = sig([inR, s.room?.name, s.room?.media?.title, live, ppl.map((p) => [p.id, p.ready, p.away, p.status?.title, p.name])]);
+    if (last.h === key) return; last.h = key;
+    $('#tgTitle', el).textContent = inR ? s.room.name : 'Watch with the people you trust.';
+    $('.tg-eyebrow', el).textContent = inR ? 'In a room' : 'Together';
+    const m = s.room?.media;
+    $('#tgCta', el).innerHTML = inR
+      ? `${m ? `<button class="btn primary tg-big" id="heroGo">${icon('play')} Go to the movie</button>` : ''}<button class="btn tg-big" id="heroCp" title="For someone who isn't your friend yet">Copy room code</button><button class="btn ghost tg-big" id="heroLv">Leave</button>`
+      : `<button class="btn primary tg-big" id="heroMk" ${live ? '' : 'disabled'}>${icon('play')} Start a room</button>`;
+    $('#heroMk', el)?.addEventListener('click', (e) => { e.currentTarget.disabled = true; sapi('/room', { name: `${s.you?.name || 'My'}'s room` }).catch((err) => { e.currentTarget.disabled = false; toast(err.message, 'err'); }); });
+    $('#heroGo', el)?.addEventListener('click', async () => { const { joinRoomPlayback } = await import('../roomplay.js'); joinRoomPlayback(); });
+    $('#heroLv', el)?.addEventListener('click', () => sapi('/room/leave'));
+    $('#heroCp', el)?.addEventListener('click', () => copy(s.room.code, 'Room code copied'));
+    const list = ppl.slice(0, 10), label = (p) => inR ? (STATE[p.st?.state]?.[0] || (p.ready ? 'Ready' : 'Joining')) : (p.status?.title || '');
+    const inner = list.length > 7 ? list.filter((_, i) => i % 2 === 0) : list, outer = list.length > 7 ? list.filter((_, i) => i % 2) : [];
+    // when the stage is rebuilt (someone joins, a state changes) the motion carries on from where it was, instead of starting over
+    const tt = (performance.now() - T0) / 1000, d1 = -(tt % 80).toFixed(2), d2 = -(tt % 110).toFixed(2), dc = -(tt % 8).toFixed(2);
+    $('#tgStage', el).innerHTML = `<div class="tg-orbit o1"></div><div class="tg-orbit o2"></div>
+      <div class="tg-core" style="--cd:${dc}s"><img src="/img/orbie-orb.png" alt=""></div>
+      ${outer.length ? ring(outer, 136, 'r2', label, d2) : ''}${ring(inner, outer.length ? 90 : 104, 'r1', label, d1)}
+      ${list.length ? '' : `<p class="tg-empty">${s.friends.length ? 'Nobody is online right now.' : 'Add a friend and they will appear here.'}</p>`}`;
+  }
 
   const draw = (s) => {
     const link = $('#tgLink', el); link.textContent = STATUS[s.relay.status] || s.relay.status; link.className = 'badge ' + (s.relay.status === 'connecting' ? 'warn' : ''); link.hidden = s.relay.status === 'online'; // only worth saying when something is wrong
-    const onl = s.friends.filter((f) => f.online).length; $('#tgSub', el).textContent = s.friends.length ? `${onl} of ${s.friends.length} online` : 'See what your friends are watching and watch together.';
+    hero(s);
+    const onl = s.friends.filter((f) => f.online).length; $('#tgSub', el).textContent = s.room ? `${s.room.members.length} in the room` : s.friends.length ? `${onl} of ${s.friends.length} friends online` : 'See what your friends are watching, and watch together.';
     if (s.room && inviteNext) { sapi('/room/invite', { id: inviteNext.id }); toast(`Invited ${inviteNext.name}`, 'ok'); inviteNext = null; } // "Watch together" made this room for them
     // setup card until a relay is configured
     const setupKey = sig([s.relay.url, s.relay.status]);
     if (last.setup !== setupKey) { last.setup = setupKey; setup(s); }
-    const fKey = sig([s.you, s.people, s.friends, s.incoming, s.outgoing, s.room?.code, s.room?.members.map((m) => [m.id, m.st?.state]), s.relay.status]);
+    const fKey = sig([s.you, s.people, s.friends.map((f) => [f.id, f.name, f.online, f.away, f.inRoom && [f.inRoom.code, f.inRoom.name, f.inRoom.count], f.status && [f.status.title, f.status.state]]), s.incoming, s.outgoing, s.room?.code, s.room?.members.map((m) => [m.id, m.st?.state]), s.relay.status]);
     if (last.f !== fKey) { last.f = fKey; friends(s); }
     // live member states (every ~2 s) must not rebuild the room card, or the chat would lose focus; they are painted in place
     const roomSig = s.room && { ...s.room, members: s.room.members.map(({ st, ...m }) => m) };
-    const rKey = sig([roomSig, s.invites, s.relay.status, s.relay.version, s.friends.map((f) => f.id), s.savedRooms, s.room ? 0 : s.friends.map((f) => [f.online, f.inRoom])]); // while in a room this stays put so the chat keeps focus
+    const rKey = sig([roomSig, s.invites, s.relay.status, s.relay.version, s.friends.map((f) => f.id), s.room ? 0 : s.savedRooms, s.room ? 0 : s.friends.map((f) => [f.online, f.inRoom])]); // while in a room this stays put so the chat keeps focus
     if (last.r !== rKey) { last.r = rKey; room(s); }
     paintMemberStates(s);
   };
@@ -81,12 +122,12 @@ export default async function together(el) {
           <div class="fi"><b><a class="fr-link" href="#/profile/${esc(f.id)}">${esc(f.name)}</a></b>${presenceLine(f, s)}</div>
           <div class="fr-act">${s.room && f.online && !f.inRoom ? `<button class="btn sm" data-inv="${f.id}">Invite</button>` : ''}${!s.room && f.online && !f.inRoom ? `<button class="btn sm" data-with="${f.id}" data-name="${esc(f.name)}">Watch together</button>` : ''}</div>
           ${f.online && (f.inRoom || f.status) ? `<div class="fr-x">${f.inRoom ? `<span class="fr-room">${icon('users')}<span class="fr-rt"><em>${esc(f.inRoom.name)}</em><small>${f.inRoom.count} in${f.inRoom.media ? ` · ${esc(f.inRoom.media.title)}` : ''}</small></span></span>` : ''}${f.status ? `${f.status.imdbId && f.status.imdbId !== 'synctest' ? `<a class="fw-strip" href="#/title/${esc(f.status.type === 'movie' ? 'movie' : 'series')}/${esc(f.status.imdbId)}" title="Open ${esc(f.status.title)}"><span class="fw" style="background-image:url('${esc(f.status.poster || posterOf(f.status.imdbId))}')"></span>` : '<span class="fw-strip">'}<span class="fw-t"><small><i class="fw-dot ${f.status.state === 'paused' || f.away ? 'idle' : ''}"></i>${f.status.state === 'paused' ? 'Paused' : 'Watching now'}${f.away ? ' · tabbed out' : ''}</small><b>${esc(f.status.title)}</b></span>${f.status.imdbId && f.status.imdbId !== 'synctest' ? '</a>' : '</span>'}` : ''}</div>` : ''}</div>`).join('') : '<p class="tg-note" style="padding:var(--s3) 0">No friends yet. Add your first one below.</p>'}</div>
-      <form class="tg-card add" id="addF"><div class="tg-k">Add a friend</div><div class="tg-row"><input class="input" id="fCode" placeholder="Their friend code" maxlength="12" autocomplete="off" spellcheck="false" ${live ? '' : 'disabled'}><button class="btn primary" ${live ? '' : 'disabled'}>Add</button></div>
+      <form class="tg-card add" id="addF"><details class="tg-codes" ${s.directory ? '' : 'open'}><summary>Add someone with a friend code</summary>
+        <p class="tg-note" style="margin-top:12px">Everyone has a code, since there are no accounts. Ask for theirs, or send yours. You only need it once.</p>
+        <div class="tg-row" style="margin-top:12px"><input class="input" id="fCode" placeholder="Their friend code" maxlength="12" autocomplete="off" spellcheck="false" ${live ? '' : 'disabled'}><button class="btn primary" ${live ? '' : 'disabled'}>Add</button></div>
         ${s.outgoing.length ? `<p class="tg-note">Waiting for ${s.outgoing.length} to accept…</p>` : ''}
-        <div class="tg-mine"><span>Your code <b>${s.you ? esc(fmtCode(s.you.id)) : '—'}</b></span><button type="button" class="btn ghost sm" id="cpCode" ${s.you ? '' : 'disabled'}>Copy</button></div>
-        <p class="tg-note">You only need this once. After that, you see each other's rooms and can just join.</p>
-        ${s.relayHost && live ? `<p class="tg-note tg-relay"><i class="fw-dot"></i>On ${esc(s.relayHost)}. Friends must be on the same relay.</p>` : ''}</form>
-      ${s.directory ? `<div class="tg-card"><div class="tg-k">People here <button class="btn ghost sm" id="rfP">Refresh</button></div>${s.people.length ? s.people.map((p) => `<div class="fr on"><span class="av live">${avatar({ avatar: p.avatar }, 38)}</span><div class="fi"><b>${esc(p.name)}</b><span>Online now</span></div>${s.outgoing.some((o) => o.id === p.id) ? '<span class="muted">Requested</span>' : `<button class="btn sm" data-add="${p.id}">Add</button>`}</div>`).join('') : '<p class="tg-note" style="padding:var(--s3) 0">No one else is online yet.</p>'}</div>` : ''}`;
+        <div class="tg-mine"><span>Your code <b>${s.you ? esc(fmtCode(s.you.id)) : '—'}</b></span><button type="button" class="btn ghost sm" id="cpCode" ${s.you ? '' : 'disabled'}>Copy</button></div></details></form>
+      ${s.directory ? `<div class="tg-card people"><div class="tg-k">People here <button class="btn ghost sm" id="rfP">Refresh</button></div>${s.people.length ? s.people.map((p) => `<div class="fr on"><span class="av live">${avatar({ avatar: p.avatar }, 38)}</span><div class="fi"><b>${esc(p.name)}</b><span>Online now</span></div>${s.outgoing.some((o) => o.id === p.id) ? '<span class="muted">Requested</span>' : `<button class="btn sm" data-add="${p.id}">Add</button>`}</div>`).join('') : '<p class="tg-note" style="padding:var(--s3) 0">No one else is online yet.</p>'}</div>` : ''}`;
     $('#cpCode', el)?.addEventListener('click', () => copy(s.you.id, 'Friend code copied'));
     $('#addF', el).onsubmit = async (e) => { e.preventDefault(); const v = $('#fCode', el).value.trim(); if (!v) return; try { await sapi('/friends', { code: v }); $('#fCode', el).value = ''; } catch (err) { toast(err.message, 'err'); } };
     $('#rfP', el)?.addEventListener('click', () => sapi('/people'));
@@ -108,11 +149,10 @@ export default async function together(el) {
       for (const i of s.invites) { const c = seen.get(i.code); if (c) c.invitedBy = i.from.name; else seen.set(i.code, { code: i.code, name: i.name, media: i.media, invitedBy: i.from.name, who: [i.from], count: 0 }); }
       const roomsNow = [...seen.values()].sort((a, b) => !!b.invitedBy - !!a.invitedBy);
       box.innerHTML = `${relayWarn(s)}
-        <div class="tg-card tg-rooms"><div class="tg-rh"><div><div class="tg-k">Rooms</div><p class="tg-note">${roomsNow.length ? 'Your friends are watching. Just join.' : 'Nobody is in a room right now.'}</p></div><button class="btn primary" id="mkRoom" ${live ? '' : 'disabled'}>${icon('play')} Start a room</button></div>
-          ${roomsNow.map((x) => `<div class="sr"><span class="sr-p" style="background-image:url('${x.media ? esc(x.media.poster || posterOf(x.media.imdbId)) : ''}')"></span><div class="sr-i"><b>${esc(x.name)}</b><span>${x.media ? esc(x.media.title) : 'Picking something to watch'}</span>${x.invitedBy ? `<span class="sr-inv">${esc(x.invitedBy)} invited you</span>` : ''}${x.count ? `<span>${x.count} in the room</span>` : ''}<div class="sr-av">${x.who.slice(0, 6).map((u) => avatar({ avatar: u.avatar }, 22)).join('')}</div></div><button class="btn primary sm" data-join="${esc(x.code)}">Join</button>${x.invitedBy ? `<button class="btn ghost sm" data-no="${esc(x.code)}">Dismiss</button>` : ''}</div>`).join('')}</div>
+        <div class="tg-card tg-rooms"><div class="tg-rh"><div><div class="tg-k">Rooms</div><p class="tg-note">${roomsNow.length ? 'Your friends are watching. Just join.' : 'Nobody is in a room right now.'}</p></div></div>
+          ${roomsNow.map((x) => `<div class="sr" style="--bg:url('${x.media ? esc(x.media.poster || posterOf(x.media.imdbId)) : ''}')"><span class="sr-p" style="background-image:url('${x.media ? esc(x.media.poster || posterOf(x.media.imdbId)) : ''}')"></span><div class="sr-i"><b>${esc(x.name)}</b><span>${x.media ? esc(x.media.title) : 'Picking something to watch'}</span>${x.invitedBy ? `<span class="sr-inv">${esc(x.invitedBy)} invited you</span>` : ''}${x.count ? `<span>${x.count} in the room</span>` : ''}<div class="sr-av">${x.who.slice(0, 6).map((u) => avatar({ avatar: u.avatar }, 22)).join('')}</div></div><button class="btn primary sm" data-join="${esc(x.code)}">Join</button>${x.invitedBy ? `<button class="btn ghost sm" data-no="${esc(x.code)}">Dismiss</button>` : ''}</div>`).join('')}</div>
         ${savedCard(s)}
         <details class="tg-code-join"><summary>Someone who isn't your friend gave you a room code?</summary><form class="tg-row" id="jnRoom"><input class="input" id="rCode" placeholder="Room code" maxlength="8" autocomplete="off" spellcheck="false" style="text-transform:uppercase" ${live ? '' : 'disabled'}><button class="btn" ${live ? '' : 'disabled'}>Join</button></form></details>`;
-      $('#mkRoom', el).onclick = (e) => { e.currentTarget.disabled = true; sapi('/room', { name: `${s.you?.name || 'My'}'s room` }).catch((err) => toast(err.message, 'err')); };
       $('#jnRoom', el).onsubmit = (e) => { e.preventDefault(); const v = $('#rCode', el).value.trim(); if (v) sapi('/room/join', { code: v }); };
       $$('[data-join]', el).forEach((b) => (b.onclick = () => sapi('/room/join', { code: b.dataset.join })));
       $$('[data-rejoin]', el).forEach((b) => (b.onclick = () => { b.disabled = true; sapi('/room/join', { code: b.dataset.rejoin }).catch((e) => { b.disabled = false; toast(e.message, 'err'); }); }));
@@ -122,16 +162,13 @@ export default async function together(el) {
     }
     const host = r.host === s.you?.id || r.owner === s.you?.id, owner = r.owner === s.you?.id, m = r.media, ep = m?.season ? `S${String(m.season).padStart(2, '0')}E${String(m.episode).padStart(2, '0')}` : '';
     box.innerHTML = `${relayWarn(s)}
-      <div class="tg-card room-head"><div><div class="tg-k">Room</div><h2>${esc(r.name)}</h2></div>
-        <div class="rh-r"><button class="btn sm" id="cpRoom" title="For someone who isn't your friend yet">Copy room code</button><button class="btn sm" id="lvRoom">Leave</button></div></div>
-      <div class="tg-card"><div class="tg-k">In the room · ${r.members.length}</div><div class="mem">${r.members.map((u) => `<div class="mb ${u.ready ? 'ready' : ''}" data-mid="${u.id}"><span class="av">${avatar({ avatar: u.avatar }, 40)}</span><b>${esc(u.name)}${u.id === r.owner ? '<em class="own" title="Owner: always in control">owner</em>' : u.id === r.host ? '<em title="Hosting until the owner is back">host</em>' : ''}</b><small class="mst"></small><i title="${u.ready ? 'Loaded and ready' : 'Not ready'}"></i>${owner && u.id !== r.owner ? `<button class="mb-x mb-own" data-own="${u.id}" data-kname="${esc(u.name)}" aria-label="Make ${esc(u.name)} the owner" title="Make ${esc(u.name)} the owner">${icon('crown')}</button>` : ''}${host && u.id !== r.owner && u.id !== s.you?.id ? `<button class="mb-x" data-kick="${u.id}" data-kname="${esc(u.name)}" aria-label="Remove ${esc(u.name)} from the room" title="Remove from room">${icon('x')}</button>` : ''}</div>`).join('')}</div>
+      <div class="tg-card"><div class="tg-k">In the room · ${r.members.length}</div><div class="mem">${r.members.map((u) => `<div class="mb ${u.ready ? 'ready' : ''}" data-mid="${u.id}"><span class="av">${avatar({ avatar: u.avatar }, 48)}</span><b>${esc(u.name)}${u.id === r.owner ? '<em class="own" title="Owner: always in control">owner</em>' : u.id === r.host ? '<em title="Hosting until the owner is back">host</em>' : ''}</b><small class="mst"></small><i title="${u.ready ? 'Loaded and ready' : 'Not ready'}"></i>${owner && u.id !== r.owner ? `<button class="mb-x mb-own" data-own="${u.id}" data-kname="${esc(u.name)}" aria-label="Make ${esc(u.name)} the owner" title="Make ${esc(u.name)} the owner">${icon('crown')}</button>` : ''}${host && u.id !== r.owner && u.id !== s.you?.id ? `<button class="mb-x" data-kick="${u.id}" data-kname="${esc(u.name)}" aria-label="Remove ${esc(u.name)} from the room" title="Remove from room">${icon('x')}</button>` : ''}</div>`).join('')}</div>
         ${host ? `<div class="srow" style="margin-top:var(--s4)"><div class="lbl"><b>Friends can see and join</b><span>Your friends see this room in their list and can hop in without a code.</span></div><button class="switch ${r.open !== false ? 'on' : ''}" id="openSw" role="switch" aria-checked="${r.open !== false}" aria-label="Friends can join"></button></div><div class="srow"><div class="lbl"><b>Who controls playback</b><span>The host always can.</span></div><div class="seg" data-seg="ctl"><button data-v="host" class="${r.control === 'host' ? 'on' : ''}">Only me</button><button data-v="all" class="${r.control === 'all' ? 'on' : ''}">Everyone</button></div></div>` : ''}</div>
-      <div class="tg-card now">${m ? `<div class="nowrow"><div class="nposter2" style="background-image:url('${esc(m.poster || posterOf(m.imdbId))}')"></div>
+      <div class="tg-card now" ${m ? `style="--bg:url('${esc(m.poster || posterOf(m.imdbId))}')"` : ''}>${m ? `<div class="nowrow"><div class="nposter2" style="background-image:url('${esc(m.poster || posterOf(m.imdbId))}')"></div>
           <div class="nwi"><div class="tg-k">${host ? 'You picked' : 'Now watching'}</div><h3>${esc(m.title)}</h3><div class="muted">${[ep, m.year].filter(Boolean).join(' · ') || (m.type === 'series' ? 'Series' : 'Film')}</div>
             <div class="tg-row" style="margin-top:var(--s4)"><button class="btn primary" id="goPlay">${icon('play')} Go to the movie</button>${host ? '<button class="btn" id="pick">Change</button>' : ''}</div></div></div>`
         : `<div class="tg-k">What are we watching?</div><p class="tg-note">${host ? 'Pick a title. Everyone in the room gets it and loads their own copy.' : 'Waiting for the host to pick something.'}</p>${host ? '<button class="btn primary" id="pick">Pick a title</button>' : ''}`}</div>
       <div class="tg-card chatbox" id="tgChat"></div>`;
-    $('#cpRoom', el).onclick = () => copy(r.code, 'Room code copied'); $('#lvRoom', el).onclick = () => sapi('/room/leave');
     $$('[data-own]', el).forEach((b) => (b.onclick = () => ask(`Make ${b.dataset.kname} the owner of this room? You will lose owner control.`, { ok: 'Make owner' }).then((ok) => ok && sapi('/room/transfer', { id: b.dataset.own }))));
     $$('[data-kick]', el).forEach((b) => (b.onclick = () => ask(`Remove ${b.dataset.kname} from the room? They will not be able to rejoin it.`, { ok: 'Remove', danger: true }).then((ok) => ok && sapi('/room/kick', { id: b.dataset.kick }))));
     $('#openSw', el)?.addEventListener('click', () => sapi('/room/settings', { open: !(r.open !== false) }));

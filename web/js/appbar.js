@@ -26,10 +26,10 @@
   bar.id = 'ihbar';
   bar.innerHTML = `<div class="l"><button data-a="back" title="Back">${I.back}</button><button data-a="fwd" title="Forward">${I.fwd}</button><button data-a="reload" title="Reload (⌘R)">${I.reload}</button></div>
     <div class="c">Orbie</div>
-    <div class="r"><button data-a="search" title="Search (⌘K)">${I.search}</button><button class="pill" data-a="resume" title="Continue watching">${I.play}<span>Resume</span></button><button data-a="friends" title="Friends">${I.friends}<b class="dot" data-dot="friends"></b></button><button data-a="bell" title="What's new">${I.bell}<b class="dot warn sm" data-dot="bell"></b></button><button data-a="menu" title="Settings">${I.gear}</button><i class="sep"></i><button class="me" data-a="profile" title="Your profile"><i></i><span></span></button></div>`;
+    <div class="r"><button data-a="search" title="Search (⌘K)">${I.search}</button><button class="pill" data-a="resume" title="Continue watching">${I.play}<span>Resume</span></button><button data-a="sanctuary" title="A Sanctuary for Cinema" class="btn-sanctuary"><img src="/img/orbie-orb.png" alt="" class="top-orb-img"></button><button data-a="friends" title="Friends">${I.friends}<b class="dot" data-dot="friends"></b></button><button data-a="bell" title="What's new">${I.bell}<b class="dot warn sm" data-dot="bell"></b></button><button data-a="menu" title="Settings">${I.gear}</button><i class="sep"></i><button class="me" data-a="profile" title="Your profile"><i></i><span></span></button></div>`;
   const q = (s) => bar.querySelector(s);
 
-  const NAMES = [[/^#\/?$/, 'Orbie'], [/^#\/continue/, 'Continue watching'], [/^#\/shelf/, 'Shelf'], [/^#\/(friends|together)/, 'Friends'], [/^#\/profile/, 'Profile'], [/^#\/settings/, 'Settings'], [/^#\/search\//, 'Search'], [/^#\/feed\/([^?]*)/, null]];
+  const NAMES = [[/^#\/?$/, 'Orbie'], [/^#\/manifesto/, 'A Sanctuary for Cinema'], [/^#\/sanctuary/, 'A Sanctuary for Cinema'], [/^#\/continue/, 'Continue watching'], [/^#\/shelf/, 'Shelf'], [/^#\/(friends|together)/, 'Friends'], [/^#\/profile/, 'Profile'], [/^#\/settings/, 'Settings'], [/^#\/search\//, 'Search'], [/^#\/feed\/([^?]*)/, null]];
   function title() {
     const h = location.hash || '#/';
     for (const [re, name] of NAMES) { const m = h.match(re); if (m) return name || decodeURIComponent(m[1]).replace(/[-_]/g, ' ').replace(/^./, (c) => c.toUpperCase()); }
@@ -40,12 +40,15 @@
     const nav = window.navigation;
     q('[data-a=back]').disabled = nav ? !nav.canGoBack : history.length <= 1;
     q('[data-a=fwd]').disabled = nav ? !nav.canGoForward : false;
+    const isSanctuary = (location.hash || '').startsWith('#/manifesto') || (location.hash || '').startsWith('#/sanctuary');
+    q('[data-a=sanctuary]')?.classList.toggle('on', isSanctuary);
   }
   bar.addEventListener('click', (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return;
     closeMenu(); // other popovers close themselves: the page's click-outside handler sees this click too
     ({ back: () => history.back(), fwd: () => history.forward(), reload: () => location.reload(),
-       search: () => document.getElementById('nSearch')?.click(), resume: () => { location.hash = '#/continue'; }, friends: () => { location.hash = '#/friends'; },
+       search: () => document.getElementById('nSearch')?.click(), resume: () => { location.hash = '#/continue'; },
+       sanctuary: () => { const b = q('[data-a=sanctuary]'); import('./orb-seq.js').then((m) => m.playSequence(b)).catch(() => { location.hash = '#/manifesto'; }); }, friends: () => { location.hash = '#/friends'; },
        bell: () => { const pop = document.querySelector('#updBell .ub-pop'); if (pop && !pop.hidden) return; /* open: the click-outside handler closes it */ setTimeout(() => document.querySelector('#updBell .ub-btn')?.click(), 0); }, menu: () => { const wasOn = menu.classList.contains('on'); closeMenu(); if (!wasOn) setTimeout(() => menu.classList.add('on'), 0); },
        profile: () => { location.hash = '#/profile'; } })[b.dataset.a]?.();
   });

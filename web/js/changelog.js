@@ -2,6 +2,36 @@
 // `status`: 'dev' = in this copy but still being proven; leave it out once it has held up in real use.
 export const CHANGELOG = [
   {
+    version: '1.1', range: 'e363b55..HEAD', date: '2026-11-17', title: 'Smoother start, smarter picks', status: 'dev',
+    summary: 'A startup that flows into the app, a calmer Together tab, Collections with posters, better recommendations that respect what you said no to, and a handful of annoying bugs gone.',
+    groups: {
+      New: [
+        'Startup and reload: the orb and the Orbie letters carry straight into the app, so nothing flashes or reloads while it opens. Click the orb to replay it.',
+        'Collections show a fan of posters from each shelf, so you can see what a collection is about before you open it.',
+        'Together is calmer: neutral colours, no friend codes to deal with, and rooms no longer redraw while you look at them.',
+        'Home has a compact one-row header: greeting, Resume and Search.',
+        'A manifesto page, reachable from the startup sequence.',
+      ],
+      Improved: [
+        'Recommendations: a long series like Transformers no longer drowns out the rest of your taste, and a franchise you said no to stops coming back. Dislikes count for more than likes, low-quality filler needs a strong match to get through, and you get more from filmmakers you keep rating well.',
+        'Taste Lab opens in its final layout with the first cards already loading, so there is no empty panel when you switch to it.',
+        'Something you start watching shows up in Continue watching straight away, not only after you have watched a while.',
+        'Ambient light follows the picture faster and costs less to draw.',
+        'Search (⌘K) no longer flickers on every letter.',
+        'The top bar blurs what scrolls under it, and the orange focus ring is gone.',
+      ],
+      Fixed: [
+        'Cancel on the launch screen now really cancels: the stream no longer starts anyway.',
+        'In This or that, "Haven\'t seen" now remembers which title you meant, so those titles stop coming back.',
+        'Continue watching updates once after you close the player, instead of redrawing several times.',
+        'Fonts no longer jump when the app loads.',
+      ],
+      'Known limits': [
+        'Recommendations still lean on genres, keywords, cast and directors, not on plot or tone. Expect good picks more than surprising ones.',
+      ],
+    },
+  },
+  {
     version: '1.0', range: '28b1991..HEAD', date: '2026-11-08', title: 'Made for you', status: 'dev',
     summary: 'Orbie learns your taste, finds anything as you type, and feels fast everywhere: picks you would actually love, a version picker that explains itself, and a Mac app that never stutters.',
     groups: {

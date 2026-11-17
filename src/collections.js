@@ -206,7 +206,20 @@ export async function getCollection(id, { skip = 0, type = '' } = {}) {
   });
 }
 
-export const collectionInfo = ({ id, group, title, sub, kind, moods = [], season }) => ({ id, group, title, sub, kind, moods, seasonal: !!season, live: inSeason(season) });
+// Three poster paths per shelf, for the tiles on the Collections page. Cheap: one discover page, no IMDb lookups, cached.
+export async function coversFor(ids) {
+  const out = {};
+  await Promise.all(String(ids).split(',').filter((id) => BY_ID.has(id)).slice(0, 40).map(async (id) => {
+    const c = BY_ID.get(id), kind = c.kind === 'both' ? 'movie' : c.kind;
+    try {
+      const list = await memo(`cov:${id}`, () => discover(kind, c, 1), 6 * 60 * 60e3);
+      out[id] = list.filter((x) => x.poster_path && (x.vote_count || 0) > 150).slice(0, 3).map((x) => `https://image.tmdb.org/t/p/w342${x.poster_path}`);
+    } catch { out[id] = []; }
+  }));
+  return out;
+}
+
+export const collectionInfo =({ id, group, title, sub, kind, moods = [], season }) => ({ id, group, title, sub, kind, moods, seasonal: !!season, live: inSeason(season) });
 export function listCollections(now = new Date()) {
   return { groups: GROUPS, moods: MOODS, collections: COLLECTIONS.map((c) => ({ ...collectionInfo(c), live: inSeason(c.season, now) })) };
 }

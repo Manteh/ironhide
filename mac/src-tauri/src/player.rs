@@ -528,7 +528,7 @@ fn play(app: &AppHandle, req: PlayReq, rx: Receiver<Msg>) -> Result<(), String> 
                     if ATTACHED.load(Ordering::Relaxed) {
                         gl.makeCurrentContext();
                         if rc.render::<()>(0, w, h, true).is_ok() {
-                            if AMBI.load(Ordering::Relaxed) && amb_at.elapsed() >= Duration::from_millis(25) {
+                            if AMBI.load(Ordering::Relaxed) && amb_at.elapsed() >= Duration::from_millis(16) {
                                 amb_at = Instant::now();
                                 if amb.is_none() { amb = Ambient::new(); }
                                 if let Some((hx, bt, bb)) = amb.as_mut().and_then(|a| a.sample(w, h)) { js(&app_r, &format!("window.__ihp&&window.__ihp.amb('{hx}',{},{},{bt:.4},{bb:.4})", AW / 4, AH / 4)); }

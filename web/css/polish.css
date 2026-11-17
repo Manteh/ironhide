@@ -105,7 +105,7 @@ body { overflow-x: clip; }
 .ninfo > * { filter: none !important; }
 .epsec.collapsed .epwrap { filter: none; }
 /* no sideways jump when a sheet opens and the page stops scrolling */
-html { scrollbar-gutter: stable; }
+html { scrollbar-gutter: auto; }
 
 /* ---- type: the Mac's own typeface ----
    SF Pro (system-ui) switches between its Text and Display cuts by size and is drawn by the OS, so it looks native and crisp

@@ -95,7 +95,7 @@ function describeStream(q, isSeries = false, title = '') {
   const hdr = [];
   if (/dolby.?vision|\bdv\b|dovi/i.test(q)) hdr.push('Dolby Vision');
   if (/hdr10\+|hdr10plus/i.test(q)) hdr.push('HDR10+'); else if (/\bhdr(?:10)?\b/i.test(q) && !/\bsdr\b/i.test(q)) hdr.push('HDR10');
-  const group = (q.match(/-([A-Za-z0-9]{2,14})(?:\[[^\]]*\])?(?:\.\w{2,4})?\s*$/) || [])[1] || (q.match(/\|\s*([A-Za-z][\w ]{2,20})\s*$/) || [])[1]?.trim() || '';
+  const group = '';
   // words from the title itself are not languages ("No Time to Die" is not Norwegian, "It" is not Italian)
   const tw = new Set(String(title).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
   const qNoTitle = q.split(/[.\s_\-]+/).filter((t) => !tw.has(t.toLowerCase())).join(' ');
@@ -114,8 +114,8 @@ function describeStream(q, isSeries = false, title = '') {
   const service = (q.match(/\b(AMZN|NF|DSNP|ATVP|HMAX|MAX|STAN|HULU|PCOK|PMTP|CATCHPLAY|MGMP)\b/) || [])[1] || '';
   // a whole season (or several) in one torrent, rather than just this episode
   const pack = isSeries && (/\bS\d{1,2}(?![ .]?E\d)\b|\bS\d{1,2}-S?\d{1,2}\b|season|stagione|сезон|sezon|complete|\d{2}x\d{2}-\d{2}|E\d{2}-E?\d{2}/i.test(q)) && !/\bS\d{1,2}[ .]?E\d{1,3}(?![ .-]?E?\d)/i.test(q);
-  const fixes = /\b(repack|proper|regrade)\b/i.test(q) ? (q.match(/\b(repack|proper|regrade)\b/i)[1]).toUpperCase() : '';
-  return { source, codec, audio, channels, hdr, group, langs: [...langs].slice(0, 3), dub, original, subs, tenbit, service, pack, fixes };
+  const fixes = '';
+  return { source, codec, audio, channels, hdr, group: '', langs: [...langs].slice(0, 3), dub, original, subs, tenbit, service, pack, fixes: '' };
 }
 const streamTags = (q) => TAG_PATTERNS.filter(([, re]) => re.test(q)).map(([t]) => t);
 
@@ -192,6 +192,7 @@ async function handleApi(req, res, urlPath) {
       return jsonResponse(res, items.filter((x) => !hidden.has(x.imdbId)));
     }
     if (method === 'GET' && urlPath === '/api/collections') { const { listCollections } = await import('./collections.js'); return jsonResponse(res, listCollections()); }
+    if (method === 'GET' && urlPath === '/api/collections/covers') { const { coversFor } = await import('./collections.js'); return jsonResponse(res, await coversFor(new URL(req.url, 'http://localhost').searchParams.get('ids') || '')); }
     if (method === 'GET' && urlPath === '/api/collections/home') {
       const { homeShelves } = await import('./collections.js'), qp = new URL(req.url, 'http://localhost').searchParams, hidden = await hiddenSet();
       const sections = await homeShelves({ mood: qp.get('mood') || '', seed: qp.get('seed') || 0 }).catch(() => []);
@@ -339,7 +340,7 @@ async function handleApi(req, res, urlPath) {
     // The last thing mpv played, once it has closed
     if (method === 'GET' && urlPath === '/api/lastend') { const st = getPlaybackStatus(); return jsonResponse(res, st && st.status ? st : null); }
     if (method === 'GET' && urlPath === '/api/playstate') return jsonResponse(res, getPlayState());
-    if (method === 'POST' && urlPath === '/api/play/cancel') { setPlayState({ phase: 'idle', detail: '' }); await tools.ironhide_control.handler({ action: 'stop' }).catch(() => {}); return jsonResponse(res, { ok: true }); }
+    if (method === 'POST' && urlPath === '/api/play/cancel') { setPlayState({ phase: 'idle', detail: '', cancelled: getPlayState().token }); await tools.ironhide_control.handler({ action: 'stop' }).catch(() => {}); return jsonResponse(res, { ok: true }); } // 'cancelled' remembers which launch was stopped, so one still looking for its stream never starts the player afterwards
 
     // The version that was just tried didn't play: remember it as broken and start the next best one of the same title
     if (method === 'POST' && urlPath === '/api/play/next') {

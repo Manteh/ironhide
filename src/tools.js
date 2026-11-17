@@ -307,6 +307,7 @@ server.registerTool(
     ownsPlayback = true;
     const result = await playDetached(stream, globalSubs, onFinish, resumeFrom, globalMeta.title ? `${globalMeta.title}${epTag}` : undefined);
 
+    if (result.status === "cancelled") { ownsPlayback = false; return { content: [{ type: "text", text: "Cancelled before it started playing." }] }; }
     if (result.status === "not_cached") {
       return { content: [{ type: "text", text: "⏳ Not cached on Real-Debrid yet. Pick another stream." }] };
     }
@@ -662,6 +663,7 @@ server.registerTool(
     ownsPlayback = true;
     const result = await playDetached(stream, subs, onFinish, resumeFrom, `${entry.title}${resumeTag}`);
 
+    if (result.status === "cancelled") { ownsPlayback = false; return { content: [{ type: "text", text: "Cancelled before it started playing." }] }; }
     if (result.status === "not_cached") {
       return { content: [{ type: "text", text: "⏳ Stream no longer cached on Real-Debrid. Use ironhide_streams to find a new one." }] };
     }

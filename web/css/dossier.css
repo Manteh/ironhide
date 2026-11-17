@@ -590,3 +590,21 @@ button.vx2-th { cursor: pointer; } button.vx2-th:hover, .vx2-th.on { color: var(
 .dx-ytmore { display: block; margin: 14px auto 0; padding: 9px 18px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; } .dx-ytmore:hover { background: var(--surface-2); }
 .dx-ythint { display: flex; align-items: center; gap: 12px; margin: 4px 0 26px; padding: 14px 16px; border-radius: 16px; border: 1px dashed var(--border-strong); color: var(--muted); font-size: 13px; text-decoration: none; transition: color .12s linear, border-color .12s linear; }
 .dx-ythint:hover { color: var(--text); border-color: rgba(255,255,255,.3); } .dx-ythint b { color: var(--text-2); font-weight: 620; } .dx-ythint .i { width: 18px; height: 18px; flex: none; }
+
+/* Frosted glass for the score chips and round action buttons, so they stay readable over bright artwork */
+.dx-score, .dx-ib { background: rgba(16, 14, 26, .58); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); border-color: rgba(255,255,255,.16); box-shadow: 0 6px 22px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08); }
+.dx-ib:hover { background: rgba(44, 40, 66, .72); }
+.dx-score small, .dx-score em { color: rgba(255,255,255,.72); }
+
+/* Choose a version: a quieter, smaller header, a back link that does not shout, and a scroll edge that fades instead of cutting */
+.vx-top { gap: 14px; padding: 14px clamp(24px, 3vw, 44px) 8px; padding-right: 76px; }
+.vx-back, .vx-back:hover { background: none !important; border: 0 !important; box-shadow: none !important; }
+.vx-back { height: 32px; padding: 0 8px 0 2px; gap: 4px; border-radius: 10px; color: var(--muted); font-size: 13.5px; font-weight: 550; opacity: .8; transition: color .2s, opacity .2s; }
+.vx-back:hover { color: var(--text); opacity: 1; }
+.vx-back .i { width: 15px; height: 15px; }
+.vx-who { gap: 12px; }
+.vx-who img { width: 30px; border-radius: 6px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .12), 0 6px 14px -8px #000; }
+.vx-who small { font-size: 10px; letter-spacing: .16em; margin-bottom: 1px; }
+.vx-who b { font-size: 19px; letter-spacing: -.025em; }
+.vx-who span { font-size: 12.5px; }
+.vx-scroll { padding-top: 10px; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 26px); mask-image: linear-gradient(180deg, transparent 0, #000 26px); }

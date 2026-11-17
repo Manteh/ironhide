@@ -27,14 +27,16 @@ const usingWeb = () => store.settings?.playback?.player === 'web';
 // In-browser player: the daemon picks/resolves/probes, then the player streams it.
 export async function playWeb(body, opts = {}) {
   if (!opts.quiet) watchLaunch({ title: body.title || '', imdbId: body.imdbId, poster: body.poster }, 'web');
+  const L = !opts.quiet ? launch : null; // Cancel on the launch screen marks this, so a stream that was still being found never opens the player afterwards
   try {
     const { browserCaps, openPlayer } = await import('./player.js');
     const info = await post('/api/webplay', { ...body, caps: browserCaps() });
+    if (L && L.cancelled) return false;
     if (!opts.quiet) hideLaunch(); openPlayer(info, { room: !!body.room, parked: !!opts.parked, prefs: store.settings.playback });
     if (info.swapped) toast(`That version isn't working, so we picked another: ${info.size || 'next best'}`, 'info');
-    setTimeout(() => refreshHistory(), 3000);
+    setTimeout(() => refreshHistory(), 700); setTimeout(() => refreshHistory(), 3000);
     return true;
-  } catch (e) { if (!opts.quiet) hideLaunch(); toast(e.message, 'err', { action: { label: 'Try again', run: () => playWeb(body, opts) } }); return false; }
+  } catch (e) { if (L && L.cancelled) return false; if (!opts.quiet) hideLaunch(); toast(e.message, 'err', { action: { label: 'Try again', run: () => playWeb(body, opts) } }); return false; }
 }
 
 // play a specific stream row from the version picker
@@ -50,13 +52,13 @@ export async function quickPlay(item, opts = {}) {
   watchLaunch({ title: item.title, imdbId: item.imdbId, type: item.type, poster: item.poster, backdrop: item.backdrop, season: item.season, episode: item.episode, version: item.startOver ? 'From the beginning' : 'Picking the best version' });
   try {
     await post('/api/quickplay', item);
-    setTimeout(() => refreshHistory(), 4000);
+    setTimeout(() => refreshHistory(), 1200); setTimeout(() => refreshHistory(), 4000);
     return true;
   } catch (e) { launchFailed(e.message, { retry: !/no streams/i.test(e.message) }); return false; }
 }
 
 // ---------- Launch overlay: between "Play" and mpv taking over ----------
-const STEPS = [['finding', 'Finding the best stream'], ['resolving', 'Resolving the link'], ['launching', 'Starting the player'], ['buffering', 'Buffering a few seconds'], ['playing', 'Opening fullscreen']];
+const STEPS = [['finding', 'Finding the best stream'], ['resolving', 'Resolving the link'], ['launching', 'Starting the player'], ['buffering', 'Buffering a few seconds'], ['playing', 'Starting playback']];
 const WEB_STEPS = [['finding', 'Finding the best stream'], ['resolving', 'Resolving the link'], ['probing', 'Checking codecs and tracks'], ['playing', 'Opening the player']];
 let launch = null;
 
@@ -106,7 +108,7 @@ export function watchLaunch(info, mode = 'mpv') {
     if (launch && !launch.failed && Date.now() - startedAt > 90000) launchFailed('Starting took too long. This version may be slow right now.');
   };
   launch.timer = setInterval(() => { poll(); const t = Math.floor((Date.now() - startedAt) / 1000), te = el.querySelector('#lTime'); if (te) te.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; }, 350); poll();
-  $('#lCancel', el).onclick = async () => { hideLaunch(); await post('/api/play/cancel').catch(() => {}); toast('Cancelled'); };
+  $('#lCancel', el).onclick = async () => { if (launch) launch.cancelled = true; hideLaunch(); await post('/api/play/cancel').catch(() => {}); toast('Cancelled'); };
 }
 const $$li = (el) => [...el.querySelectorAll('.lsteps li')];
 
@@ -151,8 +153,14 @@ export async function toggleSave(item) {
   return r.saved;
 }
 
+// Re-reads the watch history, and redraws only if something actually changed (it is asked a few times after the player closes, and the screen should not flicker for the ones that find nothing new).
 export async function refreshHistory() {
-  try { store.history = await api('/api/history'); renderNav(); window.browseRefresh?.(); } catch {}
+  try {
+    if (refreshHistory.sig === undefined) refreshHistory.sig = JSON.stringify(store.history);
+    const h = await api('/api/history'), sig = JSON.stringify(h);
+    if (sig === refreshHistory.sig) return;
+    refreshHistory.sig = sig; store.history = h; renderNav(); window.browseRefresh?.();
+  } catch {}
 }
 
 // ---------- Top nav ----------
@@ -243,6 +251,36 @@ async function navigate() {
   location.hash = '#/';
 }
 
+// Resolves once the screen in view has finished loading: fonts, no skeletons, and every picture in view drawn (or after a few seconds regardless).
+async function settled(maxMs = 3500) {
+  const t0 = performance.now(), sleep = (ms) => new Promise((r) => setTimeout(r, ms)), frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  try { await Promise.race([document.fonts?.ready, sleep(700)]); } catch {}
+  progress(0.5); // fonts are ready
+  while (performance.now() - t0 < maxMs) {
+    const busy = document.querySelector('#app .sk, #app .skl, #app [aria-busy="true"]');
+    const onHome = document.querySelector('#browse:not(.hidden)'), cards = !onHome || document.querySelector('#browse .bc:not(.sk)'); // the home screen is not loaded until its first real cards are there
+    const inView = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.top < innerHeight; };
+    const imgs = [...document.querySelectorAll('#app img')].filter(inView);
+    // posters are mostly CSS backgrounds: wait for those pictures too
+    const bgs = [...document.querySelectorAll('#app [style*="background-image"]')].filter(inView).map((e) => /url\(["']?([^"')]+)/.exec(e.getAttribute('style') || '')?.[1]).filter(Boolean);
+    const bgReady = await Promise.all([...new Set(bgs)].slice(0, 24).map((u) => bgSeen.get(u) || (bgSeen.set(u, new Promise((res) => { const im = new Image(); im.onload = im.onerror = () => res(true); im.src = u; setTimeout(() => res(true), 2500); })), bgSeen.get(u))));
+    // real progress: the shelves are there (0.7), then the share of pictures in view that have loaded (up to 1)
+    const doneImgs = imgs.filter((i) => i.complete).length + bgs.length * 0, total = imgs.length + bgs.length;
+    progress(0.5 + (cards && !busy ? 0.2 : 0) + 0.28 * (total ? (doneImgs + (bgReady.every(Boolean) ? bgs.length : 0)) / total : 1));
+    if (!busy && cards && imgs.every((i) => i.complete) && bgReady.every(Boolean)) break;
+    await sleep(80);
+  }
+  await frames();
+}
+const bgSeen = new Map();
+const progress = (v) => { window.__bootProgress && window.__bootProgress(v); }; // lets the start-up orb show how far along the app is
+// Ordinary open or reload: the page was held back (html.reload); fade it in now that it is complete.
+function reveal() {
+  const h = document.documentElement; if (!h.classList.contains('reload')) return;
+  h.classList.add('ready'); setTimeout(() => h.classList.remove('reload', 'ready'), 900);
+}
+const bootDone = () => { window.__bootDone && window.__bootDone(); reveal(); };
+
 async function refreshNodes() { try { store.nodes = await api('/api/nodes'); renderNav(); } catch {} }
 window.refreshNodes = refreshNodes;
 
@@ -268,12 +306,18 @@ document.addEventListener('keydown', (e) => {
 });
 
 (async function boot() {
+  // First launch from the start-up screen: the manifesto opens at once, taking over the orb the start-up screen left on screen.
+  // Coming from the start-up screen: the page behind the orb is the main screen; the orb and the word are held by js/intro-boot.js until it has loaded.
+  let fromStart = false; try { fromStart = /[?&]intro=1\b/.test(location.search); if (fromStart || /[?&]boot=1\b/.test(location.search)) window.history.replaceState(null, '', location.pathname + location.hash); } catch {}
+  if (fromStart) window.__introReveal = () => import('./pages/manifesto.js').then((m) => m.openManifesto({ first: true, intro: true })).catch(() => { window.__introOrb && window.__introOrb.dispose(); });
   const [settings, list, history] = await Promise.all([api('/api/settings'), api('/api/watchlist').catch(() => []), api('/api/history').catch(() => [])]);
   store.settings = settings; store.history = history; store.watchlist = list; list.forEach((w) => wl.add(w.imdbId));
+  progress(0.22); // settings, shelf and history are in
   applyAppearance(settings.appearance);
   // invite only: no membership yet means the invite comes first (someone already set up only sees that step)
   const mem = await api('/api/membership').catch(() => ({ member: true }));
   if (!mem.member || !settings.profile.named) {
+    bootDone(); // setup needs the screen: let the orb go first
     const { welcome } = await import('./welcome.js');
     store.settings = await welcome(settings, { invite: !mem.member, onlyInvite: !mem.member && settings.profile.named });
   }
@@ -294,8 +338,10 @@ document.addEventListener('keydown', (e) => {
   import('./updates-bell.js').then((m) => m.mountBell());
   import('./cursor.js').then((m) => m.initCursor());
   window.addEventListener('hashchange', navigate);
+  progress(0.4); // the app's frame is built
   navigate(); refreshNodes(); setInterval(refreshNodes, 30000);
+  settled().then(bootDone); // the start-up orb (or, on a reload, a blank screen) stays until the main screen is really there
   // first time in: the manifesto, full screen, once (after the welcome-back moment)
   let seenManifesto = true; try { seenManifesto = !!localStorage.getItem('orbie.manifesto.seen'); } catch {}
-  if (!seenManifesto) setTimeout(() => import('./pages/manifesto.js').then((m) => m.openManifesto({ first: true })).catch(() => {}), 2100);
+  if (!seenManifesto && !fromStart) setTimeout(() => import('./pages/manifesto.js').then((m) => m.openManifesto({ first: true })).catch(() => {}), 2100);
 })();
