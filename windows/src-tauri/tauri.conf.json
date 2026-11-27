@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Orbie",
+  "version": "../../package.json",
+  "identifier": "app.orbie.windows",
+  "build": { "frontendDist": "../../web" },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "category": "Entertainment",
+    "shortDescription": "A private cinema for the people you trust.",
+    "longDescription": "Orbie is a private cinema for watching films and series.",
+    "icon": ["icons/icon.ico"],
+    "resources": {
+      "../../src": "ironhide/src",
+      "../../web": "ironhide/web",
+      "../../node_modules": "ironhide/node_modules",
+      "../../package.json": "ironhide/package.json",
+      "bin/node.exe": "ironhide/bin/node.exe",
+      "bin/ffmpeg.exe": "ironhide/bin/ffmpeg.exe",
+      "bin/ffprobe.exe": "ironhide/bin/ffprobe.exe"
+    },
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "nsis": {
+        "installMode": "perUser",
+        "displayLanguageSelector": false,
+        "startMenuFolder": "Orbie"
+      }
+    }
+  }
+}

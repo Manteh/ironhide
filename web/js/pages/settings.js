@@ -5,12 +5,12 @@ import { $, $$, esc, icon, avatar, toast, ask, AVATAR_ICONS, AVATAR_COLORS } fro
 
 const SECTIONS = [
   ['profile', 'Profile', 'user'], ['appearance', 'Appearance', 'palette'], ['playback', 'Playback', 'sliders'], ['streams', 'Streams', 'film'],
-  ['connectors', 'Connectors', 'plug'], ['together', 'Friends', 'users'], ['invites', 'Invites', 'key'], ['nodes', 'Nodes', 'nodes'], ['updates', 'Updates', 'bolt'], ['about', 'About', 'info'],
+  ['connectors', 'Connectors', 'plug'], ['voice', 'Orbie voice', 'eye'], ['together', 'Friends', 'users'], ['invites', 'Invites', 'key'], ['nodes', 'Nodes', 'nodes'], ['updates', 'Updates', 'bolt'], ['about', 'About', 'info'],
 ];
 const SUBS = {
   profile: 'Your name and how you look to friends.', appearance: 'Theme, layout and motion.', playback: 'How titles start and which versions are picked.',
   streams: 'Where versions come from and how they are ranked.', connectors: 'Accounts and keys Orbie uses. They stay on this Mac.',
-  together: 'Watch with friends.', invites: 'Orbie is invite only. Bring in people you trust.', nodes: 'Everything Orbie talks to, and whether it answers.', updates: "What's new in each version.", about: 'This install.',
+  voice: 'Who Orbie sounds like when you talk to it.', together: 'Watch with friends.', invites: 'Orbie is invite only. Bring in people you trust.', nodes: 'Everything Orbie talks to, and whether it answers.', updates: "What's new in each version.", about: 'This install.',
 };
 const seg = (name, opts, cur) => `<div class="seg" data-seg="${name}">${opts.map(([v, l, ic]) => `<button data-v="${v}" class="${String(cur) === String(v) ? 'on' : ''}">${ic ? icon(ic) : ''}${l}</button>`).join('')}</div>`;
 const card = ({ title, desc, body, foot, danger }) => `<section class="scard ${danger ? 'danger' : ''}"><div class="body"><h3>${title}</h3>${desc ? `<p class="desc">${desc}</p>` : ''}${body}</div>${foot ? `<div class="foot">${foot}</div>` : ''}</section>`;
@@ -32,7 +32,7 @@ export default async function settings(el, { section = 'profile' }) {
       <nav class="snav" aria-label="Settings">${SECTIONS.map(([k, l, ic]) => `<a href="#/settings/${k}" class="${k === section ? 'on' : ''}">${icon(ic)}<span>${l}</span></a>`).join('')}</nav></aside>
     <div class="smain"><header class="shead"><h2>${cur[1]}</h2><p>${SUBS[section] || ''}</p></header><div class="scol" id="sbody"></div></div></div></div>`;
   const body = $('#sbody');
-  await ({ profile, appearance, playback, streams, connectors, together: togetherSettings, invites, nodes, updates, about }[section])(body);
+  await ({ profile, appearance, playback, streams, connectors, voice: voiceSettings, together: togetherSettings, invites, nodes, updates, about }[section])(body);
 }
 
 // ---------- Profile ----------
@@ -338,7 +338,10 @@ async function invites(body) {
     card({ title: 'Invite someone', desc: `Each invite carries your name. ${esc(left)}`,
       body: `<form class="inv-make" autocomplete="off">
           <input id="inote" class="input" maxlength="60" placeholder="Who is it for? (only you see this)" aria-label="Who is it for">
-          <button class="btn primary" id="imake" ${!m.root && !m.left ? 'disabled' : ''}>Create invite</button></form>
+          <div class="inv-actions">
+            <button class="btn primary" id="imake" ${!m.root && !m.left ? 'disabled' : ''}>Create invite</button>
+            <button type="button" class="btn ghost" id="imakeVip" ${!m.root && !m.left ? 'disabled' : ''}>Create VIP Link (with TorBox)</button>
+          </div></form>
         <div id="iout"></div>` }) +
     card({ title: m.root ? 'You own this Orbie' : 'Your membership', desc: m.root ? 'Every invite traces back to you.' : `Invited by ${esc(m.invitedBy || 'a member')}${m.since ? ` on ${when(m.since)}` : ''}.`,
       body: `<h4 class="inv-h">Invites you've made</h4><div id="ilist">${list()}</div>` });
@@ -361,6 +364,26 @@ async function invites(body) {
       b.disabled = !m.root && !m.left; b.textContent = 'Create invite';
     } catch (err) { toast(err.message, 'err'); b.disabled = false; b.textContent = 'Create invite'; }
   };
+  $('#imakeVip', body)?.addEventListener('click', async () => {
+    const b = $('#imakeVip', body), note = $('#inote', body).value.trim();
+    b.disabled = true; b.textContent = 'Generating…';
+    try {
+      const { bundle, left: nowLeft } = await post('/api/membership/invite-bundle', { note });
+      const siteUrl = 'https://orbie.film';
+      const link = `${siteUrl}/join#bundle=${bundle}`;
+      const msg = `You're invited to Orbie with VIP 4K streaming (TorBox) included!\nDownload & setup: ${link}`;
+      $('#iout', body).innerHTML = `<div class="inv-ready">
+          <div class="inv-msg"><p><b>VIP Invite Created!</b> Includes your TorBox key.</p>
+            <p><span>VIP Link</span> <code style="word-break:break-all">${esc(link)}</code></p></div>
+          <div class="inv-acts"><button class="btn primary" id="icopyVip">Copy VIP link</button><small>${note ? `For ${esc(note)} · ` : ''}opening the link automatically configures TorBox</small></div></div>`;
+      const copyBtn = $('#icopyVip', body);
+      const copy = () => navigator.clipboard.writeText(msg).then(() => { copyBtn.textContent = 'Copied'; copyBtn.classList.add('done'); setTimeout(() => { copyBtn.textContent = 'Copy VIP link'; copyBtn.classList.remove('done'); }, 2200); });
+      copyBtn.onclick = copy; copy();
+      m.made.push({ note: note ? `${note} (VIP)` : 'VIP Invite', at: Date.now() }); if (!m.root) m.left = nowLeft;
+      $('#ilist', body).innerHTML = list(); $('#inote', body).value = '';
+      b.disabled = !m.root && !m.left; b.textContent = 'Create VIP Link (with TorBox)';
+    } catch (err) { toast(err.message, 'err'); b.disabled = false; b.textContent = 'Create VIP Link (with TorBox)'; }
+  });
 }
 
 async function updates(body) {
@@ -399,4 +422,56 @@ async function about(body) {
     await saveSettings({ appearance: { theme: 'dark', accent: 'indigo', density: 'comfortable', radius: 'round', motion: 'full', posterSize: 'm' }, playback: { quality: 'auto', hdr: 'any', remux: 'any', maxSizeGb: 0, cachedOnly: true } });
     toast('Defaults restored', 'ok');
   };
+}
+
+// ---------- Orbie's voice ----------
+let previewCtx = null, previewSrc = null;
+async function playPreview(engine, voice, text) {
+  const r = await fetch('/api/agent/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, engine, voice }) });
+  if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || `The voice did not answer (${r.status})`); }
+  const bytes = await r.arrayBuffer(), n = bytes.byteLength >> 1, dv = new DataView(bytes), f = new Float32Array(n);
+  for (let i = 0; i < n; i++) f[i] = dv.getInt16(i * 2, true) / 32768; // 24 kHz, 16-bit, mono
+  previewCtx ||= new (window.AudioContext || window.webkitAudioContext)(); if (previewCtx.state === 'suspended') await previewCtx.resume();
+  try { previewSrc?.stop(); } catch {}
+  const buf = previewCtx.createBuffer(1, n, 24000); buf.copyToChannel(f, 0);
+  const src = previewCtx.createBufferSource(); src.buffer = buf; src.connect(previewCtx.destination); src.start(); previewSrc = src;
+}
+async function voiceSettings(body) {
+  let m = await api('/api/agent/voices');
+  const NAMES = { elevenlabs: 'ElevenLabs', azure: 'Azure', openai: 'OpenAI', system: 'This Mac', text: 'Text only' };
+  const best = () => (m.have.elevenlabs ? 'elevenlabs' : m.have.azure ? 'azure' : m.have.openai ? 'openai' : 'system');
+  let sample = 'Hey, I’m Orbie. Here are a few picks for tonight.';
+  const draw = () => {
+    const eng = m.engine || best(), list = m.lists[eng] || [], cur = m.current[eng];
+    body.innerHTML =
+      card({ title: 'Voice', desc: 'Orbie speaks with the most natural voice you have a key for. Pick another engine or voice below and tap one to hear it.', body:
+        row('Engine', m.engine ? '' : `Auto is using ${NAMES[best()]}.`, seg('veng', [['', 'Auto'], ...Object.keys(NAMES).map((k) => [k, NAMES[k] + (m.have[k] ? '' : ' · no key')])], m.engine)) +
+        `<div class="vgrid">${list.map(([id, name, desc]) => `<button class="vopt ${String(cur) === String(id) ? 'on' : ''}" data-id="${esc(id)}"><b>${esc(name)}</b><span>${esc(desc || '')}</span></button>`).join('') || `<p class="muted">${eng === 'text' ? 'Orbie stays silent and shows what it says as text.' : 'No voices found.'}</p>`}</div>` +
+        (eng === 'elevenlabs' ? row('Your own ElevenLabs voice', 'Paste a voice ID from your ElevenLabs library to use any voice, including ones you made.', `<div style="display:flex;gap:8px"><input id="vcustom" class="input" placeholder="Voice ID" value="${esc(list.some(([id]) => id === cur) ? '' : cur)}" style="width:230px"><button class="btn" id="vuse">Use</button></div>`) : '') +
+        row('If a voice runs out of credit', 'Orbie skips to the next voice by itself. If none is left it can use this Mac\u2019s voice (free) or stay quiet and show text.', seg('vfb', [['system', 'Use the Mac voice'], ['text', 'Just show text']], m.fallback)) +
+        row('Try a sentence', 'What the previews say.', `<input id="vsample" class="input" value="${esc(sample)}" style="width:min(380px,100%)">`),
+        foot: `<span>${m.have[eng] ? 'Saves when you pick.' : `Add the ${NAMES[eng]} key in <a href="#/settings/connectors">Connectors</a> to use it.`}</span><span class="savestat" id="vsv" aria-live="polite"></span>` }) +
+      card({ title: 'Thinking', desc: 'How smart Orbie is when it works out what you mean. The faster one is cheaper; the smarter one understands harder requests and uses the app more reliably, at a few times the price (still under a cent or so per answer).', body:
+        row('Model', '', seg('vmodel', [['gpt-4.1-mini', 'Fast and cheap'], ['gpt-4.1', 'Smarter']], m.model)) }) +
+      card({ title: 'Live voice', desc: 'Talk over Orbie and get answers a touch faster. It uses OpenAI’s live voice, which costs noticeably more than the standard one, so it is off unless you switch it on.', body:
+        row('Use the live voice', 'Needs the OpenAI key. Closes itself after 90 seconds of silence to save credit.', `<button class="switch ${m.live ? 'on' : ''}" id="vlive" role="switch" aria-checked="${m.live}" aria-label="Live voice"></button>`) });
+    const save = async (patch) => { m = await post('/api/agent/voice', patch); draw(); flash(body, 'vsv'); };
+    bindSeg(body, 'veng', (v) => save({ engine: v }));
+    bindSeg(body, 'vmodel', (v) => save({ model: v }));
+    bindSeg(body, 'vfb', (v) => save({ fallback: v }));
+    $('#vsample', body).oninput = (e) => { sample = e.target.value; };
+    $$('.vopt', body).forEach((b) => (b.onclick = async () => {
+      if (!m.have[eng]) return toast(`Add the ${NAMES[eng]} key in Connectors first`, 'err');
+      const id = b.dataset.id; $$('.vopt', body).forEach((x) => x.classList.toggle('on', x === b));
+      try { await playPreview(eng, id, sample || 'Hello.'); } catch (e) { toast(e.message, 'err'); }
+      m = await post('/api/agent/voice', { forEngine: eng, voice: id }); flash(body, 'vsv');
+    }));
+    $('#vuse', body)?.addEventListener('click', async () => {
+      const id = $('#vcustom', body).value.trim(); if (!id) return;
+      try { await playPreview('elevenlabs', id, sample || 'Hello.'); } catch (e) { return toast(e.message, 'err'); }
+      save({ forEngine: 'elevenlabs', voice: id });
+    });
+    $('#vlive', body).onclick = () => save({ live: !m.live });
+  };
+  draw();
 }

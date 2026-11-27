@@ -10,7 +10,8 @@
 .pf-st { display: flex; flex-direction: column; gap: 3px; padding: 20px 20px 18px; background: var(--bg-elev); min-width: 0; }
 .pf-st b { font-size: clamp(25px, 2.8vw, 36px); line-height: 1; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; } .pf-st span { margin-top: 5px; font-size: 13px; color: var(--text-2); } .pf-st small { font-size: 12px; color: var(--muted); }
 .pf-s { margin-bottom: 40px; min-width: 0; } .pf-s > header { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: 14px; } .pf-s h2 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -.02em; } .pf-s > header span { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
-.pf-two { display: grid; grid-template-columns: 1.25fr 1fr; gap: 32px; } .pf-two > .pf-s { padding: 20px 22px; border: 1px solid var(--border); border-radius: 18px; background: var(--bg-elev); }
+.pf-two { display: grid; grid-template-columns: 1.25fr 1fr; gap: clamp(38px, 6vw, 88px); }
+.pf-two > .pf-s { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .pf-row { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: thin; }
 .pf-c { flex: 0 0 136px; display: flex; flex-direction: column; min-width: 0; }
 .pf-p { position: relative; display: block; aspect-ratio: 2 / 3; border-radius: 12px; overflow: hidden; background: var(--surface) center / cover; box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); transition: transform .2s var(--ease); } .pf-c:hover .pf-p { transform: translateY(-3px); }
@@ -34,9 +35,28 @@
 .md-t { flex: 1; min-width: 0; display: flex; flex-direction: column; } .md-t b { font-size: 14px; font-weight: 600; } .md-t > small { font-size: 12px; color: var(--muted); } .md.off .md-t b { color: var(--text-2); }
 .md-bar { height: 4px; margin: 7px 0 5px; border-radius: 2px; background: var(--surface-2); overflow: hidden; } .md-bar i { display: block; height: 100%; background: var(--m1); } .md.off .md-bar i { background: var(--muted); } .md-n { font-size: 11.5px !important; font-variant-numeric: tabular-nums; }
 .pf-fr { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; } .pf-fr > a { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-elev); min-width: 0; opacity: .72; } .pf-fr > a.on { opacity: 1; } .pf-fr > a:hover { background: var(--hover); } .pf-fr div { min-width: 0; display: flex; flex-direction: column; } .pf-fr b { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .pf-fr small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 980px) { .pf-stats { grid-template-columns: repeat(3, 1fr); } .pf-two { grid-template-columns: 1fr; gap: 0; } .pf-two > .pf-s { margin-bottom: 24px; } }
-@media (max-width: 560px) { .pf-stats { grid-template-columns: repeat(2, 1fr); } .pf-hero { gap: 14px; } .pf-av { width: 112px; height: 112px; } .pf-c { flex-basis: 112px; } }
+@media (max-width: 980px) { .pf-stats { grid-template-columns: repeat(3, 1fr); padding-left: 0; gap: 22px 28px; } .pf-two { grid-template-columns: 1fr; gap: 0; } .pf-two > .pf-s { margin-bottom: 24px; } }
+@media (max-width: 560px) { .pf-stats { grid-template-columns: repeat(2, 1fr); gap: 18px 24px; } .pf-hero { gap: 14px; } .pf-av { width: 112px; height: 112px; } .pf-c { flex-basis: 112px; } }
 .pf-closed { display: grid; justify-items: center; gap: 6px; padding: 70px 20px; text-align: center; } .pf-closed h1 { margin: 8px 0 0; font-size: 30px; letter-spacing: -.03em; } .pf-closed p { margin: 6px 0 12px; color: var(--text-2); max-width: 420px; }
+
+/* Profile belongs to the same quiet, poster-led world as Home. Keep its data
+   surfaces tonal and let the content carry the colour. */
+.pf-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: clamp(18px, 3.5vw, 52px); margin: 4px 0 48px; padding: 0 0 0 162px; border: 0; background: none; overflow: visible; }
+.pf-st { background: none; padding: 0; }
+.pf-st b { font-size: clamp(25px, 2.6vw, 34px); font-weight: 680; }
+.pf-st span { margin: 0; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.pf-st small { font-size: 11px; color: var(--muted); }
+.pf-two > .pf-s { background: transparent; }
+.md, .pf-fr > a { background: rgba(255,255,255,.045); border-color: rgba(255,255,255,.1); }
+.pf-hg i.l1 { background: color-mix(in srgb, var(--text) 10%, var(--surface-2)); }
+.pf-hg i.l2 { background: color-mix(in srgb, var(--text) 18%, var(--surface-2)); }
+.pf-hg i.l3 { background: color-mix(in srgb, var(--text) 28%, var(--surface-2)); }
+.pf-hg i.l4 { background: color-mix(in srgb, var(--text) 42%, var(--surface-2)); }
+.pf-split { background: var(--surface-2); }
+.pf-split i { background: var(--text-2); }
+.pf-leg u.a, .pf-leg u.b { background: var(--text-2); }
+.pf-bars u { background: var(--text-2); }
+.pf-row > .bc:not(.sk):hover .bposter { box-shadow: 0 0 0 1px rgba(255,255,255,.38), 0 18px 34px -24px rgba(0,0,0,.85); }
 
 /* ---------- Updates button, top right ---------- */
 .ub { position: fixed; top: 16px; right: 20px; z-index: 190; }

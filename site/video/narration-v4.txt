@@ -1,0 +1,15 @@
+Hey. So this is Orbie. I'll tell you what it is, and I'll try to be straight with you about what it isn't too.
+
+It's a movie and TV player for the Mac. That's really all it is. You open it, pick something, and it plays. There are no ads. There's no feed trying to keep you scrolling. There's no account with us, so there's nothing for me to track you with. What you watch and what you rate stays on your computer.
+
+A lot of streaming apps are built to keep you watching, because that's how they make money. I didn't want to build that. I just wanted a good way to watch a film. When you pick one, Orbie shows you every version it can find, with the quality, the sound, the languages and the size, and it picks the one it thinks you'd want. If you disagree, pick another one. It's your call.
+
+Okay, here's the part I think I owe you. Orbie doesn't have any movies in it. It doesn't host anything and it doesn't store anything. It finds streams, and it plays them through a service you sign up for yourself and connect to it. Whether that's okay depends on where you live and what you watch, and I'm not going to tell you it's fine, because I don't know your situation. And I'd be lying if I said people don't use tools like this to watch things they haven't paid for. They do. The people who made those films usually get nothing from that.
+
+So here's what I'd ask. If you love something, support it. Buy it, rent it, go see it in a cinema, tell a friend. People spend years on these things. I'd like to build a proper way to say thank you to them, directly, but it doesn't exist yet, and I'm not going to pretend it does.
+
+The thing I'm most happy with is watching together. Everybody plays the film on their own Mac, so it looks right for everyone, and Orbie keeps you in sync. It waits until everyone's ready, counts down, and starts you all on the same frame. If someone's connection drops, it waits for them. You can send reactions and chat while you watch.
+
+It's also invite only, and I want to explain that, because it can sound snobby. It's not about being exclusive. It's early, it has rough edges, and things break. I'd rather it grow slowly, with people who know each other, so I can actually look after it. Every invite has the name of the person who sent it. That's the whole idea. It's Mac only for now, too.
+
+So if you know someone who's already using it, ask them. And if you don't yet, that's okay. Thanks for watching. That's Orbie.

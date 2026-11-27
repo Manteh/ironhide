@@ -11,10 +11,13 @@
 import { createPrivateKey, createPublicKey, createHash, sign, verify, randomBytes } from 'crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { CONFIG_DIR } from './config.js';
+import { CONFIG_DIR, saveConfig } from './config.js';
 import { identity } from './social.js';
 
-export const ROOT = process.env.ORBIE_TEST_ROOT || 'vZapy7L6rLm0y8JtWX7lVztwbNnJXC7u0mrL8q_qW5s'; // the owner's public key (raw Ed25519, base64url) // ORBIE_TEST_ROOT: tests only
+// Shimara's current local identity is the owner for this build. Keep the previous
+// root accepted so invites already sent from the original owner remain valid.
+export const ROOT = process.env.ORBIE_TEST_ROOT || '27kAujqdkFYyEl_ZJara_pcAVbjmFmn92IVga6_Yh1k'; // owner's public key (raw Ed25519, base64url)
+const LEGACY_ROOT = 'vZapy7L6rLm0y8JtWX7lVztwbNnJXC7u0mrL8q_qW5s';
 export const QUOTA = 3;
 const FILE = join(CONFIG_DIR, 'membership.json');
 const MAX_DEPTH = 24;
@@ -47,7 +50,7 @@ function save(d) { mkdirSync(CONFIG_DIR, { recursive: true }); writeFileSync(FIL
 function validTicket(t, depth = 0) {
   if (!t || typeof t !== 'object' || depth > MAX_DEPTH) return false;
   if (!ok(t.by, ticketMsg(t), t.s)) return false;
-  if (t.by === ROOT) return true;
+  if (t.by === ROOT || t.by === LEGACY_ROOT) return true;
   return validProof(t.up, depth + 1) && t.up.id === t.by;
 }
 function validProof(p, depth = 0) {
@@ -123,6 +126,27 @@ export function makeInvite({ note = '', name = '' } = {}) {
   if (id !== ROOT) t.up = d.proof;
   (d.made ||= []).push({ n: t.n, at: Date.now(), note: String(note || '').slice(0, 60) }); save(d);
   return { code: encode(t), left: st.root ? null : st.left - 1 };
+}
+
+export function makeBundle({ inviteCode, torboxKey, name = '' }) {
+  const payload = JSON.stringify({ code: inviteCode, torbox: String(torboxKey || '').trim(), from: String(name || '').slice(0, 40) });
+  return 'orbie-bundle-' + Buffer.from(payload, 'utf8').toString('base64url');
+}
+
+export function redeemBundle(bundleCode) {
+  try {
+    const raw = String(bundleCode || '').replace(/^orbie-bundle-/, '');
+    const data = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+    if (!data.code) return { ok: false, error: 'Missing invite code in bundle' };
+    const res = redeem(data.code);
+    if (!res.ok) return res;
+    if (data.torbox) {
+      saveConfig({ torbox_api_key: String(data.torbox).trim(), debrid_provider: 'torbox' });
+    }
+    return { ok: true, from: data.from || res.from, torbox: !!data.torbox };
+  } catch (err) {
+    return { ok: false, error: 'Invalid bundle: ' + err.message };
+  }
 }
 
 // ---- friends from invites (used by social.js) ----

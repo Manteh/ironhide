@@ -7,6 +7,8 @@ export const CHANGELOG = [
     groups: {
       New: [
         'Startup and reload: the orb and the Orbie letters carry straight into the app, so nothing flashes or reloads while it opens. Click the orb to replay it.',
+        'Ask Orbie: click the orb in the top bar, say what you want ("any good detective movies out right now?"), and Orbie builds a shelf on screen, points at titles, opens a trailer, goes back, and plays your pick, answering out loud while the orb moves with its voice. You can type instead. Needs an OpenAI key in Settings → Connectors.',
+        'Discover tab: mix several genres (tap twice to leave one out, match any or all), pick a release-year range, a minimum rating, countries, themes like video games, superheroes or disasters, and tap streaming-service logos to see only what is on them. With a free OMDb key in Settings you also get IMDb and Rotten Tomatoes scores on cards and as filters.',
         'Collections show a fan of posters from each shelf, so you can see what a collection is about before you open it.',
         'Together is calmer: neutral colours, no friend codes to deal with, and rooms no longer redraw while you look at them.',
         'Home has a compact one-row header: greeting, Resume and Search.',

@@ -206,13 +206,20 @@ footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:
       <h1 class="word" style="--i:0" aria-label="Orbie"><span class="o" id="o" aria-hidden="true"></span><span aria-hidden="true">rbie</span></h1>
       <h2 class="tag" style="--i:1">A private cinema for the people you trust.</h2>
       <p class="sub" style="--i:2">Every film and series, one click away. Picked for you, played in 4K, watched together.</p>
-      <div class="pill" style="--i:3"><span>Invite only</span><i></i><span>macOS</span><i></i><span>In development</span></div>
+      <div class="pill" style="--i:3"><span>Invite only</span><i></i><span>macOS &amp; Windows</span><i></i><span>In development</span></div>
       <div class="cta" style="--i:4">
-        <a class="btn primary" href="https://github.com/Manteh/orbie-app/releases/latest">
-          Download for Mac
+        <a class="btn primary" id="dlBtn" href="downloads/Orbie.zip" download="Orbie.zip">
+          <span id="dlLabel">Download for Mac</span>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>
         </a>
+        <a class="btn ghost" id="dlWin" href="https://github.com/Manteh/ironhide/releases/latest/download/Orbie-Setup.exe" title="Windows 10/11 installer">
+          <span>Windows (x64)</span>
+        </a>
         <button class="btn ghost" id="open2">I have an invite</button>
+        <a class="btn ghost" id="openApp" href="orbie://invite" style="display:none">Open in Orbie</a>
+      </div>
+      <div id="invBanner" style="display:none;margin-top:14px;padding:10px 16px;border-radius:12px;background:rgba(150,120,255,.15);border:1px solid rgba(165,140,255,.3);color:#e2dcff;font-size:14px;display:flex;align-items:center;gap:8px">
+        <span style="color:#7be0a6">✓</span> <span id="invText">You're invited to Orbie! Download will copy your code automatically.</span>
       </div>
       <p class="mood" style="--i:5">Tonight I want <span class="rot in" id="rot">Tense</span></p>
     </section>
@@ -240,7 +247,7 @@ footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:
   </main>
 
   <footer>
-    <span>macOS 15+ on Apple Silicon</span>
+    <span>macOS (Apple Silicon) · Windows 10/11</span>
     <span>Orbie is a player and lookup tool. It doesn't host or index any content.</span>
   </footer>
 </div>
@@ -414,6 +421,67 @@ void main(){
     catch { const r = document.createRange(); r.selectNode($('#cmd')); getSelection().removeAllRanges(); getSelection().addRange(r); document.execCommand('copy'); getSelection().removeAllRanges(); }
     this.textContent = 'Copied'; setTimeout(() => (this.textContent = 'Copy'), 1600);
   };
+
+  /* ---------- OS detection for download priority ---------- */
+  try {
+    const isWin = /Win/i.test(navigator.platform || navigator.userAgent);
+    if (isWin) {
+      const dlBtn = $('#dlBtn'), dlWin = $('#dlWin'), dlLabel = $('#dlLabel');
+      if (dlBtn && dlWin) {
+        dlBtn.href = "https://github.com/Manteh/orbie-app/releases/latest";
+        dlBtn.removeAttribute('download');
+        if (dlLabel) dlLabel.textContent = "Download for Windows";
+        dlWin.href = "downloads/Orbie.zip";
+        dlWin.setAttribute('download', 'Orbie.zip');
+        dlWin.querySelector('span').textContent = "Mac (Apple Silicon)";
+      }
+    }
+  } catch {}
+
+  /* ---------- invite & VIP bundle link handling ---------- */
+  try {
+    const p = new URLSearchParams(location.search);
+    const hash = (location.hash || '').replace(/^#(\/)?/, '');
+    const hashParams = new URLSearchParams(hash);
+    const bundle = p.get('bundle') || hashParams.get('bundle') || (hash.startsWith('orbie-bundle-') ? hash : '');
+    const code = bundle || p.get('invite') || p.get('code') || hashParams.get('invite') || (hash.startsWith('orbie-') ? hash : '');
+
+    if (code) {
+      const banner = $('#invBanner'), text = $('#invText'), dl = $('#dlBtn'), openApp = $('#openApp');
+      let sender = 'A friend', isVip = false;
+
+      if (bundle) {
+        isVip = true;
+        try {
+          const raw = bundle.replace(/^orbie-bundle-/, '');
+          const b64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+          const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+          const parsed = JSON.parse(decodeURIComponent(escape(atob(b64 + pad))));
+          if (parsed.from) sender = parsed.from;
+        } catch {}
+      }
+
+      if (banner) {
+        banner.style.display = 'flex';
+        text.innerHTML = isVip
+          ? `<b>${sender}</b> invited you to Orbie with <b>VIP 4K Streaming (TorBox)</b> included!`
+          : `<b>${sender}</b> invited you to Orbie! Download includes your invite.`;
+      }
+      if (dl && isVip) {
+        dl.innerHTML = `Download Orbie for Mac (VIP) <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>`;
+      }
+      if (openApp) {
+        openApp.style.display = 'inline-flex';
+        openApp.href = `orbie://invite?code=${encodeURIComponent(code)}`;
+      }
+      if (dl) {
+        dl.addEventListener('click', async () => {
+          try { await navigator.clipboard.writeText(code); } catch {}
+          if (text) text.innerHTML = `✓ <b>${isVip ? 'VIP setup' : 'Invite'} copied to clipboard!</b> Launch Orbie after install and it will auto-detect everything.`;
+        });
+      }
+    }
+  } catch {}
 })();
 </script>
 </body>

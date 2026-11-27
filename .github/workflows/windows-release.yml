@@ -1,0 +1,63 @@
+name: Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install Windows runtime assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path windows/src-tauri/bin | Out-Null
+          Invoke-WebRequest https://nodejs.org/dist/v22.14.0/node-v22.14.0-win-x64.zip -OutFile node.zip
+          Expand-Archive node.zip -DestinationPath node-extract -Force
+          Copy-Item node-extract/node-v22.14.0-win-x64/node.exe windows/src-tauri/bin/node.exe
+          Invoke-WebRequest https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-extract -Force
+          $ffmpeg = Get-ChildItem ffmpeg-extract -Directory | Select-Object -First 1
+          Copy-Item "$($ffmpeg.FullName)/bin/ffmpeg.exe" windows/src-tauri/bin/ffmpeg.exe
+          Copy-Item "$($ffmpeg.FullName)/bin/ffprobe.exe" windows/src-tauri/bin/ffprobe.exe
+
+      - run: npm ci
+
+      - name: Build and publish installer
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: windows
+          tagName: v__VERSION__
+          releaseName: Orbie v__VERSION__
+          releaseBody: Windows installer for Orbie.
+          releaseDraft: false
+          prerelease: false
+
+      - name: Collect installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $exe = Get-ChildItem windows/src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1
+          Copy-Item $exe.FullName release/Orbie-Setup.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Orbie-Windows
+          path: release/Orbie-Setup.exe

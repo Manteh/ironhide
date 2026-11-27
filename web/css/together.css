@@ -371,7 +371,9 @@ a.fr-link { color: inherit; text-decoration: none; } a.fr-link:hover { text-deco
 .welcome .wl-orb { display: flex; justify-content: center; } .welcome .wl-orb img { width: 76px; height: 76px; filter: drop-shadow(0 8px 22px rgba(120, 80, 255, .55)); }
 .welcome .wl-code { min-height: 84px; resize: none; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; padding: 12px 14px; }
 .welcome .wl-discord { display: flex; align-items: center; justify-content: center; gap: 10px; background: #5865f2; color: #fff; border: 0; font-weight: 650; }
-.welcome .wl-discord:hover { background: #4752c4; } .welcome .wl-discord svg { width: 20px; height: 20px; }
+.welcome .wl-discord:hover:not(:disabled) { background: #4752c4; } .welcome .wl-discord:disabled { opacity: .7; cursor: wait; } .welcome .wl-discord svg { width: 20px; height: 20px; }
+.welcome .wl-dc .wl-msg { margin: 0 0 14px; justify-content: center; text-align: center; }
+.welcome .wl-dc .wl-skip { margin-top: 10px; }
 .welcome .wl-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; } .welcome .wl-or::before, .welcome .wl-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
 /* invite step spacing: the orb gets room to breathe, the heading block is centred under it, and no empty gaps */

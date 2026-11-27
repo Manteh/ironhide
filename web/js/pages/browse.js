@@ -10,7 +10,7 @@ import { makeDropdown, closeDropdown } from '../dropdown.js';
 
 // Movies and series share one tab each: the Movies / Series switch picks which list is shown
 const TABS = [
-  ['home', 'For You', '#/'], ['collections', 'Collections'], ['today', 'Today'], ['rising', 'Rising'], ['fresh', 'New'], ['trending', 'Trending'], ['popular', 'Popular'], ['theaters', 'In cinemas'],
+  ['home', 'For You', '#/'], ['collections', 'Collections'], ['discover', 'Discover'], ['today', 'Today'], ['rising', 'Rising'], ['fresh', 'New'], ['trending', 'Trending'], ['popular', 'Popular'], ['theaters', 'In cinemas'],
   ['toprated', 'Top rated'], ['gems', 'Hidden gems'], ['anticipated', 'Upcoming'], ['boxoffice', 'Box office'], ['watched_weekly', 'Most watched'], ['surprise', 'Surprise me'], ['shelf', 'Shelf', '#/shelf'],  // Continue watching has its own row on Home, "See all" and the sidebar's Resume
 ];
 const hrefOf = ([id, , h]) => h || `#/feed/${id}`;
@@ -119,6 +119,7 @@ function railMenu(b) {
 // Sort, filter and hide what has been watched. Done here so changing them is instant.
 function shown(items) {
   const seen = new Set(store.history.map((h) => h.imdbId)), hid = hiddenIds();
+  if (st.tab === 'discover') return items.filter((i) => !hid.has(i.imdbId)); // the server already filtered and sorted
   let out = items.filter((i) => !hid.has(i.imdbId) && (!st.min || Number(i.rating) >= st.min) && (!st.hideSeen || !seen.has(i.imdbId)) && (!(st.tab === 'new' && st.genre) || (i.genres || []).includes(st.genre)));
   const yr = (i) => parseInt(i.year, 10) || 0, num = (i) => Number(i.rating) || 0;
   if (st.sort === 'rating') out = [...out].sort((a, b) => num(b) - num(a));
@@ -186,6 +187,7 @@ function card(it, i = 0) {
   return `<article class="bc" tabindex="0" role="link" aria-label="${esc(label)}" draggable="true" data-year="${esc(it.year || '')}" data-rating="${esc(it.rating || '')}" style="--i:${Math.min(i, 24)}" data-id="${esc(it.imdbId)}" data-type="${esc(type)}" data-title="${esc(it.title)}" data-poster="${esc(posterOf(it.imdbId) || it.poster || posterOf(it.imdbId))}" ${it.season ? `data-season="${it.season}" data-episode="${it.episode}"` : ''}>
     <div class="bposter"><img class="bimg" src="${esc(cardSrc(it).src)}"${cardSrc(it).fb ? ` data-fb="${esc(cardSrc(it).fb)}"` : ''} alt="" loading="${i < 8 ? 'eager' : 'lazy'}"${i < 6 ? ' fetchpriority="high"' : ''} decoding="async" draggable="false">
       ${it.match ? `<span class="bmatch" title="How well this fits your taste">${it.match}% match</span>` : ''}
+      ${it.rt != null || it.imdb != null ? `<span class="bscore">${it.rt != null ? `<b class="rt${it.rt >= 60 ? '' : ' rot'}">${it.rt}%</b>` : ''}${it.imdb != null ? `<b>IMDb ${it.imdb}</b>` : ''}</span>` : ''}
       ${it.rank && it.rank <= 20 ? `<span class="brank${it.rank <= 3 ? ' top' : ''}">${it.rank}</span>` : ''}
       ${newSet.has(it.imdbId) && !it.rank ? `<span class="bnew" title="New episodes since you caught up">New ep</span>` : ''}
       ${it.removable ? `<button class="bx" data-forget aria-label="Remove ${esc(it.title)} from Continue watching" title="Remove from Continue watching">${icon('x')}</button>` : ''}
@@ -252,9 +254,10 @@ async function renderHero(items) {
 
 async function loadTab(reset = true) {
   const my = ++st.token;
+  { const fr = $('#fldRow', root); if (fr && st.tab !== 'shelf') fr.innerHTML = ''; }
   const grid = $('#grid', root), hero = $('#hero', root), more = $('#more', root);
   if (reset) {
-    st.items = []; st.endless = false; st.epage = 0;
+    st.items = []; st.endless = false; st.epage = 0; st.dpage = 0;
     if (grid.children.length && !grid.querySelector('.sk')) { grid.classList.add('leaving'); hero.classList.add('leaving'); await new Promise((r) => setTimeout(r, 170)); }
     if (my !== st.token) return;
     grid.classList.remove('leaving'); hero.classList.remove('leaving');
@@ -272,8 +275,17 @@ async function loadTab(reset = true) {
     const seen = new Set(st.items.map((i) => i.imdbId)); added = got.filter((i) => !seen.has(i.imdbId));
     items = [...st.items, ...added]; st.more = got.length > 0 && st.epage < 250;
   }
+  else if (st.tab === 'discover') {
+    if (reset) paintTools();
+    const pg = reset ? 1 : st.dpage + 1, got = await api(discoverUrl(pg)).catch(() => []), scored = !!(st.df.imdbMin || st.df.rtMin);
+    if (my !== st.token) return;
+    st.dpage = pg; const seen = new Set(st.items.map((i) => i.imdbId)), fresh = got.filter((i) => !seen.has(i.imdbId));
+    items = [...st.items, ...fresh]; st.more = (got.length > 0 || scored) && pg < (scored ? 15 : 40);
+    // a page can come back thin when score filters trim it: keep reading until the grid has something to show
+    if (!fresh.length && st.more && pg < 40) { st.items = items; st.busy = false; return loadTab(false); }
+  }
   else if (st.tab === 'continue') { items = continueItems(store.history).map((it) => ({ ...it, removable: true })); }
-  else if (st.tab === 'shelf') { items = store.watchlist.map((w) => ({ ...w, tag: progressTag(w.imdbId) })); }
+  else if (st.tab === 'shelf') { items = store.watchlist.map((w) => ({ ...w, tag: progressTag(w.imdbId) })); import('../folders.js').then((m) => m.mountFolderRow($('#fldRow', root))).catch(() => {}); } // collections sit above the shelf
   else if (st.tab === 'collections') {
     const m = await api('/api/collections').catch(() => null); if (my !== st.token) return;
     if (m) colMeta = m;
@@ -287,7 +299,7 @@ async function loadTab(reset = true) {
     const cont = continueItems(store.history, 4), seen = new Set(cont.map((c) => c.imdbId));
     const inRows = new Set([...(secs.sections || []), ...lastCols].flatMap((x) => x.items.map((i) => i.imdbId)));
     items = fy.filter((m) => !seen.has(m.imdbId) && !inRows.has(m.imdbId));  // in progress and row picks are shown above
-    hero.innerHTML = await renderHero(fy.filter((x) => x.tag === 'Trending').concat(fy));
+    hero.innerHTML = '';
     if (my !== st.token) return;
     st.endless = true; st.epage = 0; st.more = true;
   } else {
@@ -313,7 +325,7 @@ async function loadTab(reset = true) {
   if (reset) { paintTools(); grid.innerHTML = view.length ? view.map(card).join('') : emptyHtml; }
   else syncGrid(view, emptyHtml); // more arriving at the end: nothing you are looking at is touched
   prefetch(view.map((i) => posterOf(i.imdbId)));
-  if (st.more) readAhead();
+  if (st.more && st.tab !== 'discover') readAhead();
   checkMore(); // the page may still be short (filters hide titles), so look again
 }
 
@@ -375,6 +387,7 @@ function syncGrid(view, emptyHtml) {
 function paintTools() {
   const el = $('#tools', root); if (!el) return;
   const t = st.tab, fm = feedMeta(base(t)), isFeed = !['continue', 'shelf', 'collections'].includes(t);
+  if (t === 'discover') { root.classList.remove('pagey'); paintDiscover(el); const c = $('#count', el); if (c) c.textContent = st.busy ? '' : `${st.items.length} title${st.items.length === 1 ? '' : 's'}`; return; }
   root.classList.toggle('pagey', !isFeed && t !== 'collections'); // Resume and Shelf are pages of their own: heading, denser grid, no category strip
   if (!isFeed) {
     if (t === 'collections') { el.innerHTML = '<div class="pg-head"><h1>Collections</h1><span>Shelves for every mood, season and obsession</span></div>'; return; }
@@ -660,6 +673,83 @@ async function refreshCols(animate = false) {
   lastCols = cols.sections || [];
   paintRows(lastTaste, lastCols, animate);
 }
+// ---------- Discover: every filter in one place ----------
+const DF0 = { type: '', genres: [], mode: 'any', exclude: [], yearFrom: '', yearTo: '', ratingMin: 0, imdbMin: 0, rtMin: 0, countries: [], themes: [], providers: [], sort: 'popular' };
+st.df = { ...DF0, ...ls('df', {}) };
+let dmeta = null;
+const dRegion = () => (navigator.language || 'en-US').split('-')[1]?.toUpperCase() || 'US';
+const dActive = () => { const f = st.df; return f.type || f.genres.length || f.exclude.length || f.yearFrom || f.yearTo || f.ratingMin || f.imdbMin || f.rtMin || f.countries.length || f.themes.length || f.providers.length; };
+function discoverUrl(page) {
+  const f = st.df, qs = new URLSearchParams({ page, sort: f.sort, region: dRegion(), mode: f.mode });
+  if (f.type) qs.set('type', f.type);
+  for (const k of ['genres', 'exclude', 'countries', 'themes', 'providers']) if (f[k].length) qs.set(k, f[k].join(','));
+  for (const k of ['yearFrom', 'yearTo', 'ratingMin', 'imdbMin', 'rtMin']) if (f[k]) qs.set(k, f[k]);
+  return `/api/discover?${qs}`;
+}
+function paintDiscover(el) {
+  if ($('#dpanel', el) && dmeta) { paintDiscoverState(el); return; }
+  if (dmeta && !dmeta.scores) dmeta = null; // no score filters yet: ask again, in case an OMDb key was added since (the list is cached for the session)
+  el.innerHTML = '<div class="pg-head"><h1>Discover</h1><span>Mix genres, years, ratings, countries, themes and streaming services</span></div><div id="dpanel" class="dpanel"></div>';
+  const build = (m) => {
+    dmeta = m; const panel = $('#dpanel', el); if (!panel) return;
+    const f = st.df, yNow = new Date().getFullYear(), years = Array.from({ length: yNow - 1919 }, (_, i) => String(yNow - i));
+    const chips = (key, list, label) => list.map((n) => `<button class="dchip" data-chip="${key}" data-v="${esc(n)}">${esc(label ? label(n) : n)}</button>`).join('');
+    panel.innerHTML = `
+      <div class="drow"><div class="seg2" role="group" aria-label="Type">${[['', 'All'], ['movie', 'Films'], ['series', 'Series']].map(([v, l]) => `<button data-dtype="${v}">${l}</button>`).join('')}</div>
+        <span id="dsort"></span><button class="dtoggle" id="dtoggle" aria-expanded="true">Filters</button><span class="dsum" id="dsum"></span><span class="dgrow"></span><button class="dreset" id="dreset">Reset filters</button><span class="cnt" id="count"></span></div>
+      <div class="dsec"><h4>Genres <small>tap once to include, twice to leave out</small></h4>
+        <div class="dchips">${chips('genre', m.genres)}</div>
+        <div class="dmode" role="group" aria-label="Match"><button data-dmode="any">Any of these</button><button data-dmode="all">All of these</button></div></div>
+      <div class="dsec dgrid2"><div><h4>Release years</h4><div class="drow"><span id="dyf"></span><i>to</i><span id="dyt"></span></div></div>
+        <div><h4>Rating</h4><div class="drow"><span id="drt"></span>${m.scores ? '<span id="dimdb"></span><span id="drtm"></span>' : '<a class="dhint" href="#/settings/connectors">Add a free OMDb key for IMDb and Rotten Tomatoes filters</a>'}</div></div></div>
+      <div class="dsec"><h4>Streaming on <small>${esc(dRegion())}</small></h4><div class="dlogos">${(m.providers || []).map((p) => `<button class="dlogo" data-chip="provider" data-v="${p.id}" title="${esc(p.name)}" aria-label="${esc(p.name)}"><img src="${esc(p.logo)}" alt="" loading="lazy" draggable="false"></button>`).join('') || '<span class="dhint">Services unavailable right now</span>'}</div></div>
+      <div class="dsec"><h4>Themes</h4><div class="dchips">${chips('theme', m.themes)}</div></div>
+      <div class="dsec"><h4>Made in</h4><div class="dchips" id="dcountries">${chips('country', m.countries.slice(0, 12).map((c) => c.code), (c) => m.countries.find((x) => x.code === c).name)}<button class="dchip more" id="dmoreC">More countries</button></div></div>`;
+    const go = () => { keep('df', st.df); paintDiscoverState(el); loadTab(true); };
+    const dd = (id, label, options, value, onChange) => { const h = $('#' + id, panel); if (h) makeDropdown(h, { label, options, value, onChange }); };
+    dd('dsort', 'Sort', [['popular', 'Most popular'], ['rating', 'Highest rated'], ['newest', 'Newest first'], ['oldest', 'Oldest first']], f.sort, (v) => { st.df.sort = v; go(); });
+    dd('dyf', 'From', [['', 'Any year'], ...years.map((y) => [y, y])], f.yearFrom, (v) => { st.df.yearFrom = v; go(); });
+    dd('dyt', 'To', [['', 'Any year'], ...years.map((y) => [y, y])], f.yearTo, (v) => { st.df.yearTo = v; go(); });
+    dd('drt', 'Rating', [[0, 'Any rating'], [6, 'TMDB 6+'], [7, 'TMDB 7+'], [8, 'TMDB 8+']], f.ratingMin, (v) => { st.df.ratingMin = +v; go(); });
+    dd('dimdb', 'IMDb', [[0, 'Any IMDb'], [6, 'IMDb 6+'], [7, 'IMDb 7+'], [8, 'IMDb 8+'], [9, 'IMDb 9+']], f.imdbMin, (v) => { st.df.imdbMin = +v; go(); });
+    dd('drtm', 'Rotten Tomatoes', [[0, 'Any Rotten'], [60, 'Fresh 60%+'], [75, 'Fresh 75%+'], [90, 'Certified 90%+']], f.rtMin, (v) => { st.df.rtMin = +v; go(); });
+    panel.onclick = (e) => {
+      const t = e.target.closest('button'); if (!t) return;
+      if ('dtype' in t.dataset) { st.df.type = t.dataset.dtype; return go(); }
+      if ('dmode' in t.dataset) { st.df.mode = t.dataset.dmode; return go(); }
+      if (t.id === 'dtoggle') { keep('dmin', !ls('dmin', false)); return paintDiscoverState(el); }
+      if (t.id === 'dreset') { st.df = { ...DF0 }; keep('df', st.df); dmeta = m; $('#dpanel', el).remove(); paintDiscover(el); return loadTab(true); }
+      if (t.id === 'dmoreC') { t.remove(); $('#dcountries', panel).insertAdjacentHTML('beforeend', chips('country', m.countries.slice(12).map((c) => c.code), (c) => m.countries.find((x) => x.code === c).name)); return paintDiscoverState(el); }
+      const k = t.dataset.chip, v = t.dataset.v; if (!k) return;
+      const F = st.df;
+      if (k === 'genre') { // off -> include -> leave out -> off
+        if (F.genres.includes(v)) { F.genres = F.genres.filter((x) => x !== v); F.exclude = [...F.exclude, v]; }
+        else if (F.exclude.includes(v)) F.exclude = F.exclude.filter((x) => x !== v);
+        else F.genres = [...F.genres, v];
+      } else { const n = { theme: 'themes', country: 'countries', provider: 'providers' }[k]; F[n] = F[n].includes(v) ? F[n].filter((x) => x !== v) : [...F[n], v]; }
+      go();
+    };
+    paintDiscoverState(el);
+  };
+  if (dmeta) build(dmeta); else api(`/api/discover/meta?region=${dRegion()}`).then(build).catch(() => { const p = $('#dpanel', el); if (p) p.innerHTML = '<div class="empty">Could not load the filters.</div>'; });
+}
+// light up the chips, segments and reset button for the current filters (no rebuild)
+function paintDiscoverState(el) {
+  const f = st.df, panel = $('#dpanel', el); if (!panel) return;
+  $$('[data-dtype]', panel).forEach((b) => b.classList.toggle('on', b.dataset.dtype === f.type));
+  $$('[data-dmode]', panel).forEach((b) => b.classList.toggle('on', b.dataset.dmode === f.mode));
+  $$('[data-chip]', panel).forEach((b) => {
+    const k = b.dataset.chip, v = b.dataset.v;
+    const on = k === 'genre' ? f.genres.includes(v) : k === 'theme' ? f.themes.includes(v) : k === 'country' ? f.countries.includes(v) : f.providers.includes(v);
+    b.classList.toggle('on', on); b.classList.toggle('off', k === 'genre' && f.exclude.includes(v));
+    b.setAttribute('aria-pressed', String(on));
+  });
+  $('#dreset', panel)?.classList.toggle('show', !!dActive());
+  const min = ls('dmin', false); panel.classList.toggle('min', min); const tg = $('#dtoggle', panel); if (tg) { tg.setAttribute('aria-expanded', String(!min)); tg.textContent = min ? 'Show filters' : 'Hide filters'; }
+  const bits = [...f.genres, ...f.exclude.map((g) => 'not ' + g), f.yearFrom || f.yearTo ? `${f.yearFrom || '…'}–${f.yearTo || 'now'}` : '', f.ratingMin ? `TMDB ${f.ratingMin}+` : '', f.imdbMin ? `IMDb ${f.imdbMin}+` : '', f.rtMin ? `Rotten ${f.rtMin}%+` : '', ...f.themes, ...f.countries, ...(f.providers.length ? [`${f.providers.length} service${f.providers.length > 1 ? 's' : ''}`] : [])].filter(Boolean);
+  const sum = $('#dsum', panel); if (sum) sum.textContent = min ? bits.join(' · ') : '';
+}
+
 // the Collections tab: every shelf, grouped
 function hubHtml(m) {
   const by = (g) => m.collections.filter((c) => c.group === g.id && (!c.seasonal || c.live));
@@ -695,7 +785,7 @@ export async function mount(el) {
     <div class="bwrap"><div id="hero"></div>
       <section id="cont" class="cont hidden" aria-label="Continue watching"></section>
       <div class="tabrow"><nav id="tabs" class="tabs2" aria-label="Categories"></nav></div>
-      <div id="fyRows" class="fy-rows"></div><div id="tools" class="tools"></div><div id="grid" class="bgrid"></div><div id="more" class="more"></div></div>
+      <div id="fyRows" class="fy-rows"></div><div id="tools" class="tools"></div><div id="fldRow" class="fld-row"></div><div id="grid" class="bgrid"></div><div id="more" class="more"></div></div>
     <aside id="rail" class="rail2" aria-label="Continue watching, friends and now playing"></aside>`;
   applyTint(null);
   // the list of feeds and genres: only the category tabs need it, so the view doesn't wait for it

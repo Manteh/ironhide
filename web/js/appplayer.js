@@ -31,6 +31,7 @@
     gamma: svg('<path d="M3.5 19.5C8 19.5 9.5 12 12 4.5M12 4.5c1.2 5 3 8.2 8.5 10.5" opacity="0"/><path d="M4 18c5-1 8.5-5 16-12"/><path d="M4 18C9 18 16 15 20 6" opacity="0"/>'),
     hue: svg('<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="3.4"/><path d="M12 3.6v5M12 15.4v5" opacity=".0"/>'),
     list: svg('<path d="M8.5 6.5H20M8.5 12H20M8.5 17.5H20"/><circle class="f" cx="4.4" cy="6.5" r="1.1"/><circle class="f" cx="4.4" cy="12" r="1.1"/><circle class="f" cx="4.4" cy="17.5" r="1.1"/>'),
+    cast: svg('<rect x="3.4" y="5.2" width="17.2" height="11.6" rx="3"/><path d="M8.5 20.2h7M12 16.8v3.4"/><path d="M8.6 11.6a4.2 4.2 0 0 1 6.8 0"/>'),
     pip: svg('<rect x="3.4" y="5.2" width="17.2" height="13.6" rx="3"/><rect class="f" x="11.6" y="11.2" width="6.6" height="4.6" rx="1.3"/>'),
     snap: svg('<path d="M4 8.7A2.7 2.7 0 0 1 6.7 6h1.1l1.2-1.9h6l1.2 1.9h1.1A2.7 2.7 0 0 1 20 8.7v7.6a2.7 2.7 0 0 1-2.7 2.7H6.7A2.7 2.7 0 0 1 4 16.3Z"/><circle cx="12" cy="12.4" r="3.3"/>'),
     star: svg('<path class="f" d="m12 3.8 2.5 5.3 5.8.7-4.3 4 1.1 5.7-5.1-2.9-5.1 2.9 1.1-5.7-4.3-4 5.8-.7Z"/>'),
@@ -119,6 +120,7 @@
     <div class="ihp-top"><button class="ihp-round ihp-glass" data-a="close" title="Back (Esc)">${I.back}</button></div>
     <div class="ihp-center"><div class="ihp-pulse"></div><div class="ihp-spin"></div></div>
     <div class="ihp-hud ihp-glass"></div>
+    <div class="ihp-cast ihp-glass" hidden></div>
     <div class="ihp-bottom">
       <div class="ihp-meta"><div class="ihp-title"></div><div class="ihp-tags"></div></div>
       <div class="ihp-chaps"><div class="cs" data-list="chap"></div></div>
@@ -135,7 +137,7 @@
           <button class="ihp-ib" data-a="chaps" title="Chapters (H)" hidden>${I.list}</button>
           <button class="ihp-ib" data-a="tab:subs" title="Subtitles (C)">${I.subs}</button><button class="ihp-ib" data-a="tab:audio" title="Audio (A)">${I.audio}</button>
           <button class="ihp-ib" data-a="tab:pic" title="Picture (P)">${I.pic}</button><i class="sep"></i>
-          <button class="ihp-ib" data-a="pip" title="Picture in picture (W)">${I.pip}</button>
+          <button class="ihp-ib" data-a="cast" title="Show on PS5 / TV box">${I.cast}</button><button class="ihp-ib" data-a="pip" title="Picture in picture (W)">${I.pip}</button>
           <button class="ihp-ib ihp-fs" data-a="fs" title="Full screen (F)"><span class="i-enter">${I.enter}</span><span class="i-exit">${I.exit}</span></button>
         </div>
       </div>
@@ -149,7 +151,7 @@
           <div class="ihp-note lk-note" data-lnote></div>
           <details class="ft"><summary>Fine-tune<span data-ftsum></span></summary>${PICTURE.map(([k, l, ic, trk]) => slider(k, l, -100, 100, 1, ic, trk)).join('')}</details>
           <h4>Frame<button data-frame="reset">Reset</button></h4>
-          <div class="chips" data-frames><button data-frame="cinema">Cinema</button><button data-frame="lying">Lying down</button><button data-frame="smaller">Smaller</button><button data-frame="bigger">Bigger</button><button data-frame="up">Up</button><button data-frame="down">Down</button></div>
+          <div class="chips" data-frames><button data-frame="cinema">Cinema</button><button data-frame="lying">Lying down</button><button data-frame="rotl" title="Turn left (Option + ,)">&#10226; Turn</button><button data-frame="rotr" title="Turn right (Option + .)">Turn &#10227;</button><button data-frame="rot90" title="Quarter turn (Option + R)">90&deg;</button><button data-frame="smaller">Smaller</button><button data-frame="bigger">Bigger</button><button data-frame="up">Up</button><button data-frame="down">Down</button></div>
           <div class="amb-sl"><label>Light strength<output data-ambo="strength"></output></label><input type="range" min="0.3" max="2" step="0.05" data-amb="strength" aria-label="Light strength"></div>
           <div class="amb-sl"><label>Light reach<output data-ambo="reach"></output></label><input type="range" min="0.5" max="2" step="0.05" data-amb="reach" aria-label="Light reach"></div>
           <div class="tg"><div>Ambient mode<small>Smaller, movable picture with the film's light around it (G). Off: normal full screen</small></div><button data-tg="amb"></button></div>
@@ -463,7 +465,35 @@
     speed: () => { const i = SPEEDS.findIndex((s) => Math.abs(s - n('speed', 1)) < 0.01); setSpeed(SPEEDS[(i + 1) % SPEEDS.length]); },
     resetpic: () => { applyPicture(PRESETS.Neutral[0]); hud(I.pic, 'Picture reset'); },
     chaps: () => { root.classList.toggle('ch-open'); wake(); const on = q('.cs .on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); },
+    // Show what is playing on a PS5 (or any box that can't be cast to): the Mac serves it over the home network, see src/castserver.js
+    cast: async () => {
+      const card = q('.ihp-cast');
+      if (!card.hidden) { card.hidden = true; return; }
+      card.hidden = false; card.innerHTML = '<b>Getting it ready…</b><small>Checking the file and opening Orbie on your network</small>';
+      try {
+        const r = await fetch('/api/cast/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }), d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error || 'Could not start');
+        card.innerHTML = `<b>${esc(d.title)}</b><small>Paused here${d.from ? ' at ' + fmt(d.from) : ''}. Now on your network${d.ssdp ? '' : ' (the Orbie server could not be announced, use the address)'}.</small>
+          <ol><li>PS5: <em>Media</em> → <em>Media Player</em> → <em>Orbie</em> <span>(if your PS5 lists network servers)</span></li>
+          <li>or in the PS5 web browser open <code>${esc(d.tvUrl)}</code></li></ol>
+          <div class="cr"><button data-a="castoff">Stop</button><button data-a="cast">Close</button></div>`;
+      } catch (e) { card.innerHTML = `<b>Couldn't start</b><small>${esc(e.message || e)}</small><div class="cr"><button data-a="cast">Close</button></div>`; }
+    },
+    castoff: async () => { q('.ihp-cast').hidden = true; await fetch('/api/cast/stop', { method: 'POST' }).catch(() => {}); hud(I.cast, 'Stopped showing on the PS5'); },
     shot: () => { cmd('screenshot', 'window'); hud(I.snap, 'Screenshot saved to Pictures'); },
+  };
+
+  // for Ask Orbie (orbie-agent.js): voice-driven controls
+  window.__ihpDo = (name, v) => {
+    const amt = Number(v);
+    if (name === 'pause') { if (!b('pause')) actions.toggle(); }
+    else if (name === 'resume') { if (b('pause')) actions.toggle(); }
+    else if (name === 'seek') { cmd('seek', Number.isFinite(amt) ? amt : 10, 'relative'); }
+    else if (name === 'volume') { cmd('add', 'volume', Number.isFinite(amt) ? amt : 10); }
+    else if (name === 'mute') actions.mute();
+    else if (name === 'fullscreen') actions.fs();
+    else if (name === 'subtitles') cmd('cycle', 'sub');
+    else if (name === 'close') actions.close();
   };
 
   // mini player: no visible controls. Tap = pause, drag = move the window, double tap = expand
@@ -537,8 +567,11 @@
     if (e.altKey && (k.startsWith('Arrow') || ['Minus', 'Equal', 'Digit0'].includes(e.code))) {
       const st = 0.025 / 2 ** pframe.zoom; // the same distance on screen at any size
       ({ ArrowUp: () => moveFrame(0, -st), ArrowDown: () => moveFrame(0, st), ArrowLeft: () => moveFrame(-st, 0), ArrowRight: () => moveFrame(st, 0),
-         Minus: () => sizeFrame(-0.06), Equal: () => sizeFrame(0.06), Digit0: () => setFrame({ zoom: 0, x: 0, y: 0 }) })[k.startsWith('Arrow') ? k : e.code]?.();
+         Minus: () => sizeFrame(-0.06), Equal: () => sizeFrame(0.06), Digit0: () => setFrame({ zoom: 0, x: 0, y: 0, rot: 0 }) })[k.startsWith('Arrow') ? k : e.code]?.();
       e.preventDefault(); e.stopPropagation(); return;
+    }
+    if (e.altKey && ['Comma', 'Period', 'KeyR'].includes(e.code)) { // Option+, and Option+. turn the picture 5 degrees (Shift: 1); Option+R a quarter turn
+      turnFrame(e.code === 'KeyR' ? 90 : (e.code === 'Comma' ? -1 : 1) * (e.shiftKey ? 1 : 5)); e.preventDefault(); e.stopPropagation(); return;
     }
     if (e.altKey && e.code === 'KeyZ') { set('audio-delay', 0); S['audio-delay'] = 0; paintStatic(); hud(I.audio, 'Audio delay reset'); e.preventDefault(); e.stopPropagation(); return; }
     switch (k) {
@@ -572,39 +605,85 @@
   // For watching lying down with the laptop on your chest: raise and shrink the picture to where your eyes are,
   // everything else stays black. mpv does the work (video-zoom is a power of two, pan is a fraction of the picture).
   const FRAME_KEY = 'ihp.pframe';
-  let pframe = (() => { try { return { zoom: 0, x: 0, y: 0, ...JSON.parse(localStorage.getItem(FRAME_KEY) || '{}') }; } catch { return { zoom: 0, x: 0, y: 0 }; } })();
+  let pframe = (() => { try { return { zoom: 0, x: 0, y: 0, rot: 0, ...JSON.parse(localStorage.getItem(FRAME_KEY) || '{}') }; } catch { return { zoom: 0, x: 0, y: 0, rot: 0 }; } })();
   // pan is measured in picture sizes: a smaller picture needs a bigger number to reach the edge (mpv allows up to 3)
   const clampF = (f) => {
     const zoom = Math.max(-1.6, Math.min(0.6, +f.zoom || 0)), lim = Math.min(3, 0.6 + 0.6 / 2 ** zoom);
-    return { zoom, x: Math.max(-lim, Math.min(lim, +f.x || 0)), y: Math.max(-lim, Math.min(lim, +f.y || 0)) };
+    return { zoom, x: Math.max(-lim, Math.min(lim, +f.x || 0)), y: Math.max(-lim, Math.min(lim, +f.y || 0)), rot: (((Math.round(+f.rot || 0)) % 360) + 360) % 360 };
   };
   // the frame counts only in ambient mode; off is plain full screen
-  const eff = () => (ambOn ? pframe : { zoom: 0, x: 0, y: 0 });
-  function applyFrame() { const f = eff(); set('video-zoom', f.zoom.toFixed(3)); set('video-pan-x', f.x.toFixed(3)); set('video-pan-y', f.y.toFixed(3)); }
+  const eff = () => (ambOn ? pframe : { zoom: 0, x: 0, y: 0, rot: 0 });
+  // Rotation (any angle, in ambient mode): mpv turns the picture. Only software decoding and copy-back hardware decoding can turn it by angles other than 90s, so the decoder
+  // switches to its copy-back mode while the picture is at an odd angle, and back to the faster one when it is straight again.
+  let hwCopy = false, hwT = 0; const sent = {};
+  const setOnce = (k, v) => { if (sent[k] !== v) { sent[k] = v; set(k, v); } }; // only what changed is sent to the player
+  // turned picture = every frame is copied off the GPU and redrawn, so the cheapest scaling and no frame-blending while it is turned (4K especially)
+  let liteSaved = null;
+  function lite(on) {
+    if (on) { if (liteSaved) return; liteSaved = { scale: S.scale, deband: S.deband, interpolation: S.interpolation }; for (const k of ['scale', 'cscale', 'dscale']) set(k, 'bilinear'); set('correct-downscaling', 'no'); set('deband', 'no'); set('interpolation', 'no'); }
+    else if (liteSaved) { const o = liteSaved; liteSaved = null; for (const k of ['scale', 'cscale', 'dscale']) set(k, o.scale && o.scale !== 'bilinear' ? o.scale : 'bilinear'); set('correct-downscaling', 'yes'); if (o.deband) set('deband', o.deband); if (o.interpolation) set('interpolation', o.interpolation); }
+  }
+  function applyFrame() {
+    const f = eff(); setOnce('video-zoom', f.zoom.toFixed(3)); setOnce('video-pan-x', f.x.toFixed(3)); setOnce('video-pan-y', f.y.toFixed(3));
+    // the decoder goes to copy-back mode as soon as the picture is at an odd angle, and stays there until it has been straight for a few seconds (no switching back and forth while you turn)
+    if ((f.rot || 0) % 90 !== 0) { clearTimeout(hwT); hwT = 0; if (!hwCopy) { hwCopy = true; set('hwdec', 'videotoolbox-copy'); lite(true); } }
+    else if (hwCopy && !hwT) hwT = setTimeout(() => { hwT = 0; if ((eff().rot || 0) % 90 === 0 && hwCopy) { hwCopy = false; set('hwdec', 'videotoolbox'); lite(false); } }, 4000);
+    setOnce('video-rotate', String(f.rot || 0));
+    setOnce('blend-subtitles', f.rot || f.zoom || f.x || f.y ? 'video' : 'no'); // whenever the picture is moved, scaled or turned the subtitles are drawn into it, so they stay on it (never cut off at the window edge)
+  }
   function setFrame(f, quiet = false) {
     if (!ambOn) setAmb(true, false); // placing the picture means you want ambient mode
     pframe = clampF(f); applyFrame(); drawAmb();
-    const plain = !pframe.zoom && !pframe.x && !pframe.y;
-    try { plain ? localStorage.removeItem(FRAME_KEY) : localStorage.setItem(FRAME_KEY, JSON.stringify(pframe)); } catch {}
-    if (!quiet) hud(I.enter, plain ? 'Frame reset' : `Picture ${Math.round(2 ** pframe.zoom * 100)}%${pframe.y < -0.005 ? ' · raised' : pframe.y > 0.005 ? ' · lowered' : ''}`, Math.min(1, 2 ** pframe.zoom));
+    const plain = !pframe.zoom && !pframe.x && !pframe.y && !pframe.rot;
+    if (!quiet) { try { plain ? localStorage.removeItem(FRAME_KEY) : localStorage.setItem(FRAME_KEY, JSON.stringify(pframe)); } catch {} } // saved when you let go, not on every move
+    if (!quiet) hud(I.enter, plain ? 'Frame reset' : `Picture ${Math.round(2 ** pframe.zoom * 100)}%${pframe.rot ? ` · turned ${pframe.rot}\u00b0` : ''}${pframe.y < -0.005 ? ' · raised' : pframe.y > 0.005 ? ' · lowered' : ''}`, Math.min(1, 2 ** pframe.zoom));
   }
-  const moveFrame = (dx, dy) => setFrame({ ...pframe, x: pframe.x + dx, y: pframe.y + dy });
+  // Alignment guides, like an Instagram story: while the picture is moved, centre lines show, and the picture clicks onto them (and onto the screen's edges) when it comes close.
+  const guides = document.createElement('div'); guides.className = 'ihp-guides'; guides.innerHTML = '<i class="v"></i><i class="h"></i><i class="el"></i><i class="er"></i><i class="et"></i><i class="eb"></i>'; root.append(guides);
+  let guideT = 0;
+  const showGuides = (hit = {}, hold = 0) => {
+    guides.classList.add('on');
+    for (const k of ['v', 'h', 'el', 'er', 'et', 'eb']) guides.querySelector(`.${k}`).classList.toggle('snap', k === 'v' ? hit.x === 'cx' : k === 'h' ? hit.y === 'cy' : hit.x === k || hit.y === k);
+    clearTimeout(guideT); if (hold) guideT = setTimeout(() => guides.classList.remove('on'), hold);
+  };
+  // where would the picture sit if it snapped? the picture's own centre / edges against the screen's (positions in pixels, pan in picture sizes)
+  function snapPos(x, y, st = {}) {
+    const r = videoRect(), W = innerWidth, H = innerHeight, T = 12, R = 20; let cx = W / 2 + x * r.dw, cy = H / 2 + y * r.dh; const hit = {};
+    const pick = (c, targets, held) => { for (const [t, k] of targets) { if (Math.abs(c - t) < (held === k ? R : T)) return [t, k]; } return [c, null]; };
+    let k; [cx, k] = pick(cx, [[W / 2, 'cx'], [r.w / 2, 'el'], [W - r.w / 2, 'er']], st.x); hit.x = k;
+    [cy, k] = pick(cy, [[H / 2, 'cy'], [r.h / 2, 'et'], [H - r.h / 2, 'eb']], st.y); hit.y = k;
+    return { x: (cx - W / 2) / r.dw, y: (cy - H / 2) / r.dh, hit };
+  }
+  const moveFrame = (dx, dy) => { const sn = snapPos(pframe.x + dx, pframe.y + dy); setFrame({ ...pframe, x: sn.x, y: sn.y }); showGuides(sn.hit, 700); };
   const moveScreen = (dx, dy) => moveFrame(dx / 2 ** pframe.zoom, dy / 2 ** pframe.zoom); // buttons: a step of the screen, not the picture
   const sizeFrame = (dz) => setFrame({ ...pframe, zoom: pframe.zoom + dz });
+  // turning: any angle; it clicks onto the straight angles (0, 90, 180, 270) when close, and the centre guides light up to say so
+  const turnFrame = (deg, quiet) => { let r = (((pframe.rot + deg) % 360) + 360) % 360; const near = Math.round(r / 90) * 90; const snapped = Math.abs(r - near) < 3.5; if (snapped) r = near % 360; setFrame({ ...pframe, rot: r }, quiet); showGuides(snapped ? { x: 'cx', y: 'cy' } : {}, quiet ? 0 : 600); return r; };
   // Cinema: about 74% of the screen, raised to leave a row of seats beneath it; Lying down: smaller and raised
   const FRAMES = { cinema: { zoom: Math.log2(0.74), x: 0, y: -0.11 }, lying: { zoom: -0.35, x: 0, y: -0.1 }, reset: { zoom: 0, x: 0, y: 0 } };
   root.addEventListener('click', (e) => {
     const b = e.target.closest('[data-frame]'); if (!b) return;
     e.stopPropagation(); const f = b.dataset.frame;
-    if (FRAMES[f]) setFrame(FRAMES[f]); else if (f === 'smaller') sizeFrame(-0.1); else if (f === 'bigger') sizeFrame(0.1); else if (f === 'up') moveScreen(0, -0.03); else if (f === 'down') moveScreen(0, 0.03);
+    if (FRAMES[f]) setFrame({ ...FRAMES[f], rot: f === 'reset' ? 0 : pframe.rot }); else if (f === 'rotl') turnFrame(-15); else if (f === 'rotr') turnFrame(15); else if (f === 'rot90') turnFrame(90); else if (f === 'smaller') sizeFrame(-0.1); else if (f === 'bigger') sizeFrame(0.1); else if (f === 'up') moveScreen(0, -0.03); else if (f === 'down') moveScreen(0, 0.03);
   }, true);
   // Option+drag moves the picture, Option+scroll resizes it (trackpad-friendly when the keyboard is out of reach)
   root.addEventListener('pointerdown', (e) => {
     if (!e.altKey || e.button !== 0 || e.target.closest('.ihp-bottom, .ihp-panel, .ihp-top, button, input')) return;
     e.preventDefault(); e.stopPropagation();
+    if (e.shiftKey) { // Option+Shift+drag turns the picture around its centre, to any angle
+      const r = videoRect(), cx = r.x + r.w / 2, cy = r.y + r.h / 2, a0 = Math.atan2(e.clientY - cy, e.clientX - cx), r0 = pframe.rot;
+      let pend = null, raf = 0; // at most once per screen refresh, however fast the pointer reports
+      const go = () => { raf = 0; const m = pend; if (!m) return; const d = (Math.atan2(m.clientY - cy, m.clientX - cx) - a0) * 180 / Math.PI; pframe = { ...pframe, rot: r0 }; turnFrame(d, true); };
+      const mv = (m) => { pend = m; if (!raf) raf = requestAnimationFrame(go); };
+      const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); cancelAnimationFrame(raf); go(); setFrame(pframe); showGuides({}, 250); };
+      addEventListener('pointermove', mv); addEventListener('pointerup', up); return;
+    }
     const x0 = e.clientX, y0 = e.clientY, f0 = { ...pframe }, scale = 2 ** pframe.zoom;
-    const mv = (m) => setFrame({ ...f0, x: f0.x + (m.clientX - x0) / (innerWidth * scale), y: f0.y + (m.clientY - y0) / (innerHeight * scale) }, true);
-    const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); setFrame(pframe); };
+    const hold = {};
+    let pend = null, raf = 0;
+    const go = () => { raf = 0; const m = pend; if (!m) return; const sn = snapPos(f0.x + (m.clientX - x0) / (innerWidth * scale), f0.y + (m.clientY - y0) / (innerHeight * scale), hold); hold.x = sn.hit.x; hold.y = sn.hit.y; setFrame({ ...f0, x: sn.x, y: sn.y }, true); showGuides(sn.hit); };
+    const mv = (m) => { pend = m; if (!raf) raf = requestAnimationFrame(go); };
+    const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); cancelAnimationFrame(raf); go(); setFrame(pframe); showGuides({}, 250); };
     addEventListener('pointermove', mv); addEventListener('pointerup', up);
   }, true);
   root.addEventListener('wheel', (e) => { if (!e.altKey) return; e.preventDefault(); e.stopPropagation(); sizeFrame(e.deltaY > 0 ? -0.03 : 0.03); }, { capture: true, passive: false });
@@ -651,13 +730,21 @@
   function paintAmbBtn() { q('[data-tg=amb]')?.classList.toggle('on', ambOn); }
   // where mpv draws the picture in the window: fitted, then scaled and moved by the frame setting
   function videoRect() {
-    const W = innerWidth, H = innerHeight, ov = parseFloat(S['video-aspect-override']);
-    const a = ov > 0 ? ov : n('video-params/aspect') || (n('width') && n('height') ? n('width') / n('height') : 16 / 9);
-    let vw, vh; if (W / H > a) { vh = H; vw = H * a; } else { vw = W; vh = W / a; }
-    const f = eff(), sc = 2 ** f.zoom; vw *= sc; vh *= sc;
-    const cx = W / 2 + f.x * vw, cy = H / 2 + f.y * vh;
-    return { x: cx - vw / 2, y: cy - vh / 2, w: vw, h: vh, W, H };
+    const W = innerWidth, H = innerHeight, ov = parseFloat(S['video-aspect-override']), f = eff(), rot = f.rot || 0;
+    let a = ov > 0 ? ov : n('video-params/aspect') || (n('width') && n('height') ? n('width') / n('height') : 16 / 9);
+    if (rot % 180 === 90) a = 1 / a; // turned a quarter: the picture is now tall instead of wide
+    let dw, dh; if (W / H > a) { dh = H; dw = H * a; } else { dw = W; dh = W / a; }
+    const sc = 2 ** f.zoom; dw *= sc; dh *= sc;                      // the frame mpv places the picture in (pan is measured in these)
+    const cx = W / 2 + f.x * dw, cy = H / 2 + f.y * dh;
+    let pw = dw, ph = dh, bw = dw, bh = dh;
+    if (rot % 90 !== 0) { // at an odd angle mpv shrinks the picture until its turned shape fits that frame, then turns it about the middle
+      const th = rot * Math.PI / 180, c = Math.abs(Math.cos(th)), sn = Math.abs(Math.sin(th)), k = Math.min(dw / (dw * c + dh * sn), dh / (dw * sn + dh * c));
+      pw = dw * k; ph = dh * k; bw = pw * c + ph * sn; bh = pw * sn + ph * c;
+    }
+    return { x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh, W, H, dw, dh, pw, ph, cx, cy, rot };
   }
+  // the turned picture's centre, size and angle, when it is at an odd angle (else null: the picture is a plain rectangle)
+  function rotGeom() { const r = videoRect(); if (!r.rot || r.rot % 90 === 0) return null; const th = r.rot * Math.PI / 180; return { cx: r.cx, cy: r.cy, pw: r.pw, ph: r.ph, cs: Math.cos(th), sn: Math.sin(th), rot: r.rot }; }
   // the part of the picture that's on screen
   function visRect() {
     const r = videoRect(), x0 = Math.max(0, r.x), y0 = Math.max(0, r.y), x1 = Math.min(r.W, r.x + r.w), y1 = Math.min(r.H, r.y + r.h);
@@ -708,10 +795,20 @@
     // edge colours: each one an average of a band just inside that edge
     const line = (n, f) => { const o = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const c = f(i); o.set(c, i * 3); } return o; };
     const bandAvg = (xa, xb, ya, yb) => { let r0 = 0, g0 = 0, b0 = 0, c = 0; for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) { const i = at(x, y); r0 += src[i]; g0 += src[i + 1]; b0 += src[i + 2]; c++; } return [r0 / c, g0 / c, b0 / c]; };
-    const edges = {
+    const G = rotGeom(); // a picture at an odd angle: its edges are followed along the turned sides
+    let edges = {
       top: line(sw, (x) => bandAvg(x, x, t, t + band - 1)), bottom: line(sw, (x) => bandAvg(x, x, b - band + 1, b)),
       left: line(ch, (y) => bandAvg(0, bandX - 1, t + y, t + y)), right: line(ch, (y) => bandAvg(sw - bandX, sw - 1, t + y, t + y)),
     };
+    if (G) {
+      const smp = (px, py) => { const sx = Math.round(((px - v.x) / Math.max(1, v.w)) * (sw - 1)), sy = Math.round(((py - v.y) / Math.max(1, v.h)) * (sh - 1)), i = at(sx, sy); return [src[i], src[i + 1], src[i + 2]]; };
+      const ptAt = (lx, ly) => [G.cx + lx * G.cs - ly * G.sn, G.cy + lx * G.sn + ly * G.cs];
+      const avg3 = (fn) => { let r0 = 0, g0 = 0, b0 = 0; for (const d of [0.03, 0.08, 0.13]) { const p = fn(d), c = smp(p[0], p[1]); r0 += c[0]; g0 += c[1]; b0 += c[2]; } return [r0 / 3, g0 / 3, b0 / 3]; };
+      edges = {
+        top: line(sw, (i) => { const u = i / (sw - 1); return avg3((d) => ptAt((u - 0.5) * G.pw, (-0.5 + d) * G.ph)); }), bottom: line(sw, (i) => { const u = i / (sw - 1); return avg3((d) => ptAt((u - 0.5) * G.pw, (0.5 - d) * G.ph)); }),
+        left: line(sh, (i) => { const u = i / (sh - 1); return avg3((d) => ptAt((-0.5 + d) * G.pw, (u - 0.5) * G.ph)); }), right: line(sh, (i) => { const u = i / (sh - 1); return avg3((d) => ptAt((0.5 - d) * G.pw, (u - 0.5) * G.ph)); }),
+      };
+    }
     // three blur levels per edge: near the picture the light keeps its shape, far away it is a soft wash
     const lv = {}; for (const k of Object.keys(edges)) { const nn = edges[k].length / 3; lv[k] = [blur1(edges[k], nn, 1), blur1(edges[k], nn, Math.max(2, nn / 6 | 0)), blur1(edges[k], nn, Math.max(4, nn / 2 | 0))]; }
     const pick = (k, u, d) => { // colour of edge k at position u (0..1), at distance weight d (0 near .. 1 far)
@@ -728,7 +825,7 @@
     // the image without its bars (fixed once known). A bar's real edge falls part-way through a row of the 88-row
     // measurement, and that last, partly black row isn't counted -- so crop one more row's worth, or a hairline shows.
     const over = 1 / 88, ct = bt > 0 ? bt + over : 0, cb = bb > 0 ? bb + over : 0;
-    const cx0 = v.x, cx1 = v.x + v.w, cy0 = v.y + v.h * ct, cy1 = v.y + v.h * (1 - cb);
+    const cx0 = G ? G.cx - G.pw / 2 : v.x, cx1 = G ? G.cx + G.pw / 2 : v.x + v.w, cy0 = G ? G.cy - G.ph / 2 : v.y + v.h * ct, cy1 = G ? G.cy + G.ph / 2 : v.y + v.h * (1 - cb);
     const LW = 96, LH = Math.max(1, Math.round(LW * H / W)), k = LW / W;
     if (A.LW !== LW || A.LH !== LH) { A.LW = LW; A.LH = LH; ambCv.width = LW; ambCv.height = LH; A.img = ambCtx.createImageData(LW, LH); A.cur = null; }
     const tgt = new Float32Array(LW * LH * 3);
@@ -739,9 +836,10 @@
     const darkCut = Math.min(1, Math.max(0, (sceneL - 1) / 3)); // 0 when sceneL <= 1, 1 when sceneL >= 4
     const expo = darkCut * Math.min(1.5, Math.max(1, 1 + (28 - sceneL) / 60)) * AMBS.strength;
     for (let py = 0; py < LH; py++) {
-      const Y = (py + 0.5) / k;
+      const Y0 = (py + 0.5) / k;
       for (let px = 0; px < LW; px++) {
-        const X = (px + 0.5) / k;
+        const X0 = (px + 0.5) / k; let X = X0, Y = Y0; // at an odd angle every point of the light is first turned back into the picture's own (straight) frame
+        if (G) { const ddx = X0 - G.cx, ddy = Y0 - G.cy; X = G.cx + ddx * G.cs + ddy * G.sn; Y = G.cy - ddx * G.sn + ddy * G.cs; }
         const nx = Math.min(cx1, Math.max(cx0, X)), ny = Math.min(cy1, Math.max(cy0, Y)), dx = X - nx, dy = Y - ny;
         if (!dx && !dy) { // on the picture: only its rounded corners (and the soft edge) show this, at the edge's full colour
           const dl = X - cx0, dr = cx1 - X, dt2 = Y - cy0, db2 = cy1 - Y, m = Math.min(dl, dr, dt2, db2);
@@ -768,7 +866,7 @@
     A.tgt = tgt;
     if (!A.cur || instant) A.cur = new Float32Array(tgt);
     // cut the picture out of the light layer (the soft CSS blur would otherwise spill over its edges)
-    A.holeTgt = { x0: cx0, y0: cy0, x1: cx1, y1: cy1, W, H };
+    A.holeTgt = { x0: cx0, y0: cy0, x1: cx1, y1: cy1, W, H, rot: G ? G.rot : 0 };
     if (!A.hole || instant) A.hole = { ...A.holeTgt };
     clipHole();
     // (the cut-out itself is drawn by clipHole, eased)
@@ -779,6 +877,11 @@
     const h = A.hole; if (!h) return;
     const inset = 1.5, x0 = h.x0 + inset, y0 = h.y0 + inset, x1 = h.x1 - inset, y1 = h.y1 - inset;
     const R = Math.max(6, Math.min(22, 0.035 * Math.min(x1 - x0, y1 - y0))), f1 = (n) => n.toFixed(1);
+    if (h.rot) { // a turned picture: the cut-out is a turned rounded rectangle (drawn as a polygon)
+      const th = h.rot * Math.PI / 180, cs = Math.cos(th), sn = Math.sin(th), hw = (x1 - x0) / 2, hh = (y1 - y0) / 2, mx = (x0 + x1) / 2, my = (y0 + y1) / 2, pts = [];
+      for (const [ox, oy, a0] of [[hw - R, -hh + R, -90], [hw - R, hh - R, 0], [-hw + R, hh - R, 90], [-hw + R, -hh + R, 180]]) for (let q = 0; q <= 6; q++) { const an = (a0 + q * 15) * Math.PI / 180, lx = ox + R * Math.cos(an), ly = oy + R * Math.sin(an); pts.push(`${f1(mx + lx * cs - ly * sn)} ${f1(my + lx * sn + ly * cs)}`); }
+      ambCv.style.clipPath = `path(evenodd, 'M0 0H${h.W}V${h.H}H0Z M${pts.join(' L')}Z')`; return;
+    }
     ambCv.style.clipPath = `path(evenodd, 'M0 0H${h.W}V${h.H}H0Z M${f1(x0 + R)} ${f1(y0)}H${f1(x1 - R)}A${R} ${R} 0 0 1 ${f1(x1)} ${f1(y0 + R)}V${f1(y1 - R)}A${R} ${R} 0 0 1 ${f1(x1 - R)} ${f1(y1)}H${f1(x0 + R)}A${R} ${R} 0 0 1 ${f1(x0)} ${f1(y1 - R)}V${f1(y0 + R)}A${R} ${R} 0 0 1 ${f1(x0 + R)} ${f1(y0)}Z')`;
   }
   // ease the shown light toward the target at display rate: smooth between samples, quick on a cut
@@ -801,7 +904,7 @@
     if (A.hole && A.holeTgt) {
       const hk = 1 - Math.exp(-dt / 0.08);
       for (const key of ['x0', 'y0', 'x1', 'y1']) { const d0 = A.holeTgt[key] - A.hole[key]; A.hole[key] += d0 * hk; holeMoving = Math.max(holeMoving, Math.abs(d0)); }
-      A.hole.W = A.holeTgt.W; A.hole.H = A.holeTgt.H; clipHole();
+      A.hole.W = A.holeTgt.W; A.hole.H = A.holeTgt.H; A.hole.rot = A.holeTgt.rot; clipHole();
     }
     if (moving > 0.4 || holeMoving > 0.3 || Math.abs(dimTo - A.dim) > 0.01) A.raf = requestAnimationFrame(ambTick); else A.cut = false;
   }
@@ -812,7 +915,7 @@
   // ---------- ? : every key the player knows ----------
   const KEYS = [['Space / K', 'Play or pause'], ['← →', 'Back / forward 10 s'], ['↑ ↓', 'Volume'], ['M', 'Mute'], ['F', 'Full screen'], ['W', 'Picture in picture'],
     ['[ ]', 'Slower / faster'], ['C', 'Subtitles'], ['A', 'Audio'], ['P', 'Picture settings'], ['H', 'Chapters'], ['I', 'What you are watching'],
-    ['S', 'Skip intro, recap or credits'], ['Option+arrows', 'Move the picture'], ['Option+− / =', 'Picture smaller / bigger'], ['Option+0', 'Picture back to full'], ['G', 'Ambient mode on or off'], ['Shift+I', 'Mark where the intro starts, then ends'], ['Alt+Z', 'Reset audio delay'], ['Q', 'Close the player'], ['Esc', 'Back out: panel, full screen, player'], ['?', 'This list']];
+    ['S', 'Skip intro, recap or credits'], ['Option+arrows', 'Move the picture'], ['Option+, / .', 'Turn the picture (Shift: 1 degree)'], ['Option+R', 'Quarter turn'], ['Option+Shift+drag', 'Turn to any angle'], ['Option+− / =', 'Picture smaller / bigger'], ['Option+0', 'Picture back to full and straight'], ['G', 'Ambient mode on or off'], ['Shift+I', 'Mark where the intro starts, then ends'], ['Alt+Z', 'Reset audio delay'], ['Q', 'Close the player'], ['Esc', 'Back out: panel, full screen, player'], ['?', 'This list']];
   let keysEl = null;
   function toggleKeys() {
     if (keysEl) { keysEl.remove(); keysEl = null; return; }

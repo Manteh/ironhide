@@ -1,8 +1,8 @@
-// First run. Orbie is invite only, so it starts with the invite, then three short steps so the first Play can't fail:
-//   0. the invite code (someone you trust sent it), 1. who you are: Continue with Discord, or a name and a look,
+// First run. Discord is the identity step; membership is checked immediately after it and only asks for an invite when needed:
+//   1. sign in with Discord (your name and picture), 0. the invite code (someone you trust sent it),
 //   2. a debrid key that is checked before you go on, 3. player and languages.
 // Someone already set up who just needs an invite (an update made Orbie invite only) only sees step 0.
-import { $, $$, esc, icon, avatar, AVATAR_ICONS, AVATAR_COLORS } from './ui.js';
+import { $, $$, esc, icon } from './ui.js';
 
 const json = (url, method = 'GET', body) => fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined })
   .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); return d; });
@@ -14,14 +14,13 @@ const DISCORD = '<svg viewBox="0 0 24 24" aria-hidden="true" class="i"><path fil
 
 export function welcome(settings, { invite = false, onlyInvite = false } = {}) {
   return new Promise((done) => {
-    const av = { ...settings.profile.avatar };
     const box = document.createElement('div'); box.className = 'welcome';
-    let saved = settings, step = invite ? 0 : 1;
-    const steps = onlyInvite ? [0] : invite ? [0, 1, 2, 3] : [1, 2, 3];
+    let saved = settings, step = onlyInvite ? 0 : 1, discordWait = 0;
+    const steps = onlyInvite ? [0] : invite ? [1, 0, 2, 3] : [1, 2, 3];
     const dots = () => steps.length < 2 ? '' : `<div class="wl-steps" aria-label="Step ${steps.indexOf(step) + 1} of ${steps.length}">${steps.map((n) => `<i class="${n === step ? 'on' : n < step ? 'done' : ''}"></i>`).join('')}</div>`;
     // while setting up, the window header shows only the window controls: no name, Resume or Settings yet
     document.documentElement.classList.add('onboarding');
-    const finish = () => { box.remove(); document.documentElement.classList.remove('onboarding'); done(saved); };
+    const finish = () => { clearInterval(discordWait); box.remove(); document.documentElement.classList.remove('onboarding'); done(saved); };
 
     // ---- 0. the invite ----
     const stepInvite = (msg = '', kind = '') => {
@@ -32,29 +31,56 @@ export function welcome(settings, { invite = false, onlyInvite = false } = {}) {
         <button class="btn primary" style="height:46px" id="wgo">Join Orbie</button></form>`;
       const c = $('#wc', box), m = $('#wm', box); c.focus();
       let t = 0;
+      const checkCode = async (code) => {
+        if (!code || code.trim().length < 40) { m.className = 'wl-msg'; m.textContent = ''; return; }
+        const p = await json('/api/membership/peek', 'POST', { code: code.trim() }).catch((e) => ({ ok: false, error: e.message }));
+        m.className = `wl-msg ${p.ok ? 'ok' : 'err'}`; m.innerHTML = p.ok ? `${icon('check')} ${p.from ? `An invite from <b>${esc(p.from)}</b>` : 'A valid invite'}` : esc(p.error);
+      };
       c.oninput = () => { // say who it is from as soon as a whole code is there
         box.dataset.c = c.value; clearTimeout(t);
-        t = setTimeout(async () => {
-          if (c.value.trim().length < 40) { m.className = 'wl-msg'; m.textContent = ''; return; }
-          const p = await json('/api/membership/peek', 'POST', { code: c.value }).catch((e) => ({ ok: false, error: e.message }));
-          m.className = `wl-msg ${p.ok ? 'ok' : 'err'}`; m.innerHTML = p.ok ? `${icon('check')} ${p.from ? `An invite from <b>${esc(p.from)}</b>` : 'A valid invite'}` : esc(p.error);
-        }, 250);
+        t = setTimeout(() => checkCode(c.value), 250);
       };
+      // auto-read clipboard so Discord invites or VIP bundles paste themselves on open or focus
+      const checkClipboard = async () => {
+        if (c.value.trim().length >= 40) return;
+        try {
+          const r = await json('/api/membership/clipboard');
+          if (r?.found && r.code) {
+            if (r.bundle) {
+              const res = await json('/api/membership/redeem-bundle', 'POST', { bundle: r.code });
+              if (res.ok) {
+                step = 2;
+                stepDebrid(res.from ? `You're in! Invited by ${res.from} with TorBox VIP active.` : "You're in! TorBox active.");
+                return;
+              }
+            }
+            if (!c.value.trim()) {
+              c.value = r.code; box.dataset.c = r.code;
+              checkCode(r.code);
+            }
+          }
+        } catch {}
+      };
+      checkClipboard();
+      window.addEventListener('focus', checkClipboard);
       $('form', box).onsubmit = async (e) => {
         e.preventDefault(); if (!c.value.trim()) return c.focus();
         const go = $('#wgo', box); go.disabled = true; go.textContent = 'Checking…';
         try {
           const r = await json('/api/membership/redeem', 'POST', { code: c.value });
           if (onlyInvite) return finish();
-          step = 1; stepName(r.from ? `You're in. Invited by ${r.from}.` : "You're in.");
+          step = 2; stepDebrid(r.from ? `You're in. Invited by ${r.from}.` : "You're in.");
         } catch (err) { stepInvite(err.message, 'err'); }
       };
     };
 
-    // ---- 1. who you are: from Discord, or a name and a look ----
-    let discordWait = 0;
-    const linkDiscord = async (btn) => {
+    // ---- 1. who you are: Discord only ----
+    const linkDiscord = async () => {
+      const btn = $('#wdc', box), cancel = $('#wdcancel', box), msg = $('#wdm', box);
+      if (!btn) return;
       btn.disabled = true; btn.innerHTML = `${DISCORD} Waiting for Discord…`;
+      if (msg) { msg.className = 'wl-msg'; msg.textContent = ''; }
+      if (cancel) cancel.hidden = false;
       try {
         const { url, state } = await json('/api/auth/discord/start', 'POST', {});
         window.open(url, '_blank'); // the Mac app opens it in your browser
@@ -65,33 +91,24 @@ export function welcome(settings, { invite = false, onlyInvite = false } = {}) {
           if (st.done) {
             clearInterval(discordWait); saved = await json('/api/settings');
             if (!saved.profile.named) saved = await json('/api/settings', 'PUT', { profile: { name: saved.profile.name } });
-            step = 2; stepDebrid(`Linked as ${st.name}`);
-          } else if (st.error && st.error !== 'expired' || Date.now() > until) {
-            clearInterval(discordWait); stepName(st.error || 'Discord took too long. Try again, or pick a name below.', 'err');
+            if (invite) { step = 0; stepInvite(`Linked as ${st.name}`); }
+            else { step = 2; stepDebrid(`Linked as ${st.name}`); }
+          } else if (st.error || Date.now() > until) {
+            clearInterval(discordWait);
+            stepDiscord(st.error === 'expired' ? 'Sign-in session expired. Try again.' : (st.error || 'Discord took too long. Try again.'), 'err');
           }
         }, 1200);
-      } catch (e) { stepName(e.message, 'err'); }
+      } catch (e) { clearInterval(discordWait); stepDiscord(e.message, 'err'); }
     };
-    const stepName = (note = '', kind = 'ok') => {
-      box.innerHTML = `<form autocomplete="off">${dots()}${note ? `<div class="wl-msg ${kind}">${kind === 'ok' ? icon('check') + ' ' : ''}${esc(note)}</div>` : ''}
-        <h1>Who's watching?</h1><p>Bring your name and picture from Discord, or pick them here. You can change them later.</p>
+    const stepDiscord = (note = '', kind = 'ok') => {
+      box.innerHTML = `<form autocomplete="off" class="wl-invite wl-dc">${dots()}<div class="wl-orb"><img src="/img/orbie-orb.png" alt=""></div>
+        <h1>Sign in with Discord</h1><p>Orbie uses your Discord account for your name and profile picture.</p>
+        <div class="wl-msg ${note ? kind : ''}" role="status" id="wdm">${note ? `${kind === 'ok' ? icon('check') + ' ' : ''}${esc(note)}` : ''}</div>
         <button type="button" class="btn wl-discord" style="height:48px" id="wdc">${DISCORD} Continue with Discord</button>
-        <div class="wl-or"><span>or</span></div>
-        <div style="display:flex;justify-content:center">${avatar({ avatar: av }, 72)}</div>
-        <input class="input" id="wn" maxlength="24" placeholder="Your name" aria-label="Your name" spellcheck="false" value="${esc(box.dataset.n || '')}">
-        <div class="avatar-picker">${AVATAR_ICONS.slice(0, 10).map((i) => `<button type="button" class="av-opt ${av.icon === i ? 'on' : ''}" data-i="${i}" aria-label="${i}">${icon(i)}</button>`).join('')}</div>
-        <div class="swatches">${AVATAR_COLORS.map((c) => `<button type="button" class="color-opt av-${c} ${av.color === c ? 'on' : ''}" data-c="${c}" aria-label="${c}"></button>`).join('')}</div>
-        <button class="btn primary" style="height:46px">Continue</button></form>`;
-      $('#wdc', box).onclick = (e) => linkDiscord(e.currentTarget);
-      const keep = () => { box.dataset.n = $('#wn', box).value; };
-      $$('[data-i]', box).forEach((b) => (b.onclick = () => { keep(); av.icon = b.dataset.i; stepName(); }));
-      $$('[data-c]', box).forEach((b) => (b.onclick = () => { keep(); av.color = b.dataset.c; stepName(); }));
-      const n = $('#wn', box); n.focus(); n.setSelectionRange(n.value.length, n.value.length);
-      $('form', box).onsubmit = async (e) => {
-        e.preventDefault(); const name = n.value.trim(); if (!name) return n.focus();
-        saved = await json('/api/settings', 'PUT', { profile: { name, avatar: av } });
-        step = 2; stepDebrid();
-      };
+        <button type="button" class="btn ghost wl-skip" id="wdcancel" hidden>Cancel</button></form>`;
+      $('#wdc', box).onclick = linkDiscord;
+      $('#wdcancel', box).onclick = () => { clearInterval(discordWait); stepDiscord(); };
+      $('#wdc', box).focus();
     };
 
     // ---- 2. debrid: checked now, not at the first Play ----
@@ -158,7 +175,7 @@ export function welcome(settings, { invite = false, onlyInvite = false } = {}) {
     };
 
     document.getElementById('gate')?.classList.add('out'); // drop the splash so the form is visible
-    if (invite) stepInvite(); else stepName();
+    if (onlyInvite) stepInvite(); else stepDiscord();
     document.body.appendChild(box);
   });
 }

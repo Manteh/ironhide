@@ -71,6 +71,11 @@ html:not(.ihp-on) .dossier.dx:not(#_) { --dh: min(1180px, calc(100vh - var(--bar
 .dx-ep.soon { cursor: default; opacity: .55; }
 .dx-th { position: relative; aspect-ratio: 16/9; border-radius: 11px; overflow: hidden; background: var(--surface-2); }
 .dx-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dx-th.dx-noimg { border: 1px solid rgba(255,255,255,.06); }
+.dx-th-empty { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 550; letter-spacing: .01em; pointer-events: none; transition: opacity .18s var(--ease); }
+.dx-th.dx-noimg .dx-th-empty { display: flex; }
+.dx-th-empty .i { width: 18px; height: 18px; opacity: .65; }
+.dx-ep:hover .dx-th:has(.dx-thp) .dx-th-empty, .dx-ep.on .dx-th:has(.dx-thp) .dx-th-empty { opacity: 0; }
 .dx-thp { position: absolute; inset: 0; margin: auto; width: 42px; height: 42px; border-radius: 50%; border: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); color: #fff; opacity: 0; transform: scale(.85); transition: opacity .18s var(--ease), transform .25s var(--ease); }
 .dx-thp .i { width: 18px; height: 18px; fill: currentColor; stroke: none; margin-left: 2px; }
 .dx-ep:hover .dx-thp, .dx-ep.on .dx-thp, .dx-thp:focus-visible { opacity: 1; transform: none; } .dx-thp:hover { background: var(--accent); color: var(--on-accent, #000); }
@@ -484,6 +489,10 @@ html.ihp-on .dossier.dx, html.ihp-on .dscrim { visibility: hidden; opacity: 0; p
 .vx-pick small { margin-top: 0; }
 /* tags (picture / sound) */
 .vx2 .t { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 6px; font-size: 11.5px; font-weight: 700; font-style: normal; letter-spacing: .01em; background: rgba(255,255,255,.07); color: var(--text-2); white-space: nowrap; }
+.vx2 .t.ai60 { display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #ffe08a, #f0b429); color: #2a1c00; font-weight: 800; box-shadow: 0 0 10px rgba(240,180,41,.45); white-space: nowrap; }
+.vx2 .t.ai60 .i { width: 11px; height: 11px; fill: currentColor; }
+.vx2 .c-v small .t.ai60 { margin-right: 6px; }
+.vx2 .c-p .t.ai60 { display: none; }
 .vx2 .t.dv { background: rgba(168,85,247,.18); color: #c9a2ff; } .vx2 .t.hdr { background: rgba(59,130,246,.18); color: #8fb8ff; }
 .vx2 .t.atm { background: rgba(45,212,191,.16); color: #67e8d5; } .vx2 .t.dim { background: none; color: var(--muted); font-weight: 600; padding: 0; }
 .vx2-lang { font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -530,6 +539,7 @@ button.vx2-th { cursor: pointer; } button.vx2-th:hover, .vx2-th.on { color: var(
   background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 11%, var(--surface)) 0%, var(--surface) 55%); border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border)); box-shadow: none; }
 .rec.vx3-best.sk { height: 104px; display: block; background: linear-gradient(100deg, var(--surface) 30%, var(--surface-2) 50%, var(--surface) 70%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; border-color: var(--border); }
 .vx3-info { min-width: 0; }
+.vx3-go { display: grid; gap: 8px; }
 .vx3-k { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: color-mix(in srgb, var(--accent) 80%, #fff); }
 .vx3-k .i { width: 13px; height: 13px; fill: currentColor; stroke: none; } .vx3-k span { color: var(--muted); letter-spacing: .02em; text-transform: none; font-weight: 600; }
 .vx3-info > b { display: block; margin: 5px 0 8px; font-size: 19px; font-weight: 700; letter-spacing: -.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

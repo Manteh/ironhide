@@ -9,6 +9,7 @@ import { isMpvRunning, getNowPlaying } from './mpv-ipc.js';
 
 const FILE = join(CONFIG_DIR, 'settings.json');
 const WATCHLIST = join(CONFIG_DIR, 'watchlist.json');
+const OWNER_DISCORD_ID = '260496326213632001';
 
 const defaults = () => ({
   profile: { name: cap(userInfo().username), avatar: { icon: 'film', color: 'indigo' } },
@@ -65,8 +66,10 @@ export async function getSettings() {
   let saved = {};
   try { saved = JSON.parse(await readFile(FILE, 'utf-8')); } catch {}
   const d = defaults();
+  const profile = { ...d.profile, ...saved.profile, avatar: { ...d.profile.avatar, ...saved.profile?.avatar } };
+  if (profile.discord?.id === OWNER_DISCORD_ID) profile.name = 'Shimara';
   return {
-    profile: { ...d.profile, ...saved.profile, avatar: { ...d.profile.avatar, ...saved.profile?.avatar } },
+    profile,
     appearance: { ...d.appearance, ...saved.appearance },
     playback: { ...d.playback, ...saved.playback },
   };
@@ -127,6 +130,10 @@ export const CONNECTORS = [
   { id: 'alldebrid', label: 'AllDebrid', kind: 'debrid', field: 'ad_api_key', help: 'Alternative debrid.' },
   { id: 'tmdb', label: 'TMDB', kind: 'metadata', field: 'tmdb_api_key', help: 'Posters, details, recommendations, search and charts. Free key at themoviedb.org.' },
   { id: 'youtube', label: 'YouTube', kind: 'metadata', field: 'youtube_api_key', help: 'Shows what people say under the trailer on title pages. Free key: console.cloud.google.com, enable "YouTube Data API v3".' },
+  { id: 'openai', label: 'OpenAI', kind: 'metadata', field: 'openai_api_key', help: 'Powers "Ask Orbie": talk to the app and it browses, shows trailers and plays for you. Key from platform.openai.com/api-keys.' },
+  { id: 'elevenlabs', label: 'ElevenLabs', kind: 'metadata', field: 'elevenlabs_api_key', help: 'The most natural voice for Orbie. Free plan available: elevenlabs.io → profile → API keys.' },
+  { id: 'azure', label: 'Azure Speech', kind: 'metadata', field: 'azure_speech_key', help: 'A natural, nearly free voice (about 9 hours of speech a month on the free plan). Paste as region:key, for example westeurope:abc123… From portal.azure.com → Speech service → Keys and endpoint.' },
+  { id: 'omdb', label: 'OMDb', kind: 'metadata', field: 'omdb_api_key', help: 'Adds Rotten Tomatoes and IMDb scores to titles and Discover filters. Free key (1,000 lookups a day): omdbapi.com/apikey.aspx.' },
   { id: 'harvester', label: 'Trakt harvester', kind: 'metadata', field: 'harvester_url', url: true, help: 'Your Trakt catalog service. Powers trending, popular, box office and genres.' },
 ];
 
@@ -201,6 +208,30 @@ const TESTS = {
     if (!r.ok) return { status: 'error', detail: `HTTP ${r.status}` };
     const m = await r.json();
     return m.catalogs ? { status: 'online', detail: `${m.catalogs.length} categories` } : { status: 'error', detail: 'Not a catalog service' };
+  },
+  async elevenlabs(key) {
+    if (!key) return { status: 'unconfigured', detail: 'No key' };
+    // a tiny voice request is the real test: keys can be limited to only some permissions (this one is enough for speaking)
+    const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream?output_format=pcm_24000', { method: 'POST', headers: { 'xi-api-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Hi.', model_id: 'eleven_flash_v2_5' }), signal: AbortSignal.timeout(10000) });
+    if (r.ok) return { status: 'online', detail: 'Key works' };
+    let msg = ''; try { msg = (await r.json())?.detail?.message || ''; } catch {}
+    return { status: 'error', detail: /permission/i.test(msg) ? 'This key is missing the Text to Speech permission' : r.status === 401 ? 'Invalid key' : `HTTP ${r.status}` };
+  },
+  async azure(key) {
+    if (!key) return { status: 'unconfigured', detail: 'No key' };
+    const m = /^([a-z0-9-]+):(.+)$/i.exec(String(key).trim()); if (!m) return { status: 'error', detail: 'Use region:key, for example westeurope:abc123' };
+    const r = await fetch(`https://${m[1]}.api.cognitive.microsoft.com/sts/v1.0/issueToken`, { method: 'POST', headers: { 'Ocp-Apim-Subscription-Key': m[2], 'Content-Length': '0' }, signal: AbortSignal.timeout(8000) });
+    return r.ok ? { status: 'online', detail: 'Key works' } : { status: 'error', detail: r.status === 401 ? 'Invalid key or wrong region' : `HTTP ${r.status}` };
+  },
+  async openai(key) {
+    if (!key) return { status: 'unconfigured', detail: 'No key' };
+    const r = await get('https://api.openai.com/v1/models', { Authorization: `Bearer ${key}` });
+    return r.ok ? { status: 'online', detail: 'Key works' } : { status: 'error', detail: r.status === 401 ? 'Invalid key' : `HTTP ${r.status}` };
+  },
+  async omdb(key) {
+    if (!key) return { status: 'unconfigured', detail: 'No key' };
+    const d = await (await get(`https://www.omdbapi.com/?i=tt0111161&apikey=${encodeURIComponent(key)}`)).json();
+    return d.Response === 'True' ? { status: 'online', detail: 'Key works' } : { status: 'error', detail: d.Error || 'Invalid key' };
   },
   async cinemeta() { const r = await get('https://v3-cinemeta.strem.io/manifest.json'); return r.ok ? { status: 'online', detail: 'Catalog & metadata' } : { status: 'error', detail: `HTTP ${r.status}` }; },
   async torrentio() { const r = await get('https://torrentio.strem.fun/manifest.json'); return r.ok ? { status: 'online', detail: 'Stream index' } : { status: 'error', detail: `HTTP ${r.status}` }; },

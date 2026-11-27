@@ -10,6 +10,7 @@ import { recommend, recommendSections, noteOpened, tasteSummary, rate, notIntere
 const hiddenSet = async () => new Set(((await loadTaste().catch(() => ({}))).notInterested || []).map((n) => n.imdbId));
 import { smartSearch } from './search.js';
 import * as lab from './lab.js';
+import { fetchSubtitles } from './subtitles.js';
 import { getHistory } from './history.js';
 import { profileData, profileMeta } from './profile.js';
 import { parseLangs } from './ui.js';
@@ -28,8 +29,12 @@ import { refuse, hostAllowed, originAllowed, CSP } from './guard.js';
 import { updateStats } from './update-stats.js';
 import { newEpisodes } from './newepisodes.js';
 import { getIntro, setIntro } from './intros.js';
+import { getConfig } from './config.js';
 import { prepareNext } from './tools.js';
 import { checkUpdate, installUpdate } from './app-update.js';
+import { startCast, stopCast, castStatus } from './castserver.js';
+import { sendToPs5 } from './ps5.js';
+import { aiSixty } from './ps5-watchlist.js';
 
 import {
   listPlaylists, getPlaylist, createPlaylist, deletePlaylist,
@@ -192,6 +197,75 @@ async function handleApi(req, res, urlPath) {
       return jsonResponse(res, items.filter((x) => !hidden.has(x.imdbId)));
     }
     if (method === 'GET' && urlPath === '/api/collections') { const { listCollections } = await import('./collections.js'); return jsonResponse(res, listCollections()); }
+    // ---- Ask Orbie (agent.js) ----
+    // ---- shelf collections (folders.js) ----
+    if (method === 'GET' && urlPath === '/api/folders') { const f = await import('./folders.js'); return jsonResponse(res, { folders: await f.listFolders(), presets: Object.entries(f.PRESETS).map(([id, p]) => ({ id, name: p.name, blurb: p.blurb, count: new Set([...p.orders.release, ...p.orders.story]).size })) }); }
+    if (method === 'POST' && urlPath === '/api/folders') {
+      const b = await parseBody(req), f = await import('./folders.js');
+      try {
+        if (b.op === 'preset') await f.addPreset(String(b.preset));
+        else if (b.op === 'create') await f.createFolder({ name: b.name, items: Array.isArray(b.items) ? b.items : [] });
+        else if (b.op === 'rename') await f.renameFolder(String(b.id), b.name);
+        else if (b.op === 'order') await f.setOrder(String(b.id), String(b.order));
+        else if (b.op === 'add') await f.addItem(String(b.id), b.item);
+        else if (b.op === 'remove') await f.removeItem(String(b.id), String(b.imdbId));
+        else if (b.op === 'move') await f.moveItem(String(b.id), String(b.imdbId), Number(b.dir));
+        else if (b.op === 'delete') await f.deleteFolder(String(b.id));
+        else return errorResponse(res, 'Unknown action', 400);
+        return jsonResponse(res, { folders: await f.listFolders() });
+      } catch (e) { return errorResponse(res, e.message, 400); }
+    }
+    if (method === 'GET' && urlPath === '/api/agent/status') { const a = await import('./agent.js'); return jsonResponse(res, { ready: a.hasKey(), live: a.liveOn() }); }
+    if (method === 'POST' && urlPath === '/api/agent/stt') {
+      const chunks = []; let size = 0;
+      for await (const c of req) { size += c.length; if (size > 8e6) return errorResponse(res, 'Too long', 413); chunks.push(c); }
+      try { return jsonResponse(res, { text: await (await import('./agent.js')).stt(Buffer.concat(chunks)) }); } catch (e) { return errorResponse(res, e.message, 502); }
+    }
+    if (method === 'GET' && urlPath === '/api/agent/voices') return jsonResponse(res, await (await import('./agent.js')).voiceMenu());
+    if (method === 'POST' && urlPath === '/api/agent/voice') { // Settings → Orbie voice: engine, a voice for an engine, the live voice switch
+      const b = await parseBody(req), patch = {}, E = ['elevenlabs', 'azure', 'openai', 'system', 'text'], KEY = { elevenlabs: 'eleven_voice', azure: 'azure_voice', openai: 'openai_voice', system: 'tts_voice' };
+      if (typeof b.engine === 'string' && (b.engine === '' || E.includes(b.engine))) patch.agent_voice = b.engine || null;
+      if (E.includes(b.forEngine) && typeof b.voice === 'string') patch[KEY[b.forEngine]] = b.voice.trim().slice(0, 80) || null;
+      if (typeof b.live === 'boolean') patch.agent_live = b.live;
+      if (b.fallback === 'system' || b.fallback === 'text') patch.agent_fallback = b.fallback;
+      if (['gpt-4.1-mini', 'gpt-4.1', 'gpt-4.1-nano'].includes(b.model)) patch.agent_model = b.model;
+      const { saveConfig } = await import('./config.js'); saveConfig(patch);
+      return jsonResponse(res, await (await import('./agent.js')).voiceMenu());
+    }
+    if (method === 'POST' && urlPath === '/api/agent/tts') {
+      const b = await parseBody(req);
+      try {
+        const r = await (await import('./agent.js')).ttsStream(String(b.text || ''), { engine: ['elevenlabs', 'azure', 'openai', 'system', 'text'].includes(b.engine) ? b.engine : '', voice: typeof b.voice === 'string' ? b.voice.slice(0, 80) : '' });
+        res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Sample-Rate': '24000' });
+        if (r.silent) { res.writeHead(204); return res.end(); } // text only: no audio, the page just shows the words
+        if (r.pcm) return res.end(r.pcm);
+        const { Readable } = await import('node:stream'); res.on('close', () => r.body.cancel?.().catch(() => {}));
+        return Readable.fromWeb(r.body).pipe(res);
+      } catch (e) { return errorResponse(res, e.message, 502); }
+    }
+    if (method === 'POST' && urlPath === '/api/agent/rt') {
+      let sdp = ''; for await (const c of req) { sdp += c; if (sdp.length > 2e5) return errorResponse(res, 'Too long', 413); }
+      try { const answer = await (await import('./agent.js')).rtConnect(sdp); res.writeHead(200, { 'Content-Type': 'application/sdp', 'Cache-Control': 'no-store' }); return res.end(answer); } catch (e) { return errorResponse(res, e.message, 502); }
+    }
+    if (method === 'POST' && urlPath === '/api/agent/tool') { const b = await parseBody(req); return jsonResponse(res, await (await import('./agent.js')).toolCall(b)); }
+    if (method === 'POST' && urlPath === '/api/agent') {
+      const b = await parseBody(req), ac = new AbortController();
+      res.on('close', () => ac.abort());
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+      const emit = (o) => { if (!res.writableEnded) res.write(JSON.stringify(o) + '\n'); };
+      try { await (await import('./agent.js')).run({ text: String(b.text || '').slice(0, 500), screen: b.screen || {}, region: /^[A-Z]{2}$/.test(b.region) ? b.region : 'US' }, emit, ac.signal); }
+      catch (e) { if (!ac.signal.aborted) emit({ t: 'error', message: String(e.message || e) }); }
+      return res.end();
+    }
+    if (method === 'GET' && urlPath === '/api/discover/meta') {
+      const f = await import('./filters.js'), region = new URL(req.url, 'http://localhost').searchParams.get('region') || 'US';
+      return jsonResponse(res, { ...f.meta(), providers: await f.providers(region) });
+    }
+    if (method === 'GET' && urlPath === '/api/discover') {
+      const { discoverFiltered } = await import('./filters.js'), qp = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams), hidden = await hiddenSet();
+      const items = await discoverFiltered(qp).catch(() => []);
+      return jsonResponse(res, items.filter((x) => !hidden.has(x.imdbId)));
+    }
     if (method === 'GET' && urlPath === '/api/collections/covers') { const { coversFor } = await import('./collections.js'); return jsonResponse(res, await coversFor(new URL(req.url, 'http://localhost').searchParams.get('ids') || '')); }
     if (method === 'GET' && urlPath === '/api/collections/home') {
       const { homeShelves } = await import('./collections.js'), qp = new URL(req.url, 'http://localhost').searchParams, hidden = await hiddenSet();
@@ -293,6 +367,7 @@ async function handleApi(req, res, urlPath) {
         cached: s.cached,
         quality: s.quality,
         size: s.size,
+        ai60: aiSixty(s.quality), // AI-enhanced 60 fps release: gets the gold badge
         sizeGb: s.sizeBytes / 1e9,
         seeds: s.seeds,
         resolution: (s.quality.match(/2160p|4k|1080p|720p|480p/i) || [''])[0].toLowerCase().replace('4k', '2160p'),
@@ -361,6 +436,17 @@ async function handleApi(req, res, urlPath) {
       if (/^tt\d+$/.test(b.imdbId || '') && b.season && b.episode) prepareNext({ imdbId: b.imdbId, type: 'tv', season: Number(b.season), episode: Number(b.episode) - 1 }).catch?.(() => {});
       return jsonResponse(res, { ok: true });
     }
+    if (method === 'POST' && urlPath === '/api/ps5') { // add a version to the Plex folder the PS5 reads
+      const body = await parseBody(req);
+      const { streams, meta } = getLoadedStreams();
+      const stream = streams[Number(body.index) - 1];
+      if (!stream?.url || !meta?.imdbId) return errorResponse(res, 'Pick a cached version (plain torrents cannot be sent)', 400);
+      const info = await getTitle(meta.imdbId, meta.type === 'tv' ? 'series' : 'movie').catch(() => null);
+      try {
+        return jsonResponse(res, await sendToPs5({ url: stream.url, title: info?.title || meta.title, year: String(info?.year || '').slice(0, 4), season: meta.season, episode: meta.episode }));
+      } catch (e) { return errorResponse(res, e.message, 502); }
+    }
+
     if (method === 'POST' && urlPath === '/api/play') {
       const body = await parseBody(req);
       const meta0 = getLoadedStreams().meta || {};
@@ -376,15 +462,57 @@ async function handleApi(req, res, urlPath) {
       return jsonResponse(res, await tools.ironhide_control.handler({ action: body.action, value: body.value }));
     }
 
+    // ---- show what is playing on a box that can't be cast to (PS5): see castserver.js ----
+    if (method === 'GET' && urlPath === '/api/cast/status') return jsonResponse(res, castStatus());
+    if (method === 'POST' && urlPath === '/api/cast/stop') { stopCast(); return jsonResponse(res, castStatus()); }
+    if (method === 'POST' && urlPath === '/api/cast/start') {
+      const entry = (await getHistory(10)).find((x) => x.streamUrl && x.streamIsRD);
+      if (!entry) return errorResponse(res, 'Play something in Orbie first, then press the PS5 button', 400);
+      const np = await getNowPlaying().catch(() => null);
+      const pos = np?.position > 5 ? np.position : (entry.percent < 90 ? entry.position || 0 : 0);
+      const label = `${entry.title}${entry.season ? ` S${String(entry.season).padStart(2, '0')}E${String(entry.episode).padStart(2, '0')}` : ''}`;
+      try {
+        const out = await startCast({ url: entry.streamUrl, origin: entry.streamUrl, title: label, meta: { title: entry.title, imdbId: entry.imdbId, type: entry.type, season: entry.season, episode: entry.episode }, start: pos, settings: (await getSettings()).playback });
+        if (np) await tools.ironhide_control.handler({ action: 'pause' }).catch(() => {}); // one screen at a time
+        return jsonResponse(res, { ...out, title: label, from: Math.floor(pos) });
+      } catch (e) { return errorResponse(res, String(e.message || e).replace(/([?&](token|apikey|api_key)=)[^&\s]+/gi, '$1***').slice(0, 200), 500); }
+    }
+
     if (method === 'GET' && urlPath === '/api/settings') return jsonResponse(res, await getSettings());
 
     // ---- invites (membership.js) and "Continue with Discord" (discord-auth.js) ----
     if (urlPath.startsWith('/api/membership')) {
       const mem = await import('./membership.js');
       if (method === 'GET' && urlPath === '/api/membership') return jsonResponse(res, mem.status());
+      if (method === 'GET' && urlPath === '/api/membership/clipboard') {
+        const cp = await import('child_process');
+        try {
+          const txt = await new Promise((ok, fail) => cp.execFile('pbpaste', (err, out) => err ? fail(err) : ok(out)));
+          const raw = String(txt || '').trim();
+          const bundleMatch = raw.match(/orbie-bundle-([A-Za-z0-9_-]+)/);
+          if (bundleMatch) return jsonResponse(res, { found: true, bundle: true, code: bundleMatch[0] });
+          const m = raw.match(/orbie-([A-Za-z0-9_-]{100,})/);
+          return jsonResponse(res, { found: !!m, bundle: false, code: m ? m[0] : '' });
+        } catch { return jsonResponse(res, { found: false, code: '' }); }
+      }
       const body = method === 'POST' ? await parseBody(req) : {};
       if (method === 'POST' && urlPath === '/api/membership/peek') return jsonResponse(res, mem.peek(body.code));
       if (method === 'POST' && urlPath === '/api/membership/redeem') { const out = mem.redeem(body.code); if (out.ok) social.askInviter(); return out.ok ? jsonResponse(res, out) : errorResponse(res, out.error, 400); }
+      if (method === 'POST' && urlPath === '/api/membership/redeem-bundle') {
+        const out = mem.redeemBundle(body.bundle);
+        if (out.ok) social.askInviter();
+        return out.ok ? jsonResponse(res, out) : errorResponse(res, out.error, 400);
+      }
+      if (method === 'POST' && urlPath === '/api/membership/invite-bundle') {
+        const cfg = getConfig();
+        const torboxKey = cfg.torbox_api_key;
+        if (!torboxKey) return errorResponse(res, 'No TorBox key configured on this account', 400);
+        const name = (await getSettings()).profile?.name || 'Shimara';
+        const inv = mem.makeInvite({ note: body.note || 'VIP Discord Friend', name });
+        if (inv.error) return errorResponse(res, inv.error, 400);
+        const bundle = mem.makeBundle({ inviteCode: inv.code, torboxKey, name });
+        return jsonResponse(res, { bundle, inviteCode: inv.code, left: inv.left });
+      }
       if (method === 'POST' && urlPath === '/api/membership/invite') {
         const out = mem.makeInvite({ note: body.note, name: (await getSettings()).profile?.name || '' });
         return out.error ? errorResponse(res, out.error, 400) : jsonResponse(res, out);
@@ -524,7 +652,7 @@ async function handleApi(req, res, urlPath) {
             direct = r.headers.get('location') || (r.status < 300 ? stream.url : null);
             if (!direct || /failed_|error|denied/i.test(direct)) throw new Error('That stream is not available right now');
             setPlayState({ phase: 'probing', detail: 'Checking codecs and tracks' });
-            info = await createSession({ url: direct, origin: stream.url, title: meta.title || body.title || 'Playing', meta, subs: loaded.subs || [], caps: body.caps || {}, settings, delivery: CDN_DELIVERY ? 'cdn' : 'proxy' });
+            info = await createSession({ url: direct, origin: stream.url, title: meta.title || body.title || 'Playing', meta, subs: (meta.imdbId ? await fetchSubtitles(meta.imdbId, meta.season, meta.episode, stream.quality).catch(() => null) : null) || loaded.subs || [], caps: body.caps || {}, settings, delivery: CDN_DELIVERY ? 'cdn' : 'proxy' });
             break;
           } catch (e) {
             if (/ffmpeg is not installed/.test(e.message)) throw e;

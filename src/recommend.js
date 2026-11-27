@@ -232,13 +232,13 @@ const bigrams = (t) => { const w = words(t); const out = []; for (let i = 0; i <
 export async function recommend({ seed = 0, limit = 48 } = {}) {
   if (!key()) return [];
   if (cache.out && cache.seed === seed && Date.now() - cache.at < 10 * 60e3) return cache.out;
-  const { prof, sig, titleFeats, acc } = await buildProfile();
+  const { prof, sig, titleFeats, acc, taste: tasteFile } = await buildProfile();
   const R = rnd(Number(seed) + 7), st = await stats();
   // franchises you turned down (or rated low) as a whole, and the ones you love: a sequel of something you said no to is not a good guess,
   // unless you also love other entries of it
   const negFran = new Set(), posFran = new Set();
   for (const [id, f] of titleFeats) { const w = sig.get(id)?.w || 0; const set = w <= -0.5 ? negFran : w >= 0.5 ? posFran : null; if (set) franchiseKeys(f).forEach((k) => set.add(k)); }
-  const exclude = new Set([...sig.keys()]);
+  const exclude = new Set([...sig.keys(), ...(tasteFile?.seen || [])]); // titles marked as seen are never picked again
   const seen = new Set([...titleFeats.values()].map((f) => `${f.kind}:${f.tmdbId}`));
   const today = new Date().toISOString().slice(0, 10), thisYear = new Date().getFullYear();
   const knownBigrams = new Set([...titleFeats.values()].flatMap((f) => bigrams(f.title)));
@@ -372,7 +372,29 @@ export async function recommendSections({ seed = 0 } = {}) {
   cache.sections = { sections, all };
   return cache.sections;
 }
-export function invalidateRecommendations() { cache = { at: 0, seed: null, out: null, sections: null }; }
+// "I've seen these": they stop being suggested, without saying anything about whether they were liked
+export async function markSeen(ids) {
+  const t = await loadTaste(); t.seen = [...new Set([...(t.seen || []), ...ids.filter((x) => /^tt\d+$/.test(x || ''))])].slice(-3000);
+  await saveTasteFile(t); invalidateRecommendations(); return t.seen.length;
+}
+export function invalidateRecommendations() { cache = { at: 0, seed: null, out: null, sections: null }; profMemo = { at: 0, v: null }; }
+// ---- for Orbie's voice: picks that follow your taste, in any shape ----
+let profMemo = { at: 0, v: null };
+const profile5 = async () => { if (profMemo.v && Date.now() - profMemo.at < 5 * 60e3) return profMemo.v; const v = await buildProfile(); profMemo = { at: Date.now(), v }; return v; };
+// the taste-ranked pool behind For You (best first); a new seed makes a different pool, an old one is reused so a refresh is instant
+export async function recommendPool({ seed = null, fresh = false } = {}) {
+  if (!fresh && cache.pool?.length && Date.now() - cache.at < 30 * 60e3) return cache.pool;
+  const r = await recommend({ seed: seed ?? Math.floor(Date.now() / 1800000), limit: 60 });
+  const seen = new Set(); return [...r, ...(cache.pool || [])].filter((x) => x.imdbId && !seen.has(x.imdbId) && seen.add(x.imdbId));
+}
+// any list of titles (a chart, a genre search): drop what you have watched, rated, saved, hidden or marked as seen, and put what fits you first
+export async function personalize(items, { rerank = true } = {}) {
+  const { prof, sig, taste } = await profile5();
+  const gone = new Set([...sig.keys(), ...(taste?.seen || []), ...(taste?.notInterested || []).map((n) => n.imdbId)]);
+  let out = items.filter((i) => !gone.has(i.imdbId));
+  if (rerank) out = out.map((i, k) => ({ i, k, s: 0.9 * affinity(prof, { kind: i.type === 'series' ? 'tv' : 'movie', genres: i.genres || [], keywords: [], cast: [], makers: [], lang: '', year: i.year }).a + 0.6 * (((+i.rating || 6.5) - 6) / 3) - k * 0.004 })).sort((x, y) => y.s - x.s).map((x) => x.i);
+  return out;
+}
 
 // ---------- taste summary (for the profile page) ----------
 export async function tasteSummary() {

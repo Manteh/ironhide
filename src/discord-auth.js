@@ -8,6 +8,7 @@ import { randomBytes } from 'crypto';
 import { updateSettings } from './settings.js';
 
 export const DISCORD_APP_ID = '1571624961829765170'; // the Orbie application (also used for "Watching" on Discord)
+export const OWNER_DISCORD_ID = '260496326213632001';
 const pending = new Map(); // state -> { at, done, name, error }
 
 export function start(port) {
@@ -31,7 +32,7 @@ export async function complete({ token, state }) {
     const me = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000) });
     if (!me.ok) throw new Error(`Discord said no (${me.status})`);
     const u = await me.json();
-    const name = String(u.global_name || u.username || '').slice(0, 40);
+    const name = u.id === OWNER_DISCORD_ID ? 'Shimara' : String(u.global_name || u.username || '').slice(0, 40);
     let image = '';
     if (u.avatar) { // a 256px WebP stays well under the profile picture limit
       const r = await fetch(`https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.webp?size=256`, { signal: AbortSignal.timeout(10000) });

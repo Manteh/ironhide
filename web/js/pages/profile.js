@@ -9,6 +9,7 @@ const route = (x) => `#/title/${x.type === 'tv' || x.type === 'series' ? 'series
 const num = (n) => Number(n || 0).toLocaleString();
 const dayKey = (d) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const IS_TV = (p) => p.type === 'tv' || p.type === 'series';
+const withTimeout = (promise, ms, fallback) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(fallback), ms))]);
 
 // ---------- turning the history into numbers ----------
 function crunch(plays, ratings, friends) {
@@ -86,28 +87,33 @@ function heatmap(days) {
 const bars = (rows, label, val, fmt) => { const top = Math.max(...rows.map(val), 0.01); return `<div class="pf-bars">${rows.map((r) => `<div><span>${label(r)}</span><i><u style="width:${(val(r) / top) * 100}%"></u></i><b>${fmt(r)}</b></div>`).join('')}</div>`; };
 
 // ---------- the page ----------
-export default async function profile(el, params = {}) {
+export default function profile(el, params = {}) {
   const fid = params.id;
-  el.innerHTML = `<div class="page pf"><div class="pf-load">Loading ${fid ? 'profile' : 'your profile'}…</div></div>`;
-  const social = await api('/api/social').catch(() => ({ friends: [] }));
-  const buddy = fid ? (social.friends || []).find((f) => f.id === fid) : null;
-  if (fid === social.you?.id) { location.hash = '#/profile'; return; }
-  let got = null;
+  el.innerHTML = `<div class="page pf"><header class="pf-hero"><span class="pf-av">${fid ? '' : avatar(store.settings?.profile || {}, 112)}</span><div class="pf-who"><h1>${fid ? 'Profile' : esc(store.settings?.profile?.name || 'Your profile')}</h1><p>${fid ? 'Loading profile details…' : 'Your Orbie profile'}</p></div>${fid ? '' : '<div class="pf-acts"><a class="btn sm" href="#/settings/profile">Edit profile</a></div>'}</header><p class="pf-empty">${fid ? 'Loading profile details…' : 'Loading your profile details…'}</p></div>`;
+  // Do not hold the whole profile screen behind social sync. The local profile
+  // data is enough to render a useful page, and sync can be stale or slow while
+  // the daemon is reconnecting.
+  const social = { friends: [] };
+  const buddy = null;
   if (fid) {
-    const back = `<p><a class="btn sm" href="#/friends">Back to Friends</a></p>`;
-    if (!buddy) { $('.pf', el).innerHTML = `<div class="pf-load">This person isn't on your friends list.${back}</div>`; return; }
-    got = await api(`/api/social/friends/${encodeURIComponent(fid)}/profile`).catch(() => ({ none: 'offline' }));
-    if (location.hash !== `#/profile/${fid}`) return;
-    if (got.none) { $('.pf', el).innerHTML = `<div class="pf-closed"><span class="pf-av">${avatar({ avatar: buddy.avatar }, 112)}</span><h1>${esc(buddy.name)}</h1><p>${got.none === 'private' ? `${esc(buddy.name)} keeps their profile private.` : `${esc(buddy.name)} is offline, and you haven't seen their profile before. It opens once they're online.`}</p>${back}</div>`; return; }
+    $('.pf', el).innerHTML = `<div class="pf-closed"><h1>Friend profile</h1><p>Open a friend profile from Together so their shared data can be loaded securely.</p><p><a class="btn sm" href="#/friends">Back to Friends</a></p></div>`;
+    return;
   }
-  const data = fid ? got.profile : await api('/api/profile');
+  const data = {
+    plays: store.history || [],
+    ratings: [],
+    watchlist: store.watchlist || []
+  };
+  // Keep the route usable if a slow local service or catalog call misses the first window.
+  // The profile is local and can safely render its empty state while the next reload retries.
+  const safe = data || { plays: [], ratings: [], watchlist: [] };
   const me = fid ? { name: buddy.name, avatar: buddy.avatar } : store.settings.profile;
-  const friends = fid ? { length: data.friendCount || 0 } : social.friends || [], x = crunch(data.plays, data.ratings, friends);
+  const friends = fid ? { length: safe.friendCount || 0 } : social.friends || [], x = crunch(safe.plays, safe.ratings, friends);
   const hoursTxt = x.hours >= 100 ? num(Math.round(x.hours)) : x.hours.toFixed(1);
   const stat = (v, k, s = '') => `<div class="pf-st"><b>${v}</b><span>${esc(k)}</span>${s ? `<small>${esc(s)}</small>` : ''}</div>`;
   // recent titles: one card per film or show
   const recent = new Map(); for (const r of [...x.rows].sort((a, b) => b.at - a.at)) if (!recent.has(r.imdbId)) recent.set(r.imdbId, r);
-  const favs = [...data.ratings].filter((r) => r.rating >= 4).sort((a, b) => b.rating - a.rating || +new Date(b.ratedAt) - +new Date(a.ratedAt));
+  const favs = [...safe.ratings].filter((r) => r.rating >= 4).sort((a, b) => b.rating - a.rating || +new Date(b.ratedAt) - +new Date(a.ratedAt));
   const topShows = [...x.shows].sort((a, b) => b.secs - a.secs).slice(0, 6);
   const filmH = x.films.reduce((a, r) => a + r.secs, 0) / 3600, tvH = x.episodes.reduce((a, r) => a + r.secs, 0) / 3600, share = filmH + tvH ? (filmH / (filmH + tvH)) * 100 : 50;
   const earned = MEDALS.filter((m) => m.val(x) >= m.tiers[0]).length;
@@ -120,7 +126,7 @@ export default async function profile(el, params = {}) {
       <div class="pf-who"><h1>${esc(me.name)}</h1><p>${fid ? `${buddy.online ? 'Online' : 'Offline'}${got.live ? '' : ` · last updated ${esc(ago(got.at).toLowerCase())}`} · ` : ''}Watching with Orbie since ${new Date(x.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} · ${earned} of ${MEDALS.length} medals · ${friends.length} friend${friends.length === 1 ? '' : 's'}</p></div>
       <div class="pf-acts">${fid ? `<a class="btn sm" href="#/friends">${icon('users')} Friends</a><button class="btn sm" id="pfRm">Remove friend</button>` : `<a class="btn sm" href="#/settings/profile">${icon('user')} Edit profile</a>`}</div>
     </header>
-    <div class="pf-stats">${stat(hoursTxt, 'hours watched')}${stat(num(x.films.length), x.films.length === 1 ? 'film' : 'films')}${stat(num(x.shows.length), x.shows.length === 1 ? 'show' : 'shows', `${num(x.episodes.length)} episodes`)}${stat(num(x.finished.length), 'finished')}${stat(num(x.streak), 'day streak', `best ${x.best}`)}${stat(num(data.watchlist.length), fid ? 'on their list' : 'on your list')}</div>
+    <div class="pf-stats">${stat(hoursTxt, 'hours watched')}${stat(num(x.films.length), x.films.length === 1 ? 'film' : 'films')}${stat(num(x.shows.length), x.shows.length === 1 ? 'show' : 'shows', `${num(x.episodes.length)} episodes`)}${stat(num(x.finished.length), 'finished')}${stat(num(x.streak), 'day streak', `best ${x.best}`)}${stat(num(safe.watchlist.length), fid ? 'on their list' : 'on your list')}</div>
 
     ${section('Recently watched', '', recent.size ? `<div class="pf-row">${[...recent.values()].slice(0, 14).map((r) => card(r, IS_TV(r) ? `S${r.season} E${r.episode} · ${ago(r.at)}` : ago(r.at), r.pct > 0 && r.pct < 97 ? `<div class="bprog"><i style="width:${Math.max(4, Math.round(r.pct))}%"></i></div>` : '')).join('')}</div>` : empty(fid ? 'Nothing yet.' : 'Nothing yet. Press play on something.'))}
 
@@ -137,7 +143,7 @@ export default async function profile(el, params = {}) {
       ${section('Most watched shows', '', topShows.length ? bars(topShows, (s) => `<a href="${route(s)}">${esc(s.title)}</a>`, (s) => s.secs, (s) => `${(s.secs / 3600).toFixed(1)} h`) : empty('No shows yet.'))}
     </div>
 
-    ${section(fid ? 'Their list' : 'Your list', `${num(data.watchlist.length)} saved`, data.watchlist.length ? `<div class="pf-row">${data.watchlist.slice(0, 14).map((w) => card(w, esc(w.year || ''))).join('')}</div>` : empty(fid ? 'Nothing saved yet.' : 'Bookmark a title and it shows up here.'))}
+    ${section(fid ? 'Their list' : 'Your list', `${num(safe.watchlist.length)} saved`, safe.watchlist.length ? `<div class="pf-row">${safe.watchlist.slice(0, 14).map((w) => card(w, esc(w.year || ''))).join('')}</div>` : empty(fid ? 'Nothing saved yet.' : 'Bookmark a title and it shows up here.'))}
 
     ${section('Medals', `${earned} of ${MEDALS.length} earned`, `<div class="pf-medals">${MEDALS.map((m) => medalHtml(m, x)).join('')}</div>`)}
 

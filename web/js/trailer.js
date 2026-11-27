@@ -88,7 +88,7 @@ function icons() {
 }
 function pulse(name) { const el = $('#trPulse', tr); el.innerHTML = icon(name); el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); }
 function toggle() { const p = yt(); if (!p) return; if (T.state === 1 || T.state === 3) { p.pauseVideo(); pulse('pause'); } else { p.playVideo(); pulse('play'); } }
-function wake() { tr.classList.remove('idle'); clearTimeout(T.idle); T.idle = setTimeout(() => { if (T.state === 1 && !T.dragging) tr.classList.add('idle'); }, 2800); }
+function wake() { if (!tr) return; tr.classList.remove('idle'); clearTimeout(T.idle); T.idle = setTimeout(() => { if (T.state === 1 && !T.dragging) tr.classList.add('idle'); }, 2800); }
 const fs = () => (document.fullscreenElement ? document.exitFullscreen() : tr.requestFullscreen?.().catch(() => {}));
 
 function bind() {

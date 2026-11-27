@@ -52,10 +52,10 @@ body.is-browse { background: var(--bg); }
 #browse, #page { padding-left: 108px; }
 
 /* full width beside the sidebar: rows already run to the right edge, so the left starts right after the rail */
-.bwrap { position: relative; z-index: 1; max-width: none; margin: 0; padding: 32px clamp(var(--page-pad), 3vw, 64px) 170px; }
+.bwrap { position: relative; z-index: 1; max-width: none; margin: 0; padding: 20px clamp(var(--page-pad), 3vw, 64px) 170px; }
 
-/* hero */
-.hero2 { position: relative; height: 440px; border-radius: 28px; overflow: hidden; margin-bottom: 44px; background: var(--surface); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); animation: rise .7s var(--ease) backwards; }
+/* hero - permanently disabled */
+#hero, .hero2 { display: none !important; }
 .h2bg { position: absolute; inset: -12%; background-size: cover; background-position: center 30%; filter: blur(34px) brightness(.8) saturate(1.35); transform: scale(1.02) translate(calc(var(--px, 0) * -10px), calc(var(--py, 0) * -8px)); transition: transform .9s var(--ease); }
 .hero2::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(8,8,10,.62) 0%, rgba(8,8,10,.28) 52%, rgba(8,8,10,.1) 100%), linear-gradient(0deg, rgba(8,8,10,.4) 0%, transparent 45%); }
 .hero2 { box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }

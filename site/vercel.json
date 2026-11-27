@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/join", "destination": "/index.html" },
+    { "source": "/invite", "destination": "/index.html" },
+    { "source": "/manifest", "destination": "/manifest.html" },
+    { "source": "/showcase", "destination": "/showcase.html" }
+  ],
+  "headers": [
+    {
+      "source": "/downloads/(.*)",
+      "headers": [
+        { "key": "Content-Disposition", "value": "attachment" }
+      ]
+    }
+  ]
+}

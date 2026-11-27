@@ -1,0 +1,5 @@
+.vercel
+node_modules/
+video/studio/node_modules/
+video/studio/.cache/
+.DS_Store

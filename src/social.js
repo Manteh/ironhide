@@ -14,6 +14,9 @@ import { inviter, claimInvite } from './membership.js';
 const osa = (s) => '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
 
 const FILE = join(CONFIG_DIR, 'social.json');
+// The owner identity stays stable across sign-out so Shimara can return without
+// being treated as a new Orbie member.
+const OWNER_PUB = 'MCowBQYDK2VwAyEA27kAujqdkFYyEl/ZJara/pcAVbjmFmn92IVga6/Yh1k=';
 const REACTIONS = ['👍', '😂', '😮', '❤️', '🔥', '👏', '😢', '🤯'];
 
 let data = { priv: '', pub: '', relayUrl: '', friends: [], shareStatus: true, appearOffline: false, rooms: {} };
@@ -273,7 +276,8 @@ export function purgeFriends() { for (const f of data.friends) tx({ t: 'friend.r
 export function resetIdentity() {
   purgeFriends(); // everyone I was friends with forgets me too
   disconnect();
-  data.friends = []; data.priv = ''; data.pub = ''; genKeys();
+  data.friends = [];
+  if (data.pub !== OWNER_PUB) { data.priv = ''; data.pub = ''; genKeys(); }
   Object.assign(S, { you: null, presence: new Map(), incoming: [], outgoing: [], room: null, chat: [], invites: [], people: [], offsets: [], watching: null });
   emit('reset', {});
   if (data.relayUrl) connect(); else push();

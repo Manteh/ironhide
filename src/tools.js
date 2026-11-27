@@ -305,6 +305,8 @@ server.registerTool(
 
     const epTag = globalMeta.season ? ` S${String(globalMeta.season).padStart(2, "0")}E${String(globalMeta.episode).padStart(2, "0")}` : "";
     ownsPlayback = true;
+    // the subtitle that fits the version being played (found when the list was shown, matched to this release now)
+    if (globalMeta.imdbId) globalSubs = await fetchSubtitles(globalMeta.imdbId, globalMeta.season, globalMeta.episode, stream.quality).catch(() => globalSubs);
     const result = await playDetached(stream, globalSubs, onFinish, resumeFrom, globalMeta.title ? `${globalMeta.title}${epTag}` : undefined);
 
     if (result.status === "cancelled") { ownsPlayback = false; return { content: [{ type: "text", text: "Cancelled before it started playing." }] }; }

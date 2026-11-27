@@ -177,7 +177,6 @@ export function renderNav() {
     <a href="#/continue" class="ri ${on(/^#\/continue/)}" aria-label="Continue watching" data-tip="Continue watching">${icon('play')}<span>Resume</span></a>
     <a href="#/shelf" class="ri ${on(/^#\/shelf/)}" aria-label="Shelf" data-tip="Shelf">${icon('bookmark')}<span>Shelf</span></a>
     <a href="#/taste" class="ri ${on(/^#\/taste/)}" aria-label="Taste Lab" data-tip="Taste Lab">${icon('heart')}<span>Taste</span></a>
-    <a href="#/friends" class="ri ${on(/^#\/(friends|together)/)}" aria-label="Friends, ${online} online" data-tip="Friends">${icon('users')}<span>Friends</span>${store.socialCount ? `<i class="rbadge">${store.socialCount}</i>` : online ? `<i class="rbadge on">${online}</i>` : ''}</a>
     <i class="rsep"></i>
     <a href="#/settings" class="ri ${on(/^#\/settings/)}" aria-label="Settings" data-tip="Settings  ⌘,">${icon('gear')}<span>Settings</span></a>
     <a class="rme ${on(/^#\/profile/)}" href="#/profile" aria-label="Your profile" data-tip="${esc(s.profile.name)}">${avatar(s.profile, 32)}</a>`;
@@ -243,7 +242,9 @@ async function navigate() {
       browse?.handle('away');
       page.innerHTML = `<div id="pg"><div class="page pg-sk" aria-busy="true" aria-label="Loading"><i class="skl h"></i><i class="skl"></i><i class="skl s"></i><div class="pg-skc"><i></i><i></i><i></i></div></div></div>`;
       window.scrollTo(0, 0);
-      try { await (await import(`./pages/${r.loader}.js`)).default($('#pg'), params); }
+      // Version page modules so a packaged app update cannot keep an older
+      // dynamically imported page in the browser module cache.
+      try { await (await import(`./pages/${r.loader}.js?v=20261127-profile-fix`)).default($('#pg'), params); }
       catch (e) { $('#pg').innerHTML = `<div class="page"><div class="note">${esc(e.message)}</div></div>`; }
     }
     return;
@@ -293,6 +294,7 @@ route('/search/:q', 'browse', 'search');
 route('/friends', 'page', 'together');
 route('/together', 'page', 'together');
 route('/taste', 'page', 'taste');
+route('/collection/:id', 'page', 'collection');
 route('/profile', 'page', 'profile');
 route('/profile/:id', 'page', 'profile');
 route('/settings', 'page', 'settings');
@@ -302,7 +304,16 @@ route('/sanctuary', 'page', 'manifesto');
 
 document.addEventListener('keydown', (e) => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
-  if ((e.key === '/' && !typing) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) { e.preventDefault(); import('./palette.js').then((m) => m.openPalette()); }
+  if ((e.key === '/' && !typing) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) {
+    e.preventDefault();
+    import('./palette.js').then((m) => m.openPalette());
+  }
+  // Option + Space (or Alt + Space): Toggle Ask Orbie from the sofa
+  if (e.altKey && (e.code === 'Space' || e.key === ' ')) {
+    e.preventDefault();
+    const btn = document.querySelector('#ihbar button.ask');
+    import('./orbie-agent.js').then((m) => m.toggleAsk(btn)).catch(() => {});
+  }
 });
 
 (async function boot() {

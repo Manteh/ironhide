@@ -9,7 +9,11 @@ import { heroIn, heroFill, watchSections, versionsIn, personIn, chain } from './
 
 // Images fade in once loaded and hide if broken. Listeners, not inline onload/onerror: the page's CSP allows no inline script.
 document.addEventListener('load', (e) => { if (e.target.matches?.('img[data-ld]')) e.target.classList.add('ld'); }, true);
-document.addEventListener('error', (e) => { if (e.target.matches?.('img[data-hide-broken]')) e.target.style.display = 'none'; }, true);
+document.addEventListener('error', (e) => {
+  if (e.target.matches?.('img[data-hide-broken]')) e.target.style.display = 'none';
+  const th = e.target.matches?.('.dx-th img') && e.target.closest('.dx-th');
+  if (th) { e.target.style.display = 'none'; th.classList.add('dx-noimg'); }
+}, true);
 
 const TIERS = [['2160p', '4K'], ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['', 'Other']];
 const tierLabel = (r) => (TIERS.find(([k]) => k === (r || ''))?.[1] || 'Other');
@@ -253,7 +257,8 @@ export async function openDossier({ type, id }) {
   const epsHTML = () => (meta.seasons?.[st.season] || []).map((e) => {
     const w = watched(st.season, e.episode), pct = Math.round(w?.percent || 0), done = pct >= 90, soon = e.released && e.released > today;
     return `<div class="dx-ep ${e.episode === st.episode ? 'on' : ''} ${soon ? 'soon' : ''}" data-e="${e.episode}" role="button" tabindex="0">
-      <div class="dx-th">${e.thumbnail ? `<img src="${esc(e.thumbnail)}" alt="" loading="lazy" decoding="async" data-ld>` : ''}
+      <div class="dx-th${e.thumbnail ? '' : ' dx-noimg'}">${e.thumbnail ? `<img src="${esc(e.thumbnail)}" alt="" loading="lazy" decoding="async" data-ld>` : ''}
+        <span class="dx-th-empty" aria-hidden="true">${icon('film')}<span>No image yet</span></span>
         ${soon ? '' : `<button class="dx-thp" data-pe="${e.episode}" aria-label="Play episode ${e.episode}">${icon('play')}</button>`}
         ${w && !done ? `<i class="dx-prog"><u style="width:${Math.max(4, pct)}%"></u></i>` : ''}${done ? `<span class="dx-done" title="Watched">${icon('check')}</span>` : ''}</div>
       <div class="dx-et"><b><span>${e.episode}.</span> ${esc(e.name || `Episode ${e.episode}`)}</b>
@@ -659,7 +664,7 @@ export async function openDossier({ type, id }) {
   function grouped(list) {
     const m = new Map();
     for (const s of list) {
-      const k = [s.resolution, s.source, s.codec, (s.hdr || []).join(), s.audio, (s.langs || []).join(), s.pack, s.dub, Math.round((s.sizeGb || 0) * 10)].join('|');
+      const k = [s.resolution, s.source, s.codec, (s.hdr || []).join(), s.audio, (s.langs || []).join(), s.pack, s.dub, s.ai60, Math.round((s.sizeGb || 0) * 10)].join('|');
       const g = m.get(k);
       if (!g) { m.set(k, { ...s, copies: 1 }); continue; }
       g.copies++;
@@ -674,6 +679,7 @@ export async function openDossier({ type, id }) {
     const out = new Map(), add = (s, label, why, ic) => { if (!s) return; const p = out.get(s.index); if (p) p.labels.push(label); else out.set(s.index, { s, labels: [label], why, ic }); };
     const top = (f, filt = () => true) => ok.filter(filt).sort((a, b) => f(b) - f(a))[0];
     const bp = top(picScore); if (bp && picScore(bp) > picScore(rec) + 5) add(bp, 'Best picture', [bp.hdr?.[0], bp.source === 'Remux' ? 'untouched disc quality' : '', bp.size].filter(Boolean).join(' · '), 'eye');
+    const ai = top(picScore, (s) => s.ai60); if (ai) add(ai, 'AI 60fps enhanced', `AI upscaled · extra smooth · ${ai.size}`, 'star');
     const ba = top(audScore, (s) => audScore(s) >= 46); if (ba && audScore(ba) > audScore(rec)) add(ba, 'Best sound', `${ba.audio} surround`, 'star');
     for (const l of myLangs) { const bl = top((s) => picScore(s) + (s.seeds || 0) / 10, (s) => s.langs?.includes(l)); if (bl) add(bl, `In ${LANG[l] || l}`, langLine(bl), 'users'); }
     const lt = top((s) => -(s.sizeGb || 99), (s) => RES[s.resolution] >= 3 && s.sizeGb > 0.3 && s.sizeGb < (rec.sizeGb || 99) * 0.55 && !s.dub);
@@ -682,7 +688,7 @@ export async function openDossier({ type, id }) {
     if (ms) add(ms, 'Most shared', `${ms.seeds} people seeding`, 'flame');
     return [...out.values()].slice(0, 4);
   }
-  const FILTERS = [['hdr', 'HDR / Dolby Vision', (s) => s.hdr?.length], ['sound', 'Surround sound', (s) => audScore(s) >= 22], ['en', 'English audio', (s) => !s.dub && (s.original || !(s.langs || []).length)], ['ep', 'Just this episode', (s) => !s.pack]];
+  const FILTERS = [['ai', 'AI 60fps', (s) => s.ai60], ['hdr', 'HDR / Dolby Vision', (s) => s.hdr?.length], ['sound', 'Surround sound', (s) => audScore(s) >= 22], ['en', 'English audio', (s) => !s.dub && (s.original || !(s.langs || []).length)], ['ep', 'Just this episode', (s) => !s.pack]];
 
   function sorted(list) {
     const by = (f) => [...list].sort(f);
@@ -769,7 +775,8 @@ export async function openDossier({ type, id }) {
 
     // cells
     const qcls = (x) => ({ '2160p': 'q4k', '1080p': 'qhd', '720p': 'q72' }[x.resolution] || 'qsd');
-    const pic = (x) => [x.hdr?.some((h) => /vision/i.test(h)) && '<i class="t dv">DV</i>', x.hdr?.some((h) => /hdr10\+/i.test(h)) ? '<i class="t hdr">HDR10+</i>' : x.hdr?.some((h) => /hdr/i.test(h)) && '<i class="t hdr">HDR</i>', x.tenbit && !x.hdr?.length && '<i class="t">10-bit</i>'].filter(Boolean).join('') || '<i class="t dim">SDR</i>';
+    const gold = (x) => (x.ai60 ? `<i class="t ai60" title="AI-enhanced, 60 frames per second">${icon('star')} AI 60fps</i>` : '');
+    const pic = (x) => gold(x) + [x.hdr?.some((h) => /vision/i.test(h)) && '<i class="t dv">DV</i>', x.hdr?.some((h) => /hdr10\+/i.test(h)) ? '<i class="t hdr">HDR10+</i>' : x.hdr?.some((h) => /hdr/i.test(h)) && '<i class="t hdr">HDR</i>', x.tenbit && !x.hdr?.length && '<i class="t">10-bit</i>'].filter(Boolean).join('') || '<i class="t dim">SDR</i>';
     const snd = (x) => x.audio ? `<i class="t ${audScore(x) >= 46 ? 'atm' : ''}">${esc(x.audio)}</i>` : '<i class="t dim">Stereo</i>';
     const lang = (x) => {
       const mine = (x.langs || []).some((l) => myLangs.includes(l)), foreign = x.dub && !mine;
@@ -790,11 +797,12 @@ export async function openDossier({ type, id }) {
             <span class="vx3-why">${reasons.map((r) => `<span>${icon('check')}${esc(r)}</span>`).join('')}</span></div>
         </div>
         <div class="vx3-meta"><b>${esc(rec.size || '')}</b>${seedBars(rec.seeds)}</div>
-        <button class="btn primary vx3-play" data-p="${rec.index}" title="${esc(specTitle(rec))}">${icon('play')} Play</button>
+        <div class="vx3-go"><button class="btn primary vx3-play" data-p="${rec.index}" title="${esc(specTitle(rec))}">${icon('play')} Play</button>
+          <button class="btn ghost" id="dPs5" title="Add to Plex. Shift-click any other version to send that one instead.">Send to PS5</button></div>
       </div>
       ${pk.length ? `<div class="vx3-alts">${pk.map(({ s, labels, why: w, ic }) => `<button class="vx-pick vx3-alt" data-p="${s.index}" title="${esc(specTitle(s))}">
         <span class="vx3-al">${icon(ic)}${esc(labels.join(' · '))}</span>
-        <span class="vx3-av"><i class="vx2-q sm ${qcls(s)}">${esc(tierLabel(s.resolution))}</i><b>${esc(headline(s))}</b></span>
+        <span class="vx3-av"><i class="vx2-q sm ${qcls(s)}">${esc(tierLabel(s.resolution))}</i><b>${esc(headline(s))}</b>${gold(s)}</span>
         <small>${esc(w)}</small></button>`).join('')}</div>` : ''}
       ${rest.length ? `<div class="vx-head"><h4>All versions <em>${groups.length - 1} different${dupes ? ` · ${dupes} duplicates merged` : ''}</em></h4></div>
       <div class="vx-filters">
@@ -803,7 +811,7 @@ export async function openDossier({ type, id }) {
       <div class="vx2-table">
         <div class="vx2-hd">${sortHead('best', 'Version', 'c-v')}<span class="vx2-th c-p">Picture</span><span class="vx2-th c-s">Sound</span><span class="vx2-th c-l">Language</span>${sortHead('size', 'Size', 'c-z')}${sortHead('seeds', 'Seeders', 'c-d')}<span class="c-a"></span></div>
         ${shown.length ? shown.map((x) => `<div class="vx-opt vx2-row ${x.broken ? 'broken' : ''}" title="${esc(specTitle(x))}" ${x.broken ? '' : `data-p="${x.index}" role="button" tabindex="0"`}>
-          <span class="c-v"><i class="vx2-q sm ${qcls(x)}">${esc(tierLabel(x.resolution))}</i><span class="vx2-src"><b>${esc([x.source, x.codec].filter(Boolean).join(' · ') || 'Stream')}</b><small>${esc([x.service, x.pack ? 'season pack' : '', x.copies > 1 ? `${x.copies} sources` : ''].filter(Boolean).join(' · '))}</small></span></span>
+          <span class="c-v"><i class="vx2-q sm ${qcls(x)}">${esc(tierLabel(x.resolution))}</i><span class="vx2-src"><b>${esc([x.source, x.codec].filter(Boolean).join(' · ') || 'Stream')}</b><small>${gold(x)}${esc([x.service, x.pack ? 'season pack' : '', x.copies > 1 ? `${x.copies} sources` : ''].filter(Boolean).join(' · '))}</small></span></span>
           <span class="c-p">${pic(x)}</span><span class="c-s">${snd(x)}</span><span class="c-l">${lang(x)}</span>
           <span class="c-z">${sizeCell(x)}</span><span class="c-d">${seedBars(x.seeds)}</span>
           <span class="c-a">${x.broken ? '<span class="badge warn" title="The debrid server refused this one. It gets another chance in 30 minutes.">Not working</span>' : `<span class="vx2-go">${icon('play')}</span>`}</span></div>`).join('') : '<div class="note" style="padding:18px 4px">Nothing matches these filters.</div>'}
@@ -818,7 +826,13 @@ export async function openDossier({ type, id }) {
     $$('[data-sort]', out).forEach((b) => (b.onclick = () => { const k = b.dataset.sort; st.sort = k === 'size' ? (st.sort === 'size' ? 'small' : 'size') : k; st.reflow = true; renderStreams(); }));
     $$('.vx2-row[data-p]', out).forEach((r) => (r.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); r.click(); } }));
     $('#dMoreV', out)?.addEventListener('click', () => { st.more = true; renderStreams(); });
-    $$('[data-p]', out).forEach((b) => (b.onclick = () => { const s = all.find((x) => x.index === +b.dataset.p); if (s) playStream(s); }));
+    const toPs5 = async (s) => {
+      toast('Sending to PS5…');
+      try { await post('/api/ps5', { index: s.index }); toast('Added. It should show up in Plex in about a minute.', 'ok'); }
+      catch (e) { toast(e.message, 'err'); }
+    };
+    $('#dPs5', out)?.addEventListener('click', () => toPs5(rec));
+    $$('[data-p]', out).forEach((b) => (b.onclick = (e) => { const s = all.find((x) => x.index === +b.dataset.p); if (s) (e.shiftKey ? toPs5 : playStream)(s); }));
   }
 
   draw();
