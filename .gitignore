@@ -5,3 +5,4 @@ node_modules/
 
 # release builds (mac/scripts/release.sh)
 dist/
+mac/.venv/

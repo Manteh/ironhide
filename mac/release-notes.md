@@ -1,0 +1,1 @@
+- Orbie now notices updates within 15 minutes, and when you come back to it

@@ -31,7 +31,7 @@ import { newEpisodes } from './newepisodes.js';
 import { getIntro, setIntro } from './intros.js';
 import { getConfig } from './config.js';
 import { prepareNext } from './tools.js';
-import { checkUpdate, installUpdate } from './app-update.js';
+import { checkUpdate, downloadUpdate, installUpdate } from './app-update.js';
 import { startCast, stopCast, castStatus } from './castserver.js';
 import { sendToPs5 } from './ps5.js';
 import { aiSixty } from './ps5-watchlist.js';
@@ -489,30 +489,13 @@ async function handleApi(req, res, urlPath) {
         try {
           const txt = await new Promise((ok, fail) => cp.execFile('pbpaste', (err, out) => err ? fail(err) : ok(out)));
           const raw = String(txt || '').trim();
-          const bundleMatch = raw.match(/orbie-bundle-([A-Za-z0-9_-]+)/);
-          if (bundleMatch) return jsonResponse(res, { found: true, bundle: true, code: bundleMatch[0] });
           const m = raw.match(/orbie-([A-Za-z0-9_-]{100,})/);
-          return jsonResponse(res, { found: !!m, bundle: false, code: m ? m[0] : '' });
+          return jsonResponse(res, { found: !!m, code: m ? m[0] : '' });
         } catch { return jsonResponse(res, { found: false, code: '' }); }
       }
       const body = method === 'POST' ? await parseBody(req) : {};
       if (method === 'POST' && urlPath === '/api/membership/peek') return jsonResponse(res, mem.peek(body.code));
       if (method === 'POST' && urlPath === '/api/membership/redeem') { const out = mem.redeem(body.code); if (out.ok) social.askInviter(); return out.ok ? jsonResponse(res, out) : errorResponse(res, out.error, 400); }
-      if (method === 'POST' && urlPath === '/api/membership/redeem-bundle') {
-        const out = mem.redeemBundle(body.bundle);
-        if (out.ok) social.askInviter();
-        return out.ok ? jsonResponse(res, out) : errorResponse(res, out.error, 400);
-      }
-      if (method === 'POST' && urlPath === '/api/membership/invite-bundle') {
-        const cfg = getConfig();
-        const torboxKey = cfg.torbox_api_key;
-        if (!torboxKey) return errorResponse(res, 'No TorBox key configured on this account', 400);
-        const name = (await getSettings()).profile?.name || 'Shimara';
-        const inv = mem.makeInvite({ note: body.note || 'VIP Discord Friend', name });
-        if (inv.error) return errorResponse(res, inv.error, 400);
-        const bundle = mem.makeBundle({ inviteCode: inv.code, torboxKey, name });
-        return jsonResponse(res, { bundle, inviteCode: inv.code, left: inv.left });
-      }
       if (method === 'POST' && urlPath === '/api/membership/invite') {
         const out = mem.makeInvite({ note: body.note, name: (await getSettings()).profile?.name || '' });
         return out.error ? errorResponse(res, out.error, 400) : jsonResponse(res, out);
@@ -599,6 +582,7 @@ async function handleApi(req, res, urlPath) {
     if (method === 'POST' && urlPath === '/api/updates/stats') return jsonResponse(res, await updateStats((await parseBody(req)).items || []));
     // Mac app updates
     if (method === 'GET' && urlPath === '/api/app/update') return jsonResponse(res, await checkUpdate({ fresh: new URL(req.url, 'http://localhost').searchParams.has('fresh') }));
+    if (method === 'POST' && urlPath === '/api/app/update/download') return jsonResponse(res, await downloadUpdate());
     if (method === 'POST' && urlPath === '/api/app/update/install') return jsonResponse(res, await installUpdate());
     if (method === 'GET' && urlPath === '/api/webplay/capabilities') return jsonResponse(res, capabilities());
 

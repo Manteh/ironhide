@@ -32,36 +32,6 @@
     new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('nowv')) n.remove(); }).observe(document.body, { childList: true });
   });
 
-  // ---------- updates: a quiet card when a new version is out; Orbie ▸ Check for Updates… asks now ----------
-  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  function card(html, actions) {
-    document.getElementById('ihupd')?.remove();
-    const el = document.createElement('div'); el.id = 'ihupd'; el.innerHTML = html; document.body.append(el);
-    requestAnimationFrame(() => el.classList.add('on'));
-    el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; if (b.classList.contains('x')) el.remove(); else actions?.[b.dataset.a]?.(el); });
-    return el;
-  }
-  async function checkUpdate(manual) {
-    let u; try { u = await (await fetch('/api/app/update' + (manual ? '?fresh=1' : ''))).json(); } catch { u = { error: 'offline' }; }
-    if (u.available) {
-      if (!manual && localStorage.getItem('ih.updSkip') === u.latest) return;
-      card(`<div><b>Orbie ${esc(u.latest)} is ready</b><small>You have ${esc(u.current)}. It installs and reopens in about a minute.</small></div>
-        <button class="go" data-a="install">Update</button><button class="x" title="Later" data-a="later">✕</button>`, {
-        install: async (el) => {
-          el.querySelector('div').innerHTML = '<b>Updating…</b><small>Orbie will close and reopen by itself.</small>'; el.querySelectorAll('button').forEach((b) => b.remove());
-          const r = await fetch('/api/app/update/install', { method: 'POST' }).then((x) => x.json()).catch(() => ({ error: 'The update could not start' }));
-          if (r.error) { el.querySelector('div').innerHTML = `<b>Update failed</b><small>${esc(r.error)}</small>`; setTimeout(() => el.remove(), 8000); }
-        },
-      });
-      document.querySelector('#ihupd .x')?.addEventListener('click', () => localStorage.setItem('ih.updSkip', u.latest));
-    } else if (manual) {
-      const el = card(u.error ? `<div><b>Couldn't check for updates</b><small>${esc(u.error)}</small></div><button class="x">✕</button>`
-        : `<div><b>You're up to date</b><small>Orbie ${esc(u.current)} is the latest version.</small></div><button class="x">✕</button>`);
-      setTimeout(() => el.remove(), 5000);
-    }
-  }
-  window.__ihUpdate = (manual) => ready(() => checkUpdate(!!manual));
-
   // the menu bar's "Next episode": what's playing now, and the episode after it
   window.__ihNextEp = async () => {
     try {
@@ -73,5 +43,4 @@
       quickPlay({ imdbId: m.imdbId, type: 'series', title: m.title || String(np.title || '').replace(/\s+S\d+E\d+.*$/, ''), season: r.next.season, episode: r.next.episode });
     } catch {}
   };
-  ready(() => { setTimeout(() => checkUpdate(false), 8000); setInterval(() => checkUpdate(false), 6 * 3600e3); });
 })();

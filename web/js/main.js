@@ -166,6 +166,7 @@ export async function refreshHistory() {
 // ---------- Top nav ----------
 export function renderNav() {
   const s = store.settings; if (!s) return;
+  window.__ihMe?.(s.profile); // the Mac app's top bar
   const hash = location.hash || '#/';
   const online = store.friendsOnline || 0; // friends online right now (from the relay)
   const on = (re) => (re.test(hash) ? 'on' : '');
@@ -308,12 +309,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     import('./palette.js').then((m) => m.openPalette());
   }
-  // Option + Space (or Alt + Space): Toggle Ask Orbie from the sofa
-  if (e.altKey && (e.code === 'Space' || e.key === ' ')) {
-    e.preventDefault();
-    const btn = document.querySelector('#ihbar button.ask');
-    import('./orbie-agent.js').then((m) => m.toggleAsk(btn)).catch(() => {});
-  }
+  // Ask Orbie (voice assistant) is hidden for now: no button and no Option+Space. Its code is still in orbie-agent.js
 });
 
 (async function boot() {

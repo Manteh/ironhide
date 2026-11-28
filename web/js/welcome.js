@@ -1,7 +1,7 @@
-// First run. Discord is the identity step; membership is checked immediately after it and only asks for an invite when needed:
-//   1. sign in with Discord (your name and picture), 0. the invite code (someone you trust sent it),
-//   2. a debrid key that is checked before you go on, 3. player and languages.
-// Someone already set up who just needs an invite (an update made Orbie invite only) only sees step 0.
+// First run:
+//   1. sign in with Discord (your name and picture). The owner's member list is the invite: on it, you are in,
+//   2. a debrid key that is checked before you go on (skipped if the list gave you one), 3. languages and quality.
+// Someone already set up who isn't a member yet only sees step 1.
 import { $, $$, esc, icon } from './ui.js';
 
 const json = (url, method = 'GET', body) => fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined })
@@ -15,64 +15,12 @@ const DISCORD = '<svg viewBox="0 0 24 24" aria-hidden="true" class="i"><path fil
 export function welcome(settings, { invite = false, onlyInvite = false } = {}) {
   return new Promise((done) => {
     const box = document.createElement('div'); box.className = 'welcome';
-    let saved = settings, step = onlyInvite ? 0 : 1, discordWait = 0;
-    const steps = onlyInvite ? [0] : invite ? [1, 0, 2, 3] : [1, 2, 3];
+    let saved = settings, step = 1, discordWait = 0, gift = false; // gift: streaming on the owner's TorBox
+    const steps = onlyInvite ? [1] : [1, 2, 3];
     const dots = () => steps.length < 2 ? '' : `<div class="wl-steps" aria-label="Step ${steps.indexOf(step) + 1} of ${steps.length}">${steps.map((n) => `<i class="${n === step ? 'on' : n < step ? 'done' : ''}"></i>`).join('')}</div>`;
     // while setting up, the window header shows only the window controls: no name, Resume or Settings yet
     document.documentElement.classList.add('onboarding');
     const finish = () => { clearInterval(discordWait); box.remove(); document.documentElement.classList.remove('onboarding'); done(saved); };
-
-    // ---- 0. the invite ----
-    const stepInvite = (msg = '', kind = '') => {
-      box.innerHTML = `<form autocomplete="off" class="wl-invite">${dots()}<div class="wl-orb"><img src="/img/orbie-orb.png" alt=""></div>
-        <h1>Welcome to Orbie</h1><p>Orbie is invite only. Paste the invite someone you trust sent you.</p>
-        <textarea class="input wl-code" id="wc" rows="3" placeholder="orbie-…" aria-label="Invite code" spellcheck="false">${esc(box.dataset.c || '')}</textarea>
-        <div class="wl-msg ${kind}" role="status" id="wm">${esc(msg)}</div>
-        <button class="btn primary" style="height:46px" id="wgo">Join Orbie</button></form>`;
-      const c = $('#wc', box), m = $('#wm', box); c.focus();
-      let t = 0;
-      const checkCode = async (code) => {
-        if (!code || code.trim().length < 40) { m.className = 'wl-msg'; m.textContent = ''; return; }
-        const p = await json('/api/membership/peek', 'POST', { code: code.trim() }).catch((e) => ({ ok: false, error: e.message }));
-        m.className = `wl-msg ${p.ok ? 'ok' : 'err'}`; m.innerHTML = p.ok ? `${icon('check')} ${p.from ? `An invite from <b>${esc(p.from)}</b>` : 'A valid invite'}` : esc(p.error);
-      };
-      c.oninput = () => { // say who it is from as soon as a whole code is there
-        box.dataset.c = c.value; clearTimeout(t);
-        t = setTimeout(() => checkCode(c.value), 250);
-      };
-      // auto-read clipboard so Discord invites or VIP bundles paste themselves on open or focus
-      const checkClipboard = async () => {
-        if (c.value.trim().length >= 40) return;
-        try {
-          const r = await json('/api/membership/clipboard');
-          if (r?.found && r.code) {
-            if (r.bundle) {
-              const res = await json('/api/membership/redeem-bundle', 'POST', { bundle: r.code });
-              if (res.ok) {
-                step = 2;
-                stepDebrid(res.from ? `You're in! Invited by ${res.from} with TorBox VIP active.` : "You're in! TorBox active.");
-                return;
-              }
-            }
-            if (!c.value.trim()) {
-              c.value = r.code; box.dataset.c = r.code;
-              checkCode(r.code);
-            }
-          }
-        } catch {}
-      };
-      checkClipboard();
-      window.addEventListener('focus', checkClipboard);
-      $('form', box).onsubmit = async (e) => {
-        e.preventDefault(); if (!c.value.trim()) return c.focus();
-        const go = $('#wgo', box); go.disabled = true; go.textContent = 'Checking…';
-        try {
-          const r = await json('/api/membership/redeem', 'POST', { code: c.value });
-          if (onlyInvite) return finish();
-          step = 2; stepDebrid(r.from ? `You're in. Invited by ${r.from}.` : "You're in.");
-        } catch (err) { stepInvite(err.message, 'err'); }
-      };
-    };
 
     // ---- 1. who you are: Discord only ----
     const linkDiscord = async () => {
@@ -91,8 +39,15 @@ export function welcome(settings, { invite = false, onlyInvite = false } = {}) {
           if (st.done) {
             clearInterval(discordWait); saved = await json('/api/settings');
             if (!saved.profile.named) saved = await json('/api/settings', 'PUT', { profile: { name: saved.profile.name } });
-            if (invite) { step = 0; stepInvite(`Linked as ${st.name}`); }
-            else { step = 2; stepDebrid(`Linked as ${st.name}`); }
+            // not a member yet: only the owner's list lets you past this step
+            if (invite && !(await json('/api/membership')).member) {
+              return stepDiscord(st.member === false
+                ? `You're not on the list yet. Send your Discord username, @${st.username}, to whoever told you about Orbie, then try again.`
+                : "Couldn't check the member list. Wait a minute and try again.", 'err');
+            }
+            if (onlyInvite) return finish();
+            gift = !!st.gift;
+            step = 2; stepDebrid(`Linked as ${st.name}`);
           } else if (st.error || Date.now() > until) {
             clearInterval(discordWait);
             stepDiscord(st.error === 'expired' ? 'Sign-in session expired. Try again.' : (st.error || 'Discord took too long. Try again.'), 'err');
@@ -102,7 +57,7 @@ export function welcome(settings, { invite = false, onlyInvite = false } = {}) {
     };
     const stepDiscord = (note = '', kind = 'ok') => {
       box.innerHTML = `<form autocomplete="off" class="wl-invite wl-dc">${dots()}<div class="wl-orb"><img src="/img/orbie-orb.png" alt=""></div>
-        <h1>Sign in with Discord</h1><p>Orbie uses your Discord account for your name and profile picture.</p>
+        <h1>Sign in with Discord</h1><p>${invite ? 'Orbie is private. If you are on the list, signing in lets you straight in.' : 'Orbie uses your Discord account for your name and profile picture.'}</p>
         <div class="wl-msg ${note ? kind : ''}" role="status" id="wdm">${note ? `${kind === 'ok' ? icon('check') + ' ' : ''}${esc(note)}` : ''}</div>
         <button type="button" class="btn wl-discord" style="height:48px" id="wdc">${DISCORD} Continue with Discord</button>
         <button type="button" class="btn ghost wl-skip" id="wdcancel" hidden>Cancel</button></form>`;
@@ -146,28 +101,30 @@ export function welcome(settings, { invite = false, onlyInvite = false } = {}) {
       draw();
     };
 
-    // ---- 3. player and languages ----
+    // ---- 3. languages and quality (the player is always mpv here; Settings can change it) ----
     const stepPlayback = (note = '', kind = 'ok') => {
-      const pb = { ...saved.playback };
+      const pb = { ...saved.playback, autoSkipIntro: true }; // on for new people; the switch below turns it off
       const al = new Set(pb.audioLangs?.length ? pb.audioLangs : ['en']);
       const draw = () => {
-        box.innerHTML = `<form autocomplete="off">${dots()}${note ? `<div class="wl-msg ${kind}">${kind === 'ok' ? icon('check') + ' ' : ''}${esc(note)}</div>` : ''}<h1>How do you watch?</h1>
-          <p>Where Play opens, and which languages to look for.</p>
-          <label class="wl-l">Player</label>
-          <div class="seg wl-seg" role="radiogroup" aria-label="Player">
-            <button type="button" role="radio" aria-checked="${pb.player !== 'web'}" class="${pb.player !== 'web' ? 'on' : ''}" data-pl="mpv">${icon('monitor')} mpv (best quality)</button>
-            <button type="button" role="radio" aria-checked="${pb.player === 'web'}" class="${pb.player === 'web' ? 'on' : ''}" data-pl="web">${icon('laptop')} In this window</button></div>
+        box.innerHTML = `<form autocomplete="off">${dots()}${gift ? `<div class="wl-gift"><b>⚡ Shimara shared TorBox with you</b><span>Nothing to set up or pay for. Films start almost instantly.</span></div>`
+          : note ? `<div class="wl-msg ${kind}">${kind === 'ok' ? icon('check') + ' ' : ''}${esc(note)}</div>` : ''}<h1>How do you watch?</h1>
+          <p>You can change any of this later in Settings.</p>
           <label class="wl-l">Audio languages</label>
           <div class="wl-chips">${LANGS.map(([c, l]) => `<button type="button" class="chip ${al.has(c) ? 'on' : ''}" aria-pressed="${al.has(c)}" data-al="${c}">${l}</button>`).join('')}</div>
           <label class="wl-l" for="wsub">Subtitles</label>
           <select class="input" id="wsub"><option value="">Automatic</option><option value="off" ${pb.subLang === 'off' ? 'selected' : ''}>Off</option>${LANGS.map(([c, l]) => `<option value="${c}" ${pb.subLang === c ? 'selected' : ''}>${l}</option>`).join('')}</select>
+          <label class="wl-l">Quality</label>
+          <div class="seg wl-seg" role="radiogroup" aria-label="Quality">${[['auto', 'Auto'], ['2160p', '4K'], ['1080p', '1080p'], ['720p', '720p']].map(([v, l]) => `<button type="button" role="radio" aria-checked="${(pb.quality || 'auto') === v}" class="${(pb.quality || 'auto') === v ? 'on' : ''}" data-q="${v}">${l}</button>`).join('')}</div>
+          <label class="wl-l">Skip intros</label>
+          <div class="seg wl-seg" role="radiogroup" aria-label="Skip intros">${[[true, 'On'], [false, 'Off']].map(([v, l]) => `<button type="button" role="radio" aria-checked="${pb.autoSkipIntro === v}" class="${pb.autoSkipIntro === v ? 'on' : ''}" data-si="${v}">${l}</button>`).join('')}</div>
           <button class="btn primary" style="height:46px">Start watching</button></form>`;
-        $$('[data-pl]', box).forEach((b) => (b.onclick = () => { pb.player = b.dataset.pl; draw(); }));
+        $$('[data-q]', box).forEach((b) => (b.onclick = () => { pb.quality = b.dataset.q; draw(); }));
+        $$('[data-si]', box).forEach((b) => (b.onclick = () => { pb.autoSkipIntro = b.dataset.si === 'true'; draw(); }));
         $$('[data-al]', box).forEach((b) => (b.onclick = () => { const c = b.dataset.al; if (al.has(c) && al.size > 1) al.delete(c); else al.add(c); draw(); }));
         $('#wsub', box).onchange = (e) => { pb.subLang = e.target.value; };
         $('form', box).onsubmit = async (e) => {
           e.preventDefault();
-          try { saved = await json('/api/settings', 'PUT', { playback: { player: pb.player || 'mpv', audioLangs: [...al], subLang: pb.subLang || '' } }); } catch {}
+          try { saved = await json('/api/settings', 'PUT', { playback: { player: 'mpv', audioLangs: [...al], subLang: pb.subLang || '', quality: pb.quality || 'auto', autoSkipIntro: pb.autoSkipIntro } }); } catch {}
           finish();
         };
       };
@@ -175,7 +132,7 @@ export function welcome(settings, { invite = false, onlyInvite = false } = {}) {
     };
 
     document.getElementById('gate')?.classList.add('out'); // drop the splash so the form is visible
-    if (onlyInvite) stepInvite(); else stepDiscord();
+    stepDiscord();
     document.body.appendChild(box);
   });
 }

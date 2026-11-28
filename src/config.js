@@ -34,6 +34,7 @@ export function getConfig() {
     realtime_model: file.realtime_model || '',
     realtime_voice: file.realtime_voice || '',
     youtube_api_key: env.YOUTUBE_API_KEY || file.youtube_api_key || '',
+    vip_torbox: file.vip_torbox === true,         // the TorBox key came from the VIP list (discord-auth.js)
     plex_token: file.plex_token || '',           // from plex-login.js: lets the PS5 bridge read the Watchlist and ask for scans
     relay_url: env.IRONHIDE_RELAY || file.relay_url || DEFAULT_RELAY,
     harvester_url: (env.HARVESTER_URL || file.harvester_url || 'https://stremio-trakt-stealth-harvester.onrender.com').replace(/\/+$/, ''),
@@ -57,6 +58,7 @@ export function saveConfig(patch) {
   for (const [k, v] of Object.entries(patch)) {
     if (v === null || v === '') delete file[k]; else file[k] = v;
   }
+  if ('torbox_api_key' in patch && !patch.vip_torbox) delete file.vip_torbox;
   if (patch.debrid_provider) delete file.no_debrid;
   mkdirSync(CONFIG_DIR, { recursive: true });
   const tmp = CONFIG_PATH + '.tmp';

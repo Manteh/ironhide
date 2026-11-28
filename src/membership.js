@@ -90,10 +90,18 @@ const giver = (t) => (t?.name ? String(t.name).slice(0, 40) : '');
 export function status() {
   const { id } = me(); const d = load();
   const root = id === ROOT;
-  const member = root || (validProof(d.proof) && d.proof.id === id);
+  const listed = d.discord?.key === id; // let in by the owner's Discord list (grantDiscord)
+  const member = root || listed || (validProof(d.proof) && d.proof.id === id);
   const made = d.made || [];
-  return { member, root, invitedBy: member && !root ? giver(d.proof.t) : '', since: d.since || null,
+  return { member, root, invitedBy: member && !root && d.proof ? giver(d.proof.t) : '', since: d.since || null,
     quota: root ? null : QUOTA, left: root ? null : Math.max(0, QUOTA - made.length), made: made.map(({ n, at, note, joined }) => ({ n, at, note, joined: joined ? { name: joined.name, at: joined.at } : null })) };
+}
+
+// the relay confirmed this Discord account is on the owner's list. Kept with this Orbie's own key, so it works offline.
+export function grantDiscord(discord) {
+  const { id } = me(); const d = load();
+  d.discord = { id: discord.id, username: discord.username, key: id, at: Date.now() }; d.since ||= Date.now();
+  save(d);
 }
 
 // check an invite without using it (the onboarding shows who it is from)
@@ -126,27 +134,6 @@ export function makeInvite({ note = '', name = '' } = {}) {
   if (id !== ROOT) t.up = d.proof;
   (d.made ||= []).push({ n: t.n, at: Date.now(), note: String(note || '').slice(0, 60) }); save(d);
   return { code: encode(t), left: st.root ? null : st.left - 1 };
-}
-
-export function makeBundle({ inviteCode, torboxKey, name = '' }) {
-  const payload = JSON.stringify({ code: inviteCode, torbox: String(torboxKey || '').trim(), from: String(name || '').slice(0, 40) });
-  return 'orbie-bundle-' + Buffer.from(payload, 'utf8').toString('base64url');
-}
-
-export function redeemBundle(bundleCode) {
-  try {
-    const raw = String(bundleCode || '').replace(/^orbie-bundle-/, '');
-    const data = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
-    if (!data.code) return { ok: false, error: 'Missing invite code in bundle' };
-    const res = redeem(data.code);
-    if (!res.ok) return res;
-    if (data.torbox) {
-      saveConfig({ torbox_api_key: String(data.torbox).trim(), debrid_provider: 'torbox' });
-    }
-    return { ok: true, from: data.from || res.from, torbox: !!data.torbox };
-  } catch (err) {
-    return { ok: false, error: 'Invalid bundle: ' + err.message };
-  }
 }
 
 // ---- friends from invites (used by social.js) ----

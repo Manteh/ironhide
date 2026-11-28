@@ -2,7 +2,6 @@
 import { $, $$, esc, icon, avatar, ask, posterCard } from '../ui.js';
 import { api } from '../api.js';
 import { store } from '../main.js';
-import { edgeflow } from '../edgeflow.js';
 
 const poster = (id) => `https://images.metahub.space/poster/small/${id}/img`;
 const route = (x) => `#/title/${x.type === 'tv' || x.type === 'series' ? 'series' : 'movie'}/${x.imdbId}`;
@@ -120,64 +119,49 @@ export default function profile(el, params = {}) {
   const stars = (n) => `<span class="pf-stars">${'★'.repeat(n)}</span>`;
   const presence = (f) => (f.inRoom ? `In ${esc(f.inRoom.name)}` : f.status?.title ? `Watching ${esc(f.status.title)}` : f.online ? 'Online' : 'Offline');
 
+  // laid out as tiles: the page keeps its shape from day one, and fills in as you watch
+  const fresh = !recent.size && !favs.length && !safe.watchlist.length;
+  const row = (list) => `<div class="pf-row">${list}</div>`;
+  const tile = (cls, title, body, aside = '') => `<section class="bt ${cls}">${title ? `<header><h2>${title}</h2>${aside ? `<span>${aside}</span>` : ''}</header>` : ''}${body}</section>`;
+  const month = new Date(x.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const week = [...Array(7)].map((_, i) => x.days.has(dayKey(Date.now() - (6 - i) * 864e5)));
+  const big = (v, unit) => `<p class="bt-num">${v}<small>${unit}</small></p>`;
+  const slots = `<div class="pf-slots" aria-hidden="true">${'<i></i>'.repeat(7)}</div>`;
+  const recentCards = [...recent.values()].slice(0, 14).map((r) => card(r, IS_TV(r) ? `S${r.season} E${r.episode} · ${ago(r.at)}` : ago(r.at), r.pct > 0 && r.pct < 97 ? `<div class="bprog"><i style="width:${Math.max(4, Math.round(r.pct))}%"></i></div>` : '')).join('');
   $('.pf', el).innerHTML = `
-    <header class="pf-hero">
-      <span class="pf-av">${avatar(me, 112)}</span>
-      <div class="pf-who"><h1>${esc(me.name)}</h1><p>${fid ? `${buddy.online ? 'Online' : 'Offline'}${got.live ? '' : ` · last updated ${esc(ago(got.at).toLowerCase())}`} · ` : ''}Watching with Orbie since ${new Date(x.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} · ${earned} of ${MEDALS.length} medals · ${friends.length} friend${friends.length === 1 ? '' : 's'}</p></div>
-      <div class="pf-acts">${fid ? `<a class="btn sm" href="#/friends">${icon('users')} Friends</a><button class="btn sm" id="pfRm">Remove friend</button>` : `<a class="btn sm" href="#/settings/profile">${icon('user')} Edit profile</a>`}</div>
-    </header>
-    <div class="pf-stats">${stat(hoursTxt, 'hours watched')}${stat(num(x.films.length), x.films.length === 1 ? 'film' : 'films')}${stat(num(x.shows.length), x.shows.length === 1 ? 'show' : 'shows', `${num(x.episodes.length)} episodes`)}${stat(num(x.finished.length), 'finished')}${stat(num(x.streak), 'day streak', `best ${x.best}`)}${stat(num(safe.watchlist.length), fid ? 'on their list' : 'on your list')}</div>
+    <div class="bento">
+      <div class="bt bt-photo">${avatar(me, 300)}</div>
+      <section class="bt bt-who">
+        <div><h1>${esc(me.name)}</h1><p>With Orbie since ${month}</p></div>
+        <div class="bt-counts"><span><b>${num(x.films.length)}</b>${x.films.length === 1 ? 'film' : 'films'}</span><span><b>${num(x.shows.length)}</b>${x.shows.length === 1 ? 'show' : 'shows'}</span><span><b>${num(x.finished.length)}</b>finished</span><a href="#/settings/profile">Edit profile</a></div>
+      </section>
+      ${tile('bt-hours', 'Watched', big(hoursTxt, 'hours'))}
+      ${tile('bt-activity', 'Activity', heatmap(x.days), `${num(x.days.size)} ${x.days.size === 1 ? 'day' : 'days'}`)}
+      ${tile('bt-streak', 'Current streak', `${big(`${icon('flame')}${num(x.streak)}`, x.streak === 1 ? 'day' : 'days')}<div class="bt-dots" aria-label="The last seven days">${week.map((on) => `<i class="${on ? 'on' : ''}"></i>`).join('')}</div>`)}
+      ${tile('bt-best', 'Longest streak', `${big(`${icon('flame')}${num(x.best)}`, x.best === 1 ? 'day' : 'days')}<p class="bt-sub">${x.best && x.streak === x.best ? 'You are on it right now' : 'Your record so far'}</p>`)}
+      ${tile('bt-recent', 'Recently watched', recent.size ? row(recentCards) : `${slots}<div class="pf-cta"><p>Nothing watched yet.</p><a class="btn primary" href="#/">Find something to watch</a></div>`)}
+      ${tile('bt-medals', 'Medals', `<div class="bt-badges">${MEDALS.map((m) => { const v = m.val(x), got = m.tiers.filter((t) => v >= t).length; return `<span class="bdg t${got}" title="${esc(m.name)}: ${got ? TIER[got - 1] : `${num(v)} of ${num(m.tiers[0])} ${esc(m.what.toLowerCase())}`}">${icon(m.icon)}</span>`; }).join('')}</div>`, `${MEDALS.filter((m) => m.val(x) >= m.tiers[0]).length} of ${MEDALS.length}`)}
+      ${tile('bt-shows', 'Most watched shows', topShows.length ? bars(topShows.slice(0, 5), (s) => `<a href="${route(s)}">${esc(s.title)}</a>`, (s) => s.secs, (s) => `${(s.secs / 3600).toFixed(1)} h`) : '<p class="bt-sub">Shows you watch rank here.</p>')}
+      ${favs.length ? tile('bt-wide', 'Favourites', row(favs.slice(0, 14).map((r) => card(r, stars(r.rating))).join(''))) : ''}
+      ${safe.watchlist.length ? tile('bt-wide', 'Your list', row(safe.watchlist.slice(0, 14).map((w) => card(w, esc(w.year || ''))).join('')), `${num(safe.watchlist.length)} saved`) : ''}
+      <div id="pfNextWrap" class="bt-slot"></div>
+      <div id="pfTasteWrap" class="bt-slot"></div>
+    </div>`;
 
-    ${section('Recently watched', '', recent.size ? `<div class="pf-row">${[...recent.values()].slice(0, 14).map((r) => card(r, IS_TV(r) ? `S${r.season} E${r.episode} · ${ago(r.at)}` : ago(r.at), r.pct > 0 && r.pct < 97 ? `<div class="bprog"><i style="width:${Math.max(4, Math.round(r.pct))}%"></i></div>` : '')).join('')}</div>` : empty(fid ? 'Nothing yet.' : 'Nothing yet. Press play on something.'))}
-
-    <div class="pf-two">
-      ${section('Activity', `${num(x.days.size)} days with something on`, heatmap(x.days))}
-      ${section('Films and shows', '', `<div class="pf-split"><i style="width:${share}%"></i></div><div class="pf-leg"><span><u class="a"></u>Films · ${filmH.toFixed(1)} h</span><span><u class="b"></u>Shows · ${tvH.toFixed(1)} h</span></div><div id="pfGenres"></div>`)}
-    </div>
-
-    ${fid ? '' : section('Your taste', 'What your picks are built from · <a href="#/taste">Open Taste Lab</a>', '<div id="pfTaste" class="tz"><p class="pf-empty">Reading your taste…</p></div>')}
-    ${section('Favourites', fid ? 'Rated 4 or 5 stars' : 'Everything you rated 4 or 5 stars', favs.length ? `<div class="pf-row">${favs.slice(0, 14).map((r) => card(r, stars(r.rating))).join('')}</div>` : empty(fid ? 'No favourites yet.' : 'Rate something 4 or 5 stars and it lands here.'))}
-
-    <div class="pf-two">
-      ${section('Waiting for', fid ? 'Next episodes of what they watch' : 'Next episodes of what you watch', '<div id="pfNext" class="pf-next"><p class="pf-empty">Checking release dates…</p></div>')}
-      ${section('Most watched shows', '', topShows.length ? bars(topShows, (s) => `<a href="${route(s)}">${esc(s.title)}</a>`, (s) => s.secs, (s) => `${(s.secs / 3600).toFixed(1)} h`) : empty('No shows yet.'))}
-    </div>
-
-    ${section(fid ? 'Their list' : 'Your list', `${num(safe.watchlist.length)} saved`, safe.watchlist.length ? `<div class="pf-row">${safe.watchlist.slice(0, 14).map((w) => card(w, esc(w.year || ''))).join('')}</div>` : empty(fid ? 'Nothing saved yet.' : 'Bookmark a title and it shows up here.'))}
-
-    ${section('Medals', `${earned} of ${MEDALS.length} earned`, `<div class="pf-medals">${MEDALS.map((m) => medalHtml(m, x)).join('')}</div>`)}
-
-    ${fid ? '' : section('Friends', friends.length ? `${friends.filter((f) => f.online).length} online` : '', friends.length ? `<div class="pf-fr">${friends.map((f) => `<a href="#/profile/${esc(f.id)}" class="${f.online ? 'on' : ''}"><span>${avatar(f, 44)}</span><div><b>${esc(f.name)}</b><small>${presence(f)}</small></div></a>`).join('')}</div>` : `<p class="pf-empty">No friends yet. <a href="#/friends">Add one here</a>.</p>`)}
-    <p class="pf-note">${fid ? 'Hours count how far they got in each film or episode once.' : "Hours count how far you got in each film or episode once, so rewatches don't add up. Until now Orbie only kept your last 100 plays, so older watching isn't counted. From here on it keeps 5,000. Friends can see this page: you can turn that off in Settings, Together."}</p>`;
-
-  $$('.pf-row', el).forEach(edgeflow);
 
   $('#pfRm', el)?.addEventListener('click', async () => { if (!(await ask(`Remove ${buddy.name} from your friends?`, { ok: 'Remove', danger: true }))) return; await fetch(`/api/social/friends/${encodeURIComponent(fid)}`, { method: 'DELETE' }); location.hash = '#/friends'; });
   // taste profile (from what you watch and rate): computed by the recommendation engine
-  if (!fid) api('/api/taste').then((t) => {
-    const tz = $('#pfTaste', el); if (!tz) return;
-    if (t.error) { tz.innerHTML = `<p class="pf-empty">${esc(t.error)}</p>`; return; }
-    const max = Math.max(...(t.genres || []).map((g) => g.score), 0.01);
-    const chips = (list) => list.map((x) => `<span>${esc(x.name)}</span>`).join('');
-    tz.innerHTML = `
-      <div class="tz-top"><div class="tz-meter"><b>${t.strength}%</b><small>taste known</small><i><u style="width:${t.strength}%"></u></i></div>
-        <p>Built from <b>${t.watched}</b> titles you watched${t.rated ? ` and <b>${t.rated}</b> you rated (avg ${t.avgRating}★)` : ''}. You lean toward <b>${t.leaning === 'both' ? 'films and series equally' : t.leaning}</b>.${t.rated < 10 ? ' Rating more titles makes your picks sharper.' : ''}</p></div>
-      <div class="tz-grid">
-        <div><h4>Genres you love</h4>${(t.genres || []).map((g) => `<div class="tz-bar"><span>${esc(g.name)}</span><i><u style="width:${Math.round((g.score / max) * 100)}%"></u></i></div>`).join('') || '<p class="pf-empty">Not enough yet.</p>'}
-          ${t.avoid?.length ? `<h4 class="tz-sub">Less your thing</h4><div class="tz-chips dim">${chips(t.avoid)}</div>` : ''}</div>
-        <div><h4>Themes that pull you in</h4><div class="tz-chips">${chips(t.themes || [])}</div>
-          <h4 class="tz-sub">People you follow</h4><div class="tz-chips">${chips(t.people || [])}</div>
-          ${t.languages?.length ? `<h4 class="tz-sub">Languages</h4><div class="tz-chips">${chips(t.languages)}</div>` : ''}
-          ${t.decades?.length ? `<h4 class="tz-sub">Eras</h4><div class="tz-chips">${chips(t.decades)}</div>` : ''}</div>
-      </div>
-      ${t.favourites?.length ? `<h4 class="tz-sub">Shaping your picks most</h4><div class="pf-row tz-favs">${t.favourites.map((f, i) => posterCard(f, { sub: f.rating ? `<em class="pc-stars">${'★'.repeat(f.rating)}</em>` : '', i })).join('')}</div>` : ''}`;
-    $$('.pf-row', tz).forEach(edgeflow);
+  if (!fresh) api('/api/taste').then((t) => {
+    const wrap = $('#pfTasteWrap', el); if (!wrap || t.error) return;
+    const chips = (list) => (list || []).map((c) => `<span>${esc(c.name)}</span>`).join('');
+    const body = [['Genres', t.genres], ['Themes', t.themes], ['People', t.people]].filter(([, l]) => l?.length)
+      .map(([k, l]) => `<div><h4>${k}</h4><div class="tz-chips">${chips(l.slice(0, 8))}</div></div>`).join('');
+    if (body) wrap.innerHTML = `<section class="bt bt-wide"><header><h2>Your taste</h2><span><a href="#/taste">Open Taste Lab</a></span></header><div class="pf-taste">${body}</div></section>`;
   }).catch(() => {});
-  // release dates and genres come from the catalog, so they arrive a moment later
-  (fid ? Promise.resolve({ upcoming: data.upcoming || [], genres: data.genres || [] }) : api('/api/profile/meta')).then((m) => {
-    const next = $('#pfNext', el), g = $('#pfGenres', el); if (!next) return;
+  // release dates come from the catalog, so they arrive a moment later
+  if (!fresh) api('/api/profile/meta').then((m) => {
+    const wrap = $('#pfNextWrap', el); if (!wrap || !m.upcoming?.length) return;
     const inDays = (d) => { const n = Math.round((+new Date(`${d}T12:00`) - Date.now()) / 864e5); return n <= 0 ? 'Today' : n === 1 ? 'Tomorrow' : n < 14 ? `In ${n} days` : new Date(`${d}T12:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
-    next.innerHTML = m.upcoming.length ? m.upcoming.slice(0, 8).map((u) => `<a href="#/title/series/${u.imdbId}"><span class="pf-np" style="background-image:url('${esc(u.poster || poster(u.imdbId))}')"></span><div><b>${esc(u.title)}</b><small>S${u.season} E${u.episode}${u.name ? ` · ${esc(u.name)}` : ''}</small></div><em>${esc(inDays(u.released))}</em></a>`).join('') : empty('Nothing with a release date right now.');
-    if (m.genres.length && g) g.innerHTML = bars(m.genres, (r) => esc(r.name), (r) => r.hours, (r) => `${r.hours.toFixed(1)} h`);
-  }).catch(() => { const n = $('#pfNext', el); if (n) n.innerHTML = empty("Couldn't reach the catalog."); });
+    wrap.innerHTML = `<section class="bt bt-wide"><header><h2>Coming up</h2></header><div class="pf-next">${m.upcoming.slice(0, 5).map((u) => `<a href="#/title/series/${u.imdbId}"><span class="pf-np" style="background-image:url('${esc(u.poster || poster(u.imdbId))}')"></span><div><b>${esc(u.title)}</b><small>S${u.season} E${u.episode}${u.name ? ` · ${esc(u.name)}` : ''}</small></div><em>${esc(inDays(u.released))}</em></a>`).join('')}</div></section>`;
+  }).catch(() => {});
 }

@@ -69,3 +69,13 @@ ZIP="$OUT/Orbie-$VERSION-$ARCH.zip"
 rm -f "$ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 echo "✓ $ZIP ($(du -h "$ZIP" | cut -f1))"
+
+# the installer window people see when they download it (the zip above is what install.sh and updates use)
+echo "▸ making the installer disk image"
+VENV="$ROOT/mac/.venv"
+[ -x "$VENV/bin/python" ] || { python3 -m venv "$VENV" && "$VENV/bin/pip" install --quiet dmgbuild pillow; }
+DMG="$OUT/Orbie.dmg"
+rm -f "$DMG"
+"$VENV/bin/python" scripts/dmg.py "$APP" "$DMG" >/dev/null
+hdiutil verify -quiet "$DMG"
+echo "✓ $DMG ($(du -h "$DMG" | cut -f1))"

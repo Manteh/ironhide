@@ -26,7 +26,7 @@
   bar.id = 'ihbar';
   bar.innerHTML = `<div class="l"><button data-a="back" title="Back">${I.back}</button><button data-a="fwd" title="Forward">${I.fwd}</button><button data-a="reload" title="Reload (⌘R)">${I.reload}</button></div>
     <div class="c">Orbie</div>
-    <div class="r"><button data-a="ask" class="ask" title="Ask Orbie" aria-label="Ask Orbie"><i class="ask-orb"></i></button><button data-a="search" title="Search (⌘K)">${I.search}</button><button class="pill" data-a="resume" title="Continue watching">${I.play}<span>Resume</span></button><button data-a="sanctuary" title="A Sanctuary for Cinema" class="btn-sanctuary"><img src="/img/orbie-orb.png" alt="" class="top-orb-img"></button><button data-a="bell" title="What's new">${I.bell}<b class="dot warn sm" data-dot="bell"></b></button><button data-a="menu" title="Settings">${I.gear}</button><i class="sep"></i><button class="me" data-a="profile" title="Your profile"><i></i><span></span></button></div>`;
+    <div class="r"><button data-a="search" title="Search (⌘K)">${I.search}</button><button class="pill" data-a="resume" title="Continue watching">${I.play}<span>Resume</span></button><button data-a="sanctuary" title="A Sanctuary for Cinema" class="btn-sanctuary"><img src="/img/orbie-orb.png" alt="" class="top-orb-img"></button><button data-a="bell" title="What's new">${I.bell}<b class="dot warn sm" data-dot="bell"></b></button><button data-a="menu" title="Settings">${I.gear}</button><i class="sep"></i><button class="me" data-a="profile" title="Your profile"><i></i><span></span></button></div>`;
   const q = (s) => bar.querySelector(s);
 
   const NAMES = [[/^#\/?$/, 'Orbie'], [/^#\/manifesto/, 'A Sanctuary for Cinema'], [/^#\/sanctuary/, 'A Sanctuary for Cinema'], [/^#\/continue/, 'Continue watching'], [/^#\/shelf/, 'Shelf'], [/^#\/(friends|together)/, 'Friends'], [/^#\/profile/, 'Profile'], [/^#\/settings/, 'Settings'], [/^#\/search\//, 'Search'], [/^#\/feed\/([^?]*)/, null]];
@@ -79,11 +79,19 @@
   const mount = () => { if (!bar.isConnected) { document.body.append(bar); document.body.append(menu); } paint(); };
   addEventListener('hashchange', () => setTimeout(paint, 0));
   addEventListener('popstate', paint);
-  fetch('/api/settings').then((r) => r.json()).then((s) => {
-    const p = s?.profile || {}, n = p.name || 'You';
-    q('.me span').textContent = n; q('.me i').textContent = (n[0] || '?').toUpperCase();
-    if (p.avatar?.c1) q('.me i').style.setProperty('--av1', p.avatar.c1); if (p.avatar?.c2) q('.me i').style.setProperty('--av2', p.avatar.c2);
-  }).catch(() => {});
+  // the chip at the top right: your picture and name. The page calls this again whenever they change (renderNav)
+  let shown = '';
+  window.__ihMe = async (p = {}) => {
+    const sig = JSON.stringify([p.name, p.avatar]);
+    if (sig === shown) return;
+    shown = sig;
+    const { avatar } = await import('./ui.js');
+    // plain round picture here: decorations and frames fall apart at this size
+    q('.me > i').innerHTML = avatar({ ...p, avatar: { ...p.avatar, deco: '', frame: 'none', shape: 'circle' } }, 22);
+    q('.me > span').textContent = p.name || 'You';
+  };
+  fetch('/api/settings').then((r) => r.json()).then((s) => { if (!shown) window.__ihMe(s?.profile); }).catch(() => {});
   if (document.body) mount(); else addEventListener('DOMContentLoaded', mount);
+  import('./updater.js').then((m) => (document.body ? m.mount(bar) : addEventListener('DOMContentLoaded', () => m.mount(bar)))).catch(() => {});
   setInterval(paint, 1500);
 })();

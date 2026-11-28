@@ -491,6 +491,9 @@ fn main() {
 
     app.run(|app, event| match event {
         RunEvent::ExitRequested { .. } => { if let Some(w) = app.get_webview_window("main") { save_window(&w); } }
+        // orbie:// from the invite page: just come to the front. The page copied the code, and the welcome screen
+        // reads the clipboard when it gets focus, so nothing from the link itself is trusted or passed on.
+        RunEvent::Opened { .. } => { if let Some(w) = app.get_webview_window("main") { let _ = w.unminimize(); let _ = w.show(); let _ = w.set_focus(); } }
         RunEvent::Exit => {
             stop_daemon(app);
             player::cleanup();

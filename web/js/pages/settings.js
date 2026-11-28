@@ -5,7 +5,7 @@ import { $, $$, esc, icon, avatar, toast, ask, AVATAR_ICONS, AVATAR_COLORS } fro
 
 const SECTIONS = [
   ['profile', 'Profile', 'user'], ['appearance', 'Appearance', 'palette'], ['playback', 'Playback', 'sliders'], ['streams', 'Streams', 'film'],
-  ['connectors', 'Connectors', 'plug'], ['voice', 'Orbie voice', 'eye'], ['together', 'Friends', 'users'], ['invites', 'Invites', 'key'], ['nodes', 'Nodes', 'nodes'], ['updates', 'Updates', 'bolt'], ['about', 'About', 'info'],
+  ['connectors', 'Connectors', 'plug'], ['voice', 'Orbie voice', 'eye'], ['together', 'Friends', 'users'], ['nodes', 'Nodes', 'nodes'], ['updates', 'Updates', 'bolt'], ['about', 'About', 'info'],
 ];
 const SUBS = {
   profile: 'Your name and how you look to friends.', appearance: 'Theme, layout and motion.', playback: 'How titles start and which versions are picked.',
@@ -340,7 +340,6 @@ async function invites(body) {
           <input id="inote" class="input" maxlength="60" placeholder="Who is it for? (only you see this)" aria-label="Who is it for">
           <div class="inv-actions">
             <button class="btn primary" id="imake" ${!m.root && !m.left ? 'disabled' : ''}>Create invite</button>
-            <button type="button" class="btn ghost" id="imakeVip" ${!m.root && !m.left ? 'disabled' : ''}>Create VIP Link (with TorBox)</button>
           </div></form>
         <div id="iout"></div>` }) +
     card({ title: m.root ? 'You own this Orbie' : 'Your membership', desc: m.root ? 'Every invite traces back to you.' : `Invited by ${esc(m.invitedBy || 'a member')}${m.since ? ` on ${when(m.since)}` : ''}.`,
@@ -350,40 +349,20 @@ async function invites(body) {
     const b = $('#imake', body), note = $('#inote', body).value.trim(); b.disabled = true; b.textContent = 'Creating…';
     try {
       const { code, left: nowLeft } = await post('/api/membership/invite', { note });
-      const msg = `You're invited to Orbie, a private cinema for the people I trust.\nDownload: https://github.com/Manteh/orbie-app\nYour invite: ${code}`;
-      const short = `${code.slice(0, 14)}…${code.slice(-8)}`;
+      // everything after # stays in the browser: the code never reaches the web server
+      const msg = `Join me on Orbie, a private cinema for the people I trust.\nhttps://orbie-site.vercel.app/join#invite=${code}`;
       $('#iout', body).innerHTML = `<div class="inv-ready">
-          <div class="inv-msg"><p>You're invited to Orbie, a private cinema for the people I trust.</p>
-            <p><span>Download</span> github.com/Manteh/orbie-app</p><p><span>Your invite</span> <code>${esc(short)}</code></p></div>
-          <div class="inv-acts"><button class="btn primary" id="icopy">Copy invite</button><small>${note ? `For ${esc(note)} · ` : ''}send it however you like</small></div></div>`;
+          <div class="inv-msg"><p>Join me on Orbie, a private cinema for the people I trust.</p>
+            <p><span>Link</span> <code>orbie-site.vercel.app/join</code></p></div>
+          <div class="inv-acts"><button class="btn primary" id="icopy">Copy invite link</button><small>${note ? `For ${esc(note)} · ` : ''}send it however you like</small></div></div>`;
       const copyBtn = $('#icopy', body);
-      const copy = () => navigator.clipboard.writeText(msg).then(() => { copyBtn.textContent = 'Copied'; copyBtn.classList.add('done'); setTimeout(() => { copyBtn.textContent = 'Copy invite'; copyBtn.classList.remove('done'); }, 2200); });
+      const copy = () => navigator.clipboard.writeText(msg).then(() => { copyBtn.textContent = 'Copied'; copyBtn.classList.add('done'); setTimeout(() => { copyBtn.textContent = 'Copy invite link'; copyBtn.classList.remove('done'); }, 2200); });
       copyBtn.onclick = copy; copy();
       m.made.push({ note, at: Date.now() }); if (!m.root) m.left = nowLeft;
       $('#ilist', body).innerHTML = list(); $('#inote', body).value = '';
       b.disabled = !m.root && !m.left; b.textContent = 'Create invite';
     } catch (err) { toast(err.message, 'err'); b.disabled = false; b.textContent = 'Create invite'; }
   };
-  $('#imakeVip', body)?.addEventListener('click', async () => {
-    const b = $('#imakeVip', body), note = $('#inote', body).value.trim();
-    b.disabled = true; b.textContent = 'Generating…';
-    try {
-      const { bundle, left: nowLeft } = await post('/api/membership/invite-bundle', { note });
-      const siteUrl = 'https://orbie.film';
-      const link = `${siteUrl}/join#bundle=${bundle}`;
-      const msg = `You're invited to Orbie with VIP 4K streaming (TorBox) included!\nDownload & setup: ${link}`;
-      $('#iout', body).innerHTML = `<div class="inv-ready">
-          <div class="inv-msg"><p><b>VIP Invite Created!</b> Includes your TorBox key.</p>
-            <p><span>VIP Link</span> <code style="word-break:break-all">${esc(link)}</code></p></div>
-          <div class="inv-acts"><button class="btn primary" id="icopyVip">Copy VIP link</button><small>${note ? `For ${esc(note)} · ` : ''}opening the link automatically configures TorBox</small></div></div>`;
-      const copyBtn = $('#icopyVip', body);
-      const copy = () => navigator.clipboard.writeText(msg).then(() => { copyBtn.textContent = 'Copied'; copyBtn.classList.add('done'); setTimeout(() => { copyBtn.textContent = 'Copy VIP link'; copyBtn.classList.remove('done'); }, 2200); });
-      copyBtn.onclick = copy; copy();
-      m.made.push({ note: note ? `${note} (VIP)` : 'VIP Invite', at: Date.now() }); if (!m.root) m.left = nowLeft;
-      $('#ilist', body).innerHTML = list(); $('#inote', body).value = '';
-      b.disabled = !m.root && !m.left; b.textContent = 'Create VIP Link (with TorBox)';
-    } catch (err) { toast(err.message, 'err'); b.disabled = false; b.textContent = 'Create VIP Link (with TorBox)'; }
-  });
 }
 
 async function updates(body) {
