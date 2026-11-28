@@ -244,8 +244,20 @@ function pulse(name) { const p = $('#wpPulse', wp); p.innerHTML = icon(name); p.
 function toggle() { if (S.room && hooks.onToggle) return hooks.onToggle(!S.video.paused); const { video } = S; if (video.paused) { video.play().catch(() => {}); S.wasPlaying = true; pulse('play'); } else { video.pause(); S.wasPlaying = false; pulse('pause'); } }
 function wake() { wp.classList.remove('idle'); clearTimeout(S.idle); S.idle = setTimeout(() => { if (!S.video.paused && $('#wpMenu', wp).classList.contains('hidden') && !S.dragging) wp.classList.add('idle'); }, 2800); }
 
+// Skip intro: the intro you marked for this show in the app player (Shift+I), offered here too. Not in rooms: everyone stays in sync.
+async function setupSkip() {
+  const id = S.info.meta?.imdbId; if (!id || S.room) return;
+  let intro = null; try { intro = (await (await fetch(`/api/intro/${id}`)).json()).intro; } catch {}
+  if (!intro) return;
+  const btn = document.createElement('button'); btn.className = 'wp-skipintro'; btn.textContent = 'Skip intro'; btn.hidden = true; wp.append(btn);
+  let done = false;
+  btn.onclick = (e) => { e.stopPropagation(); done = true; btn.hidden = true; seekTo(intro.end); };
+  S.video.addEventListener('timeupdate', () => { const t = cur(); btn.hidden = done || !(t >= intro.start && t < intro.end - 1); });
+}
+
 function bind() {
   const { video } = S;
+  setupSkip();
   video.addEventListener('timeupdate', () => { const now = performance.now(); if (!S.dragging && now - S.lastUI > 200) { S.lastUI = now; paintTime(); } paintBuffer(); });
   video.addEventListener('progress', paintBuffer);
   video.addEventListener('waiting', () => spin(true)); video.addEventListener('stalled', () => spin(true));

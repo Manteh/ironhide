@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// IronHide relay: a tiny WebSocket hub for friends, rooms, chat, reactions and playback sync.
+// Orbie relay: a tiny WebSocket hub for friends, rooms, chat, reactions and playback sync.
 // It never touches video. It only passes small JSON messages and keeps everything in memory.
 import http from 'http';
 import { createPublicKey, verify, createHash, randomBytes } from 'crypto';
@@ -135,7 +135,7 @@ setInterval(() => {
   }
 }, 1000).unref?.();
 
-// A player that stopped reporting (browser closed, but the IronHide behind it is still connected) pauses the room where it last was
+// A player that stopped reporting (browser closed, but the Orbie behind it is still connected) pauses the room where it last was
 setInterval(() => {
   for (const r of rooms.values()) {
     if (!r.pb.playing || !r.members.size || hasPlayer(r)) continue;
@@ -186,6 +186,7 @@ wss.on('connection', (ws) => {
       case 'friend.req': {
         const to = clean(m.to, 12).toUpperCase(); if (to === u.id) return;
         const f = users.get(to), payload = profile(u);
+        if (m.inv) payload.inv = clean(m.inv, 24); // joined with this person's invite: their Orbie accepts it by itself
         if (!f) { send(ws, { t: 'friend.unknown', to }); break; }
         if (f.ws) send(f.ws, { t: 'friend.req', from: payload }); else offlineReq.set(to, [...(offlineReq.get(to) || []).filter((r) => r.id !== u.id), payload].slice(-20));
         send(ws, { t: 'friend.sent', to, name: f.name });
@@ -299,4 +300,4 @@ wss.on('connection', (ws) => {
 });
 
 setInterval(() => { for (const [id, u] of users) if (!u.ws && !u.room) users.delete(id); }, 3600e3).unref();
-server.listen(PORT, () => console.log(`IronHide relay on :${PORT}`));
+server.listen(PORT, () => console.log(`Orbie relay on :${PORT}`));

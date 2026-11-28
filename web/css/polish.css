@@ -64,8 +64,6 @@ html.ihp-on #ihamb { display: none; }
 /* ---- scrolling rows: room for lifted cards, no mask (a masked scroller re-composites every frame while cards animate inside it) ---- */
 .cont-row { padding: 36px 30px 30px; margin: -28px -30px -20px; scroll-padding: 0 30px; -webkit-mask-image: none; mask-image: none; }
 .bc:not(.sk):hover { z-index: 5; }
-/* the header's backdrop blur is recomputed whenever anything moves behind it: keep it light */
-#ihbar { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 
 /* browse.css transitions --c1..--y3 on :root (inherited, so every element re-styles each frame). The ambient cross-fade lives in js/ambient.js now. */
 :root { transition: none !important; }
@@ -107,7 +105,7 @@ body { overflow-x: clip; }
 .ninfo > * { filter: none !important; }
 .epsec.collapsed .epwrap { filter: none; }
 /* no sideways jump when a sheet opens and the page stops scrolling */
-html { scrollbar-gutter: stable; }
+html { scrollbar-gutter: auto; }
 
 /* ---- type: the Mac's own typeface ----
    SF Pro (system-ui) switches between its Text and Display cuts by size and is drawn by the OS, so it looks native and crisp

@@ -57,7 +57,9 @@ function mount(i) {
     events: {
       onReady: (e) => { T.ready = true; e.target.setVolume(+(localStorage.getItem('tr-vol') ?? 80)); e.target.playVideo(); T.timer = setInterval(tick, 250); icons(); },
       onStateChange: (e) => { T.state = e.data; if (e.data === 1) { tr.classList.add('started'); $('#trSpin', tr).classList.remove('on'); } if (e.data === 3) $('#trSpin', tr).classList.add('on'); if (e.data === 0) { tr.classList.remove('idle'); } icons(); wake(); },
-      onError: () => fail(),
+      // YouTube's reasons: 2 bad id, 5 can't play in this player, 100 removed or private, 101/150 owner blocks embedding,
+      // 153 the embedding page didn't identify itself (no referrer)
+      onError: (e) => fail({ 2: 'This trailer link is broken.', 5: 'This trailer can’t play in this player.', 100: 'This trailer was removed or made private.', 101: 'The publisher blocks embedding.', 150: 'The publisher blocks embedding.', 153: 'YouTube refused to play it here.' }[e?.data]),
     },
   });
 }
@@ -86,7 +88,7 @@ function icons() {
 }
 function pulse(name) { const el = $('#trPulse', tr); el.innerHTML = icon(name); el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); }
 function toggle() { const p = yt(); if (!p) return; if (T.state === 1 || T.state === 3) { p.pauseVideo(); pulse('pause'); } else { p.playVideo(); pulse('play'); } }
-function wake() { tr.classList.remove('idle'); clearTimeout(T.idle); T.idle = setTimeout(() => { if (T.state === 1 && !T.dragging) tr.classList.add('idle'); }, 2800); }
+function wake() { if (!tr) return; tr.classList.remove('idle'); clearTimeout(T.idle); T.idle = setTimeout(() => { if (T.state === 1 && !T.dragging) tr.classList.add('idle'); }, 2800); }
 const fs = () => (document.fullscreenElement ? document.exitFullscreen() : tr.requestFullscreen?.().catch(() => {}));
 
 function bind() {

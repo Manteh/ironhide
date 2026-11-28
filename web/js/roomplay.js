@@ -4,7 +4,7 @@
 //                    then everyone starts the same frame at the same shared instant.
 //   While playing -> tiny speed changes remove drift; a viewer who falls far behind jumps ahead to a keyframe and waits for the clock.
 // Moves inside what a player has buffered are instant; anything further is a stream restart on a keyframe.
-import { esc, icon, avatar, toast, $ } from './ui.js';
+import { esc, icon, avatar, toast, $, ask } from './ui.js';
 import { social, onState, onEvent, sapi, serverNow, canControl, sendCursor } from './social.js';
 import { mountChat, floatEmoji } from './chat.js';
 import { isPlayerOpen, isRoomPlayer, playerKey, closePlayer, isRoomAttached, reattachRoom, unparkPlayer, parkPlayer, detachRoom } from './player.js';
@@ -67,7 +67,7 @@ export async function joinRoomPlayback() {
   if (isPlayerOpen() && isRoomPlayer() && playerKey() === mediaKey(r)) return unparkPlayer();
   openFor(r, true);
 }
-// One person = one player. With several tabs open on the same IronHide, only one runs the room player;
+// One person = one player. With several tabs open on the same Orbie, only one runs the room player;
 // otherwise each would report its own state and they would fight (paused / tabbed out / paused...).
 // The others wait in line and take over if that tab closes, or right away when you press "Open the player" there.
 const LOCK = 'ironhide-room-player';
@@ -145,8 +145,8 @@ export function attachRoom(P) {
   panel.addEventListener('click', (e) => {
     const b = e.target.closest('[data-do]'); if (!b) return;
     const d = b.dataset, r = social.state?.room; if (!r) return;
-    if (d.do === 'kick') { if (confirm(`Remove ${d.name} from the room? They will not be able to rejoin it.`)) sapi('/room/kick', { id: d.id }); }
-    if (d.do === 'own') { if (confirm(`Make ${d.name} the owner of this room? You will lose owner control.`)) sapi('/room/transfer', { id: d.id }); }
+    if (d.do === 'kick') { ask(`Remove ${d.name} from the room? They will not be able to rejoin it.`, { ok: 'Remove', danger: true }).then((ok) => ok && sapi('/room/kick', { id: d.id })); }
+    if (d.do === 'own') { ask(`Make ${d.name} the owner of this room? You will lose owner control.`, { ok: 'Make owner' }).then((ok) => ok && sapi('/room/transfer', { id: d.id })); }
     if (d.do === 'sync') sapi('/room/control', { action: 'seek', pos: P.cur() });
     if (d.do === 'resync') { reconcile(true); toast('Lining you up with the room'); }
     if (d.do === 'wait') sapi('/room/settings', { wait: r.wait === false });

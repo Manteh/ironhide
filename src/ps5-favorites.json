@@ -1,0 +1,974 @@
+{
+ "tt0116209": {
+  "title": "The English Patient",
+  "year": 1996,
+  "copies": [
+   {
+    "hash": "32e6d4f7dcd59a28404208550b1ff3bd22ebc53a",
+    "name": "The.English.Patient.1996.2160p.DV.HDR10Plus.Ai-Upscaled.HEVC.DTS-HD.MA.5.1.RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 31.3,
+    "hdr": true
+   }
+  ]
+ },
+ "tt6791350": {
+  "title": "Guardians of the Galaxy Vol. 3",
+  "year": 2023,
+  "copies": [
+   {
+    "hash": "ea31c51f41c1ad40f4bcf2f61a4882680882176b",
+    "name": "Guardians.of.the.Galaxy.Vol.3.IMAX.2023.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.Atmos.7.1.MULTI.RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 35.4,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0099088": {
+  "title": "Back to the Future Part III",
+  "year": 1990,
+  "copies": [
+   {
+    "hash": "15cb77278370154aa06068aeb00caa79d4a322e9",
+    "name": "Back.to.the.Future.Part.III.1990.Remastered.2160P.Ai Upscaled.BluRay.60FPS.H265.SDR.DTS5.1.MultiLangSubs_Marjenbo",
+    "gb": 30.9,
+    "hdr": false
+   }
+  ]
+ },
+ "tt0790636": {
+  "title": "Dallas Buyers Club",
+  "year": 2013,
+  "copies": [
+   {
+    "hash": "568754469ca948d771df6c882130b152f7e8fab1",
+    "name": "Dallas.Buyers.Club.2013.2160p.DV.HDR10Plus.Ai-Upscaled.HEVC.DTS-HD.MA.5.1.RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 17.7,
+    "hdr": true
+   }
+  ]
+ },
+ "tt13186482": {
+  "title": "Mufasa: The Lion King",
+  "year": 2024,
+  "copies": [
+   {
+    "hash": "1aa50a1f379cc8f0900afd54c67e6070d3a8e221",
+    "name": "Mufasa.The.Lion.King.2024.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.DDP5.1.Atmos-RIFE.4.18-60fps-DirtyHippie",
+    "gb": 26.3,
+    "hdr": true
+   }
+  ]
+ },
+ "tt3659388": {
+  "title": "The Martian",
+  "year": 2015,
+  "copies": [
+   {
+    "hash": "027a440b9f0feef64f4a16fb8868aa8cafc61eab",
+    "name": "The.Martian.2015.EXTENDED.2160p.DV.HDR10.Ai-Enhanced.H265.TrueHD.7.1.Atmos.MULTI-RIFE.4.15-60fps-DirtyHippie",
+    "gb": 38.6,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0320661": {
+  "title": "Kingdom of Heaven",
+  "year": 2005,
+  "copies": [
+   {
+    "hash": "8e3778788b1efa5690cd302ca5c4cc164e7ec88e",
+    "name": "Kingdom.of.Heaven.DC.Roadshow.Version.2005.2160p.DV.HDR10Plus.Ai-Upscaled.HEVC.DTS-HD.MA.5.1-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 39.6,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1454468": {
+  "title": "Gravity",
+  "year": 2013,
+  "copies": [
+   {
+    "hash": "6dc9ecdaef3e443066bc9e9523a8ab6270d129b3",
+    "name": "Gravity.Special.Edition.2013.2160p.DV.HDR10.Ai-Upscaled.10Bit.HEVC.TrueHD.Atmos.7.1.MULTI-RIFE.4.18-60fps-DirtyHippie",
+    "gb": 25,
+    "hdr": true
+   },
+   {
+    "hash": "7b1d3ef56032378d47f8be1cd737478a23420a3a",
+    "name": "Gravity.Special.Edition.2013.2160p.DV.HDR10.Ai-Upscaled.10Bit.HEVC.TrueHD.Atmos.7.1.MULTI-RIFE.4.18-60fps-DirtyHippie",
+    "gb": 24.7,
+    "hdr": true
+   }
+  ]
+ },
+ "tt14998742": {
+  "title": "Rebel Moon - Part One: A Child of Fire",
+  "year": 2023,
+  "copies": [
+   {
+    "hash": "62c2f97be140c77eb4f184c7ef60ff811b94b24d",
+    "name": "Rebel.Moon.Part.One.DC.2024.2160p.DV.HDR10+Ai-Enhanced.DDP.5.1.Eng.Ita-RIFE.4.18-60fps-DirtyHippie",
+    "gb": 31.6,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1504504": {
+  "title": "Wangan Midnight: The Movie",
+  "year": 2009,
+  "copies": [
+   {
+    "hash": "2d8ce8bb4a322653fd9e55220ffc1a3b5608c7fc",
+    "name": "Wangan.Midnight.The.Movie.2009.2160p.DV.HDR10.Ai-Upscaled.HEVC.DD.5.1-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 20.2,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1104001": {
+  "title": "TRON: Legacy",
+  "year": 2010,
+  "copies": [
+   {
+    "hash": "685f6876f03a07b3efd651c98fa78ac5f645af73",
+    "name": "Tron.Legacy.2010.2160p.OpenMatte.DV.HDR10Plus.Ai-Enhanced.HEVC.DTS-HD.MA.5.1.MULTI-RIFE.4.18-60fps-DirtyHippie",
+    "gb": 41.6,
+    "hdr": true
+   },
+   {
+    "hash": "a78fbf6208948561660d5d413f55952e1ba6f9a9",
+    "name": "Трон: Наследие / TRON: Legacy [2010 BDRip 60fps 2160p][Open-Matte] DTS +Dub +VO +Ukr +Sub 4K AI Upscale 60fps",
+    "gb": 42.6,
+    "hdr": false
+   }
+  ]
+ },
+ "tt1711425": {
+  "title": "21 & Over",
+  "year": 2013,
+  "copies": [
+   {
+    "hash": "9a15f710cfc731c94715975ef21c447c6750574e",
+    "name": "21.and.Over.2013.2160p.DV.HDR10.Ai-Upscaled.HEVC.DTS.HD.MA.5.1-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 22.8,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1856101": {
+  "title": "Blade Runner 2049",
+  "year": 2017,
+  "copies": [
+   {
+    "hash": "6a79e30a0a9c711c8570adad61eeeda2f2bd47c9",
+    "name": "Blade.Runner.2049.OpenMatte.2160p.DV.HDR10+Ai-Enhanced.HEVC.TrueHD.Atmos.7.1-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 34.8,
+    "hdr": true
+   },
+   {
+    "hash": "63f1e55bcc9f14319a9642c58b25c56e7cb4ad84",
+    "name": "Blade Runner 2049 (2017) AI Upscaled.Open Matte 2160P.Web.60FPS.…",
+    "gb": 59,
+    "hdr": false
+   }
+  ]
+ },
+ "tt1568346": {
+  "title": "The Girl with the Dragon Tattoo",
+  "year": 2011,
+  "copies": [
+   {
+    "hash": "317660b825498a2668475db1a0a71e2ed9bc7878",
+    "name": "The.Girl.with.the.Dragon.Tattoo.2011.2160p.OpenMatte.DV.HDR10+Ai-Enhanced.HEVC.DTS-HD.MA.5.1.MULTI-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 31.3,
+    "hdr": true
+   }
+  ]
+ },
+ "tt10366206": {
+  "title": "John Wick: Chapter 4",
+  "year": 2023,
+  "copies": [
+   {
+    "hash": "9201cb77178a76445df05829159f87f2d7e9a7dc",
+    "name": "John.Wick.Chapter.4.2023.2160p.DV.HDR10+Ai-Enhanced.HEVC.TrueHD.Atmos.7.1.MULTI3-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 38.6,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1646987": {
+  "title": "Wrath of the Titans",
+  "year": 2012,
+  "copies": [
+   {
+    "hash": "e1967dcdeb8facb45729f1c5632826e169e97ec8",
+    "name": "Wrath.of.the.Titans.2012.2160p.DV.HDR10+Ai-Enhanced.HEVC.DTS-HD.MA.5.1-RIFE.4.18-60fps-DirtyHippie",
+    "gb": 28.9,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1483013": {
+  "title": "Oblivion",
+  "year": 2013,
+  "copies": [
+   {
+    "hash": "9be0a28c6955143b68365cb699ea5241e7e25b7b",
+    "name": "Oblivion.2013.Open.Matte.Hybrid.2160p.DV.HDR10+Ai-Upscaled.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 36.8,
+    "hdr": true
+   },
+   {
+    "hash": "2ef11c80a6076d531241747c4a840e2b139e480c",
+    "name": "Oblivion.2013.2160p.DV.HDR10 Ai.Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.18-60fps-DirtyHippie",
+    "gb": 27,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0093437": {
+  "title": "The Lost Boys",
+  "year": 1987,
+  "copies": [
+   {
+    "hash": "abf28fe44c6450403d74fc31dc16fa7b13c7706b",
+    "name": "The.Lost.Boys.1987.2160p.DV.HDR10+Ai-Enhanced.HEVC.DTS-HD.MA.5.1.MULTI3-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 20.2,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1663202": {
+  "title": "The Revenant",
+  "year": 2015,
+  "copies": [
+   {
+    "hash": "dc9af9a350948f7cd860716e31c15aca314fbb29",
+    "name": "The.Revenant.2015.2160p.OpenMatte.DV.HDR10+Ai-Upscaled.HEVC.DTS-HD.MA.7.1-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 40.5,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0110912": {
+  "title": "Pulp Fiction",
+  "year": 1994,
+  "copies": [
+   {
+    "hash": "781a1bc49c29e3def11bf294317bda09b4d9e66d",
+    "name": "Pulp.Fiction.1994.2160p.DV.HDR10+Ai-Enhanced.HEVC.DTS-HD.MA.5.1-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 35.7,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0318649": {
+  "title": "Sahara",
+  "year": 2005,
+  "copies": [
+   {
+    "hash": "ac27d94fedaec52d6ac4240c3a07dd398f58f794",
+    "name": "Sahara.2005.OpenMatte.2160p.DV.HDR10 Ai-Upscaled.HEVC.TrueHD.5.1-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 28.4,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0458339": {
+  "title": "Captain America: The First Avenger",
+  "year": 2011,
+  "copies": [
+   {
+    "hash": "6031371565dd85ddc5a7d2035e8eaeb3755da5ba",
+    "name": "Captain.America.The.First.Avenger.2011.2160p.DV.HDR10+Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 35.9,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0099810": {
+  "title": "The Hunt for Red October",
+  "year": 1990,
+  "copies": [
+   {
+    "hash": "568213567ef312cc6b3038c4e9a7ab69949fba24",
+    "name": "The.Hunt.for.Red.October.1990.2160p.DV.HDR10+Ai-Enhanced.HEVC.TrueHD.5.1.MULTI-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 32.7,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0780504": {
+  "title": "Drive",
+  "year": 2011,
+  "copies": [
+   {
+    "hash": "69911b486a1e5c60e999d184d483cec81e54cdc9",
+    "name": "Drive.2011.2160p.OpenMatte.DV.HDR10+Ai-Upscaled.HEVC.DTS.5.1-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 22,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1055369": {
+  "title": "Transformers: Revenge of the Fallen",
+  "year": 2009,
+  "copies": [
+   {
+    "hash": "8afce99c40488e6641bc7deb342b84411419770d",
+    "name": "Transformers.Revenge.of.the.Fallen.2009.2160p.DV.HDR10+Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.Eng.Ita-RIFE.4.18v2-60fps-DirtyHippie-REPACK",
+    "gb": 40.6,
+    "hdr": true
+   },
+   {
+    "hash": "f4a8029453557d940decc1a2f8aa96d5f5fa9c60",
+    "name": "Transformers.Revenge.of.the.Fallen.2009.2160p.DV.HDR10+Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.Eng.Ita-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 38.9,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0083658": {
+  "title": "Blade Runner",
+  "year": 1982,
+  "copies": [
+   {
+    "hash": "1dfcf5f0c3d94163648e7abb8660db5e050e05f3",
+    "name": "Blade.Runner.1982.The.Final.Cut.2160p.DV.HDR10+Ai-Enhanced.HEVC.TrueHD.7.1.Atmos-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 24.4,
+    "hdr": true
+   }
+  ]
+ },
+ "tt2015381": {
+  "title": "Guardians of the Galaxy",
+  "year": 2014,
+  "copies": [
+   {
+    "hash": "a41e1439d4603d09856fb2df4dd57cc57a71e66b",
+    "name": "Guardians.of.the.Galaxy.2014.IMAX.2160p.DV.HDR10 Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 35,
+    "hdr": true
+   }
+  ]
+ },
+ "tt2395427": {
+  "title": "Avengers: Age of Ultron",
+  "year": 2015,
+  "copies": [
+   {
+    "hash": "7c2c0876e93fb64e16b46a18b7a42684ac75445a",
+    "name": "Avengers.Age.of.Ultron.2015.2160p.DV.HDR10+Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI3-RIFE.4.25-60fps-DirtyHippie",
+    "gb": 33.6,
+    "hdr": true
+   },
+   {
+    "hash": "bf2d3a4de5a54c839d80fef9801e3d126735f413",
+    "name": "Avengers - Age Of Ultron (2015) 2160P Ai Upscaled Bluray 60FPS H…",
+    "gb": 56.6,
+    "hdr": false
+   },
+   {
+    "hash": "d8efd96a71c531fb0f659437a4876b575478e286",
+    "name": "Avengers - Age of Ultron (2015) 2160P.Ai Enhanced.BluRay.60FPS.H265.SDR.AAC7.1.EngSubs_Marjenbo",
+    "gb": 56.4,
+    "hdr": false
+   }
+  ]
+ },
+ "tt1677720": {
+  "title": "Ready Player One",
+  "year": 2018,
+  "copies": [
+   {
+    "hash": "c1d87da5db6b6bc320e6ee5dd624f65b07522ede",
+    "name": "Ready.Player.One.2018.2160p.Ai-Enhanced.HDR10.H265.TrueHD.7.1-DirtyHippie.RIFE4.13v2-60fps",
+    "gb": 29.3,
+    "hdr": true
+   }
+  ]
+ },
+ "tt3896198": {
+  "title": "Guardians of the Galaxy Vol. 2",
+  "year": 2017,
+  "copies": [
+   {
+    "hash": "5f5edf8b2e479eea5801c375626e5c1e475fb398",
+    "name": "Guardians.of.the.Galaxy.Vol.2.2017.IMAX.2160p.DV.HDR10+Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.25-60fps-DirtyHippie",
+    "gb": 42.4,
+    "hdr": true
+   }
+  ]
+ },
+ "tt5177088": {
+  "title": "The Girl in the Spider's Web",
+  "year": 2018,
+  "copies": [
+   {
+    "hash": "977e57ab51ffa3c2b74347155e88174d658f6e8e",
+    "name": "Girl.in.the.Spider's.Web.2018.2160p.DV.HDR10+Ai-Enhanced.HEVC.TruHD.7.1.Atmos.MULTI-RIFE.4.25-60fps-DirtyHippie",
+    "gb": 27.7,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0089175": {
+  "title": "Fright Night",
+  "year": 1985,
+  "copies": [
+   {
+    "hash": "34a36d7de9307d5eed10544378b759d2b6438d4f",
+    "name": "Fright.Night.1985.2160p.DV.HDR10 Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 30.3,
+    "hdr": true
+   }
+  ]
+ },
+ "tt6263850": {
+  "title": "Deadpool & Wolverine",
+  "year": 2024,
+  "copies": [
+   {
+    "hash": "baf876862433c849bffc63199abe335c99ff531b",
+    "name": "Deadpool.and.Wolverine.2024.2160p.DV.HDR10+Ai-Enhanced.HEVC.DDP5.1.Atmos-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 23.8,
+    "hdr": true
+   },
+   {
+    "hash": "a166230eeb87fd5548c8b8e7bc681c757ff266f1",
+    "name": "Deadpool & Wolverine. 2024 2160p Ai Enhanced Bluray 60FPS.H265.BT709.DTS.7.1 Marjenbo",
+    "gb": 36.2,
+    "hdr": false
+   },
+   {
+    "hash": "12797f5fecf8a89b2b7e54394c8de27415292514",
+    "name": "Deadpool & Wolverine 2160p.Ai Enhanced.WebDl.60FPS.H265.SDR.DTS5.1.EngSubs_Marjenbo",
+    "gb": 36.2,
+    "hdr": false
+   }
+  ]
+ },
+ "tt0100403": {
+  "title": "Predator 2",
+  "year": 1990,
+  "copies": [
+   {
+    "hash": "38d2e32499f4b256aa68fb8026d7f95404ebe3b6",
+    "name": "Predator.2.1990.2160p.DV.HDR10 Ai-Enhanced.HEVC.DTS-HD.MA.5.1.MULTI-RIFE.4.18-60fps-DirtyHippie",
+    "gb": 34.8,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1340094": {
+  "title": "The Crow",
+  "year": 2024,
+  "copies": [
+   {
+    "hash": "aa206d5252f3aa6c77e77c7ef3455a2349368c22",
+    "name": "The.Crow.2024.2160p.DV.HDR10 Ai-Enhanced.HEVC.DDP.5.1.Atmos-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 17.9,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0816692": {
+  "title": "Interstellar",
+  "year": 2014,
+  "copies": [
+   {
+    "hash": "bffe42abca9bdf44121be8e3b0fc5ace68e3d4c8",
+    "name": "Interstellar.2014.2160p.DV.HDR10.Ai-Enhanced.H265.DTS-HD.5.1-RIFE.4.15-60fps-DirtyHippie",
+    "gb": 37.5,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0078346": {
+  "title": "Superman",
+  "year": 1978,
+  "copies": [
+   {
+    "hash": "f2625beb4ad66555c3a0ed67835eb53cf41cefd6",
+    "name": "Superman.The.Movie.1978.2160p.DV.HDR10+Ai.Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 36.3,
+    "hdr": true
+   },
+   {
+    "hash": "82dca3d05dd31b29f46125b72596891838394d0e",
+    "name": "Superman.1978.Extended.Ai Upscaled.2160p.BluRay.60FPS.H265.SDR.ACC_Marjenbo",
+    "gb": 54.7,
+    "hdr": false
+   }
+  ]
+ },
+ "tt0120737": {
+  "title": "The Lord of the Rings: The Fellowship of the Ring",
+  "year": 2001,
+  "copies": [
+   {
+    "hash": "2beb96586c657beaf14aae2377ae7bb395642d3c",
+    "name": "The.Lord.of.the.Rings.The.Fellowship.of.the.Ring.2001.Extended.2160p.Ai-Enhanced.DV.HDR10Plus.H265.Atmos.TrueHD.7.1.RIFE4.14-60fps-DirtyHippie",
+    "gb": 47.8,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0167261": {
+  "title": "The Lord of the Rings: The Two Towers",
+  "year": 2002,
+  "copies": [
+   {
+    "hash": "97ef447521338e80d11b5701db4d4f853a5040bd",
+    "name": "The.Lord.of.the.Rings.The.Two.Towers.2002.Extended.2160p.DV.HDR10.Ai-Enhanced.H265.Atmos.TrueHD.7.1-RIFE.4.15v2-60fps-DirtyHippie",
+    "gb": 53.2,
+    "hdr": true
+   },
+   {
+    "hash": "d28ede6f46664d33108fa7d0fda2abda52848d6d",
+    "name": "The Lord of the Rings: The Two Towers 2002 EXT REM 2160p AI 60FPS H264 Marjenbo",
+    "gb": 90.9,
+    "hdr": false
+   }
+  ]
+ },
+ "tt0167260": {
+  "title": "The Lord of the Rings: The Return of the King",
+  "year": 2003,
+  "copies": [
+   {
+    "hash": "40c01a1bace11ee737b7ccbe63dcb714db28f41e",
+    "name": "The.Lord.of.the.Rings.The.Return.Of.The.King.2003.EXTENDED.2160p.DV.HDR10.Ai-Enhanced.h265.TrueHD.Atmos.7.1-RIFE.4.15v2-60fps-DirtyHippie",
+    "gb": 58.9,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0903624": {
+  "title": "The Hobbit: An Unexpected Journey",
+  "year": 2012,
+  "copies": [
+   {
+    "hash": "c9e5c4db6c3163c3ebe9871377f333643d826410",
+    "name": "The.Hobbit.An.Unexpected.Journey.Extended.2012.2160p.DV.HDR10Plus.Ai-Enhanced.H265.TrueHD.Atmos.7.1.MULTI-RIFE.4.17-60fps-DirtyHippie",
+    "gb": 47.9,
+    "hdr": true
+   },
+   {
+    "hash": "c80c9c13ae448c5f932996c778cb4339ac7341e5",
+    "name": "The.Hobbit.An.Unexpected.Journey.2012.Extended.Cut.Open.Matte.AI Upscaled.2160P.WEBRip.60FPS.H265.SDR.AAC5.1.EngSubs_Marjenbo",
+    "gb": 50,
+    "hdr": false
+   }
+  ]
+ },
+ "tt1170358": {
+  "title": "The Hobbit: The Desolation of Smaug",
+  "year": 2013,
+  "copies": [
+   {
+    "hash": "a167307218fafcdae97419c8e63be12d06a7b479",
+    "name": "The.Hobbit.TDOS.2013.EXTENDED.2160p.DV.HDR10Plus.Ai-Enhanced.H265.TrueHD.7.1.Atmos.MULTI.RIFE.4.17-60fps-DirtyHippie",
+    "gb": 59.7,
+    "hdr": true
+   },
+   {
+    "hash": "975e2b3916cb22264cdfee82b11031867f0b5b89",
+    "name": "The.Hobbit.Desolation.of.Smaug.2013.Extended.Cut.Open.Matte.2160P.Ai Upscaled.WEBRip.60FPS.H265.SDR.AAC5.1.EngSubs_Marjenbo",
+    "gb": 46.4,
+    "hdr": false
+   }
+  ]
+ },
+ "tt2310332": {
+  "title": "The Hobbit: The Battle of the Five Armies",
+  "year": 2014,
+  "copies": [
+   {
+    "hash": "aed50db00859cfd44e178eb40c5885e56ff34eeb",
+    "name": "The.Hobbit.The.Battle.Of.The.Five.Armies.2014.Extended.2160P.Dv.Hdr10+Ai-Enhanced.Hevc.Truehd.7.1.Atmos.Multi5-Rife.4.19v2-60Fps-Dirtyhippie",
+    "gb": 46.4,
+    "hdr": true
+   },
+   {
+    "hash": "4d1386108ca3ae7eaf36eb5e03f18cec76de6bab",
+    "name": "The.Hobbit. The Battle of the Five Armies. 2014. 2160P.Ai Upscaled.Extended Hybrid Open Matte.Web.60FPS.H265.BT2020.AC3 5.1.EngSubs_Marjenbo",
+    "gb": 52.2,
+    "hdr": false
+   }
+  ]
+ },
+ "tt0808151": {
+  "title": "Angels & Demons",
+  "year": 2009,
+  "copies": [
+   {
+    "hash": "c19399b43104fb19a81f7d72da943cb607320ae1",
+    "name": "Angels.and.Demons.2009.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.DDP.7.1-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 24.3,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1630029": {
+  "title": "Avatar: The Way of Water",
+  "year": 2022,
+  "copies": [
+   {
+    "hash": "8765b97664c4f4fe33954d67eb81fb624029d46b",
+    "name": "Avatar.The.Way.Of.Water.2022.2160P.Ai-Enhanced.Full.BluRay.10.bit.H265.Dolby.Atmos.MULTI-DirtyHippie_RIFE.4.14v2-60fps",
+    "gb": 53.5,
+    "hdr": false
+   },
+   {
+    "hash": "488c0378cb8b2e695d1bb067187628bb01c2ba20",
+    "name": "Avatar.The.Way.Of.Water.2022.HDR10.2160P.Ai-Enhanced.10bit.H265.Dolby.Atmos.MULTI-DirtyHippie RIFE.4.14v2-60fps",
+    "gb": 51.3,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0348150": {
+  "title": "Superman Returns",
+  "year": 2006,
+  "copies": [
+   {
+    "hash": "61cbb85817e3d6f2e862290db6d5818e6c06c96b",
+    "name": "Superman.Returns.2006.2160p.DV.HDR10Plus.Ai-Upscaled.HEVC.DTS-HD.MA.5.1.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 36.9,
+    "hdr": true
+   },
+   {
+    "hash": "9a09a60810185fa1f232ed70195cf4346c3521ff",
+    "name": "Superman Returns 2006. 2160P.Ai Upscaled.Bluray.60FPS.H265.SDR.AC3 5.1.MultiLangSubs_Marjenbo",
+    "gb": 56.5,
+    "hdr": false
+   }
+  ]
+ },
+ "tt18412256": {
+  "title": "Alien: Romulus",
+  "year": 2024,
+  "copies": [
+   {
+    "hash": "c3457a05193e41aee295ac790b569925891a0457",
+    "name": "Alien.Romulus.2024.2160p.DV.HDR10Plus.HEVC.DDP.5.1.Atmos-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 23.6,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0443706": {
+  "title": "Zodiac",
+  "year": 2007,
+  "copies": [
+   {
+    "hash": "ee9d536429150365e33c348b2e9b0e33ea26a276",
+    "name": "Zodiac.2007.Directors.Cut.2160p.DV.HDR10Plus.Ai-Upscaled.HEVC.TrueHD.5.1-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 26.1,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0499549": {
+  "title": "Avatar",
+  "year": 2009,
+  "copies": [
+   {
+    "hash": "110920fd854a4c8cea2a1026f9902148ad3d6eb5",
+    "name": "Avatar.2009.Collectors.Extended.Cut.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.DTS-HD.MA.5.1.MULTi4-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 50.2,
+    "hdr": true
+   }
+  ]
+ },
+ "tt10838180": {
+  "title": "The Matrix Resurrections",
+  "year": 2021,
+  "copies": [
+   {
+    "hash": "936fef36fabadb8305dea3e0212960f0ca8b7064",
+    "name": "The.Matrix.Resurrections.2021.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTi5-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 34.8,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0800369": {
+  "title": "Thor",
+  "year": 2011,
+  "copies": [
+   {
+    "hash": "e9d002e43ba019cf75c88e85c811e051e8a6a562",
+    "name": "Thor.2011.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 35.7,
+    "hdr": true
+   },
+   {
+    "hash": "3369f1cf9a118d5368fa0ba5a65251f14b52e825",
+    "name": "Thor (2011) 2160p AI Enhanced BluRay 60FPS H265 SDR DTS-HD MA TrueHD Marjenbo",
+    "gb": 44.2,
+    "hdr": false
+   }
+  ]
+ },
+ "tt0116778": {
+  "title": "Kingpin",
+  "year": 1996,
+  "copies": [
+   {
+    "hash": "dad86c7e248a98b1dfc5882a739fb3d1220b9aae",
+    "name": "Kingpin.1996.2160P.Ai Upscaled.BluRay.60FPS.SDR.H265.AC5.1_Marje…",
+    "gb": 32.2,
+    "hdr": false
+   }
+  ]
+ },
+ "tt8864596": {
+  "title": "Transformers One",
+  "year": 2024,
+  "copies": [
+   {
+    "hash": "a734e220fca3400333ec955dad5b420b7dd1746a",
+    "name": "Transformers.One.2024.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.DDP.5.1-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 23.8,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0052618": {
+  "title": "Ben-Hur",
+  "year": 1959,
+  "copies": [
+   {
+    "hash": "d606c3391e9567e772fc45c7373ebaffb28d2593",
+    "name": "Ben-Hur.1959.2160p.DV.HDR10Plus.Ai-Upscaled.HEVC.DTS-HD.MA.5.1.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 59.4,
+    "hdr": true
+   }
+  ]
+ },
+ "tt2935510": {
+  "title": "Ad Astra",
+  "year": 2019,
+  "copies": [
+   {
+    "hash": "e3358e96fb57f81eb817c56989e28fe75822fc5e",
+    "name": "Ad.Astra.2019.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 36.3,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1219827": {
+  "title": "Ghost in the Shell",
+  "year": 2017,
+  "copies": [
+   {
+    "hash": "594b01d0501516ea9cde8e50a5c5392d74700439",
+    "name": "Ghost.in.the.Shell.2017.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTi4-RIFE.4.25v2.H-60fps-DirtyHippie",
+    "gb": 28.9,
+    "hdr": true
+   }
+  ]
+ },
+ "tt17526714": {
+  "title": "The Substance",
+  "year": 2024,
+  "copies": [
+   {
+    "hash": "d66d578e10337f277ec415d332d0386f0771e8df",
+    "name": "The.Substance.2024.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.DDP.5.1-RIFE.4.25v2.Heavy-60fps-DirtyHippie",
+    "gb": 25,
+    "hdr": true
+   }
+  ]
+ },
+ "tt1843866": {
+  "title": "Captain America: The Winter Soldier",
+  "year": 2014,
+  "copies": [
+   {
+    "hash": "cba94dc4a4481e6d53651fd928eebe6db941e625",
+    "name": "Captain.America.The.Winter.Soldier.2014.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 41.7,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0454082": {
+  "title": "Black Christmas",
+  "year": 2006,
+  "copies": [
+   {
+    "hash": "b3df45a866d630522fbf9033d5664ae85cf94d73",
+    "name": "Black.Christmas.Unrated.2006.2160p.DV.HDR10Plus.Ai-Upscaled.HEVC.DTS-HD.MA.5.1-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 15.2,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0120201": {
+  "title": "Starship Troopers",
+  "year": 1997,
+  "copies": [
+   {
+    "hash": "0a45ab5b5ed5890bfa68ba4bc5921217426a7573",
+    "name": "Starship.Troopers.1997.2160p.DV.HDR10+Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.18v2-60fps-DirtyHippie",
+    "gb": 41.8,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0090605": {
+  "title": "Aliens",
+  "year": 1986,
+  "copies": [
+   {
+    "hash": "41618f23e9b25bb161f7dc23c8dca855f3d1a429",
+    "name": "Aliens.1986.Special.Edition.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTi3-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 49,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0099487": {
+  "title": "Edward Scissorhands",
+  "year": 1990,
+  "copies": [
+   {
+    "hash": "d81a2b018f668bfc8bc66830a9de821509b0b9fd",
+    "name": "Edward.Scissorhands.1990.2160p.DV.HDR10Plus.Ai-Upscaled.HEVC.DTS-HD.MA.4.0-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 23.1,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0172495": {
+  "title": "Gladiator",
+  "year": 2000,
+  "copies": [
+   {
+    "hash": "50571d83e3704fefdf688eb938eaa7c69d1eab24",
+    "name": "Gladiator.2000.Extended.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.DTS-X.7.1.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 42.4,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0070034": {
+  "title": "Enter the Dragon",
+  "year": 1973,
+  "copies": [
+   {
+    "hash": "1128aa82a8cd66f1b057783df86aa9439ffcc270",
+    "name": "Enter.The.Dragon.Special.Edition.1973.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.7.1.Atmos-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 21.3,
+    "hdr": true
+   },
+   {
+    "hash": "1e2875906d0759f74603f9498b0dbcbbbb2f1d30",
+    "name": "Enter the Dragon (1973) (SE) (2160P.AI.BluRay).60FPS.H265.SDR.AAC5.1_Marjenbo",
+    "gb": 22.4,
+    "hdr": false
+   }
+  ]
+ },
+ "tt1877832": {
+  "title": "X-Men: Days of Future Past",
+  "year": 2014,
+  "copies": [
+   {
+    "hash": "1e7123aa160c4bb0c7bfee5511df113a0c288d3c",
+    "name": "X-Men.Days.of.Future.Past.2014.The.Rogue.Cut.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.DTS-HD.MA.7.1.MULTi4-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 40.2,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0099785": {
+  "title": "Home Alone",
+  "year": 1990,
+  "copies": [
+   {
+    "hash": "0ae1cadfee785622d7f27041f2f087e652b7d872",
+    "name": "Home.Alone.1990.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.DTS-HD.MA.5.1.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 23.2,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0088763": {
+  "title": "Back to the Future",
+  "year": 1985,
+  "copies": [
+   {
+    "hash": "e2c4c691894a271897ee46700f2bf666d3cc7a59",
+    "name": "Back.to.the.Future.1985.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 38.9,
+    "hdr": true
+   },
+   {
+    "hash": "a624f137a21f41b896467e63faa8e373e7469bb9",
+    "name": "Back.to.the.Future.1985.Remastered 2160P.Ai Upscaled.BluRay.60FPS.H265.SDR.DTS-HD.MA.5.1.MultiLangSubs_Marjenbo",
+    "gb": 30.2,
+    "hdr": false
+   }
+  ]
+ },
+ "tt3850590": {
+  "title": "Krampus",
+  "year": 2015,
+  "copies": [
+   {
+    "hash": "b499b2611f8d3f5f34d4bec52bfe17510848c5d9",
+    "name": "Krampus.2015.The.Naughty.Cut.2160p.DV.HDR10Plus.AI-Enhanced.HEVC.TrueHD.7.1.Atmos-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 21.1,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0102057": {
+  "title": "Hook",
+  "year": 1991,
+  "copies": [
+   {
+    "hash": "caf419ebd7a8bce76a02694466dc0611acf6790d",
+    "name": "Hook.1991.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 47.2,
+    "hdr": true
+   }
+  ]
+ },
+ "tt0096874": {
+  "title": "Back to the Future Part II",
+  "year": 1989,
+  "copies": [
+   {
+    "hash": "2f29c531aae1b75fc662eeb23a4ca324c61000ce",
+    "name": "Back.to.the.Future.Part.II.1989.2160p.DV.HDR10Plus.Ai-Enhanced.HEVC.TrueHD.7.1.Atmos.MULTI-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 34,
+    "hdr": true
+   },
+   {
+    "hash": "06ad0edadf43a257360a8e802ffe14906523c270",
+    "name": "Back.to.the.Future.Part.II.1989.Remastered.2160P.Ai Upscaled.BluRay.60FPS.H265.SDR.DTS.5.1.MultiLangSubs_Marjenbo",
+    "gb": 28.1,
+    "hdr": false
+   }
+  ]
+ },
+ "tt0111070": {
+  "title": "The Santa Clause",
+  "year": 1994,
+  "copies": [
+   {
+    "hash": "6ef03299c756abf064c88e9c5b4fd40e919353b3",
+    "name": "The.Santa.Clause.1994.2160p.DV.HDR10Plus.Ai-Upscaled.HEVC.DTS-HD.MA.5.1.MULTi5-RIFE.4.25v2-60fps-DirtyHippie",
+    "gb": 32.8,
+    "hdr": true
+   }
+  ]
+ }
+}

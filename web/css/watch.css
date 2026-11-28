@@ -1,0 +1,113 @@
+/* Around playback: recovery when a start fails, the next-episode countdown, episode marking, new episodes,
+   the Resume and Shelf pages, search clarity, first-run steps, page placeholders. */
+
+/* ---------- "are you sure?" (the web view can't show the browser's own) ---------- */
+.askw { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .18s ease; }
+.askw.in { opacity: 1; }
+.ask { width: min(420px, calc(100vw - 40px)); padding: 22px 22px 18px; border-radius: 18px; background: var(--bg-elev, #1b1b1f); border: 1px solid var(--border-strong, rgba(255,255,255,.12)); box-shadow: 0 24px 60px rgba(0,0,0,.5); transform: translateY(6px) scale(.98); transition: transform .18s ease; }
+.askw.in .ask { transform: none; }
+.ask p { margin: 0 0 18px; line-height: 1.5; font-size: 15px; }
+.ask-a { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---------- toasts that offer a way out ---------- */
+.toast { display: flex; align-items: center; gap: 14px; pointer-events: auto; transition: opacity .25s var(--ease), transform .25s var(--ease); }
+.toast.out { opacity: 0; transform: translateY(-6px); }
+.toast-act { flex: none; border: 0; border-radius: 9px; padding: 6px 12px; font: inherit; font-weight: 650; cursor: pointer; background: var(--accent); color: var(--on-accent, #fff); }
+.toast-act:hover { filter: brightness(1.08); }
+
+/* ---------- the start card when playback didn't start ---------- */
+.launch.failed .lx-steps, .launch.failed .lbar { display: none; }
+.launch.failed .lkick { color: var(--err); }
+.lx-err { color: var(--text); line-height: 1.45; }
+.lx-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.lx-acts .btn { height: 38px; }
+
+/* ---------- up next: countdown ---------- */
+.nextup.auto { padding-right: 52px; }
+.nu-count { font-style: normal; color: var(--muted); margin-left: 6px; } .nu-count b { color: var(--text); font-variant-numeric: tabular-nums; }
+.nu-ring { position: absolute; right: 14px; top: 14px; width: 26px; height: 26px; border-radius: 50%; background: conic-gradient(var(--accent) var(--p, 0%), rgba(255,255,255,.12) 0); }
+.nu-ring::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: rgba(24,24,32,.95); }
+.nu-ring u { display: none; }
+@property --p { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+.nextup.auto.in .nu-ring { animation: nuRing 10s linear forwards; }
+@keyframes nuRing { to { --p: 100%; } }
+@media (prefers-reduced-motion: reduce) { .nextup.auto.in .nu-ring { animation: none; --p: 100%; } }
+
+/* ---------- rate a film you just finished ---------- */
+.nu-stars { display: flex; gap: 2px; margin: 4px 0 6px; }
+.nu-stars button { border: 0; background: none; font-size: 26px; line-height: 1; color: rgba(255,255,255,.22); cursor: pointer; padding: 2px; transition: color .12s, transform .12s; }
+.nu-stars button.on { color: #ffcc4d; } .nu-stars button:hover { transform: scale(1.12); }
+
+/* ---------- title page: episodes ---------- */
+.dx-mk { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 8px 2px 5px; border-radius: 999px; border: 1px solid var(--border); background: transparent;
+  color: var(--muted); font: inherit; font-size: 11.5px; cursor: pointer; opacity: 0; transition: opacity .15s, background .15s, color .15s; vertical-align: middle; }
+.dx-mk .i { width: 13px; height: 13px; }
+.dx-ep:hover .dx-mk, .dx-ep:focus-within .dx-mk, .dx-mk.on, .dx-mk:focus-visible { opacity: 1; }
+.dx-mk:hover { color: var(--text); background: var(--hover); }
+.dx-mk.on { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.dx-mks { opacity: 1; margin-left: auto; padding: 5px 11px 5px 8px; font-size: 12.5px; }
+.dx-jump { border: 0; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12.5px; cursor: pointer; margin-left: 10px; }
+.dx-sh { gap: 8px; }
+
+/* ---------- cards: new episodes, remove from Continue watching ---------- */
+.bnew { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .02em; background: var(--accent); color: var(--on-accent, #fff); box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+.bx { position: absolute; right: 8px; top: 8px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 0; cursor: pointer;
+  background: rgba(10,10,14,.72); color: #fff; opacity: 0; transition: opacity .15s, background .15s; }
+.bx .i { width: 14px; height: 14px; }
+.bc:hover .bx, .bc:focus-within .bx, .bx:focus-visible { opacity: 1; } .bx:hover { background: var(--err); }
+.bc:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 12px; }
+.cont-sub { color: var(--muted); font-size: 13px; }
+
+/* ---------- Resume and Shelf as pages ---------- */
+#browse.pagey .tabrow, #browse.pagey #hero, #browse.pagey #fyRows { display: none; }
+.pg-head { display: flex; align-items: baseline; gap: 14px; padding: 8px 0 18px; }
+.pg-head h1 { margin: 0; font-size: 30px; letter-spacing: -.02em; } .pg-head span { color: var(--muted); }
+#browse.pagey .bgrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+/* ---------- search: telling look-alikes apart ---------- */
+.sx-apart { display: block; color: var(--muted); font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.sx-mine { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: 11.5px; color: var(--accent); white-space: nowrap; } .sx-mine .i { width: 12px; height: 12px; }
+
+/* ---------- a page's shape while it loads ---------- */
+.pg-sk { display: grid; gap: 14px; padding-top: 28px; }
+.pg-sk .skl { height: 14px; width: 40%; } .pg-sk .skl.h { height: 30px; width: 28%; border-radius: 9px; }
+.pg-skc { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 10px; }
+.pg-skc i { display: block; height: 150px; border-radius: 16px; background: rgba(255,255,255,.05); animation: pgPulse 1.4s ease-in-out infinite; }
+@keyframes pgPulse { 50% { opacity: .55; } }
+
+/* ---------- the now-playing pill gets its own room ---------- */
+body.np-on #browse, body.np-on #page { padding-bottom: 88px; }
+
+/* ---------- first run ---------- */
+.wl-steps { display: flex; justify-content: center; gap: 6px; margin-bottom: 6px; }
+.wl-steps i { width: 22px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.14); } .wl-steps i.on { background: var(--accent); } .wl-steps i.done { background: color-mix(in srgb, var(--accent) 50%, transparent); }
+.wl-seg { display: flex; gap: 6px; flex-wrap: wrap; } .wl-seg button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.wl-l { display: block; font-size: 12.5px; color: var(--muted); margin: 6px 0 -2px; text-align: left; }
+.wl-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wl-gift { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 12px 14px; border-radius: 14px; font-size: 13px; color: var(--muted);
+  background: color-mix(in srgb, var(--accent) 16%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.wl-gift b { font-size: 14px; color: var(--text); }
+.wl-chips .chip { border: 1px solid var(--border); background: transparent; color: var(--muted); border-radius: 999px; padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.wl-chips .chip.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); color: var(--text); }
+.wl-hint { color: var(--muted); font-size: 12px; text-align: left; }
+.wl-msg { min-height: 1em; font-size: 13px; text-align: left; } .wl-msg.err { color: var(--err); } .wl-msg.ok { color: var(--ok); display: flex; align-items: center; gap: 6px; }
+.wl-skip { height: 38px; }
+
+/* ---------- browser player: skip intro ---------- */
+.wp-skipintro { position: absolute; right: 28px; bottom: 110px; z-index: 5; padding: 11px 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,.25);
+  background: rgba(16,16,20,.82); color: #fff; font: inherit; font-weight: 650; cursor: pointer; }
+.wp-skipintro:hover { background: #fff; color: #111; }
+
+/* title page actions: the time left is quieter than "Resume", and a wrapped row looks intended (space, no divider) */
+.dx-acts { row-gap: 14px; }
+.dx-acts .dx-play .dx-left { margin-left: 10px; font-weight: 500; font-size: .86em; opacity: .62; }
+.dx-round { border-left: 0 !important; padding-left: 0 !important; margin-left: 4px !important; }
+
+/* buttons set their own display, which would beat the hidden attribute */
+#dStart[hidden], .dx-jump[hidden], .ihp-skipbtn[hidden], .wp-skipintro[hidden], .lx-acts [hidden] { display: none !important; }
+a.dx-score { color: inherit; text-decoration: none; cursor: pointer; } a.dx-score:hover { filter: brightness(1.15); }
+/* a little less padding so the actions fit one row next to the poster */
+.dx-acts .btn.dx-sec2 { padding: 0 14px !important; }
+
+/* The orange ring around a card you select: the card already lifts and gets a soft white edge on its poster when it is focused, so the extra outline is dropped. */
+.bc:focus-visible, .bc:focus { outline: none !important; }

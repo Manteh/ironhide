@@ -19,10 +19,13 @@ export default async function taste(el, params = {}) {
     <section class="lab-body" id="labBody"></section></div>`;
   const body = $('#labBody', el);
   let cleanup = () => {};
+  // start fetching the first deck right away so the Rate tab is ready by the time it paints
+  let warm = (location.hash.split('?')[1] || '').replace('tab=', '') in { duel: 1, board: 1, stats: 1 } ? null : api('/api/lab/deck?n=20&seed=0');
   const session = { rated: 0, duels: 0 };
   const score = () => { const s = $('#labScore', el); if (s) s.innerHTML = session.rated + session.duels ? `<b>${session.rated + session.duels}</b><span>answers this session</span>` : ''; };
 
   function setTab(t) {
+    if (t === 'rate' && !warm) warm = null;
     tab = t; cleanup(); cleanup = () => {};
     $$('.lab-tabs button', el).forEach((b, i) => { b.classList.toggle('on', b.dataset.tab === t); if (b.dataset.tab === t) { const ind = $('.lab-ind', el); ind.style.width = `${b.offsetWidth}px`; ind.style.transform = `translateX(${b.offsetLeft}px)`; } });
     ({ rate: rateTab, duel: duelTab, board: boardTab, stats: statsTab })[t]();
@@ -31,10 +34,12 @@ export default async function taste(el, params = {}) {
 
   // ---------- Rate: swipeable stack ----------
   async function rateTab() {
-    body.innerHTML = '<div class="lab-stack"><div class="lab-card sk"></div></div>';
+    // same two-column layout as the loaded state, so nothing jumps when the first card arrives
+    body.innerHTML = `<div class="lab-rate loading"><div class="lab-stack"><div class="lab-card sk"></div></div>
+      <div class="lab-ctl"><div class="lab-stars">${'<button disabled><span></span><em>&nbsp;</em></button>'.repeat(5)}</div><div class="lab-acts">${'<button disabled></button>'.repeat(3)}</div></div></div>`;
     let deck = [], seed = Math.floor(Math.random() * 1000), busy = false;
-    const more = async () => { const d = await api(`/api/lab/deck?n=20&seed=${seed++}`).catch(() => []); const have = new Set(deck.map((c) => c.imdbId)); deck.push(...d.filter((c) => !have.has(c.imdbId))); };
-    await more();
+    const more = async (first) => { const d = await (first && warm ? warm : api(`/api/lab/deck?n=20&seed=${seed++}`)).catch(() => []); const have = new Set(deck.map((c) => c.imdbId)); deck.push(...d.filter((c) => !have.has(c.imdbId))); };
+    await more(true); warm = null;
     if (tab !== 'rate') return;
     const cardHTML = (c, depth) => `<article class="lab-card" data-id="${esc(c.imdbId)}" style="--d:${depth}">
       <div class="lab-art" style="background-image:url('${esc(c.poster)}')"></div>
@@ -113,9 +118,9 @@ export default async function taste(el, params = {}) {
       if (cur.error) { body.innerHTML = `<div class="lab-empty"><h3>Not enough yet</h3><p>${esc(cur.error)}. Rate a few titles in the Rate tab, then come back.</p></div>`; return; }
       const side = (c, k) => `<button class="lab-dc" data-pick="${k}"><i style="background-image:url('${esc(c.poster)}')"></i><div><b>${esc(c.title)}</b><small>${esc([c.year, c.type === 'series' ? 'Series' : 'Film'].filter(Boolean).join(' · '))}${c.stars ? ` · ${'★'.repeat(c.stars)}` : ''}</small></div><kbd>${k === 'a' ? '←' : '→'}</kbd></button>`;
       body.innerHTML = `<div class="lab-q">Which did you enjoy more?</div><div class="lab-duel">${side(cur.a, 'a')}<div class="lab-vs">or</div>${side(cur.b, 'b')}</div>
-        <div class="lab-dacts"><button data-tie>Can't decide <kbd>space</kbd></button><button data-skipd>Haven't seen one <kbd>S</kbd></button><span>${cur.duels} picks so far</span></div>`;
+        <div class="lab-dacts"><button data-tie>Can't decide <kbd>space</kbd></button>${['a', 'b'].map((k) => `<button data-unseen="${k}">Haven't seen ${esc(cur[k].title.length > 18 ? cur[k].title.slice(0, 17) + '…' : cur[k].title)}</button>`).join('')}<span>${cur.duels} picks so far</span></div>`;
       $$('[data-pick]', body).forEach((b) => (b.onclick = () => pick(b.dataset.pick)));
-      $('[data-tie]', body).onclick = () => pick('tie'); $('[data-skipd]', body).onclick = () => next();
+      $('[data-tie]', body).onclick = () => pick('tie'); $$('[data-unseen]', body).forEach((b) => (b.onclick = async () => { await post('/api/lab/skip', { imdbId: cur[b.dataset.unseen].imdbId }).catch(() => {}); next(); }));
     }
     async function pick(k) {
       if (busy || !cur?.a) return; busy = true;
@@ -125,7 +130,7 @@ export default async function taste(el, params = {}) {
       session.duels++; score();
       await new Promise((r) => setTimeout(r, 280)); busy = false; next();
     }
-    const key = (e) => { if (tab !== 'duel' || e.metaKey || e.ctrlKey) return; if (e.key === 'ArrowLeft') pick('a'); else if (e.key === 'ArrowRight') pick('b'); else if (e.key === ' ') pick('tie'); else if (e.key === 's') next(); else return; e.preventDefault(); };
+    const key = (e) => { if (tab !== 'duel' || e.metaKey || e.ctrlKey) return; if (e.key === 'ArrowLeft') pick('a'); else if (e.key === 'ArrowRight') pick('b'); else if (e.key === ' ') pick('tie'); else return; e.preventDefault(); };
     document.addEventListener('keydown', key); cleanup = () => document.removeEventListener('keydown', key);
     next();
   }

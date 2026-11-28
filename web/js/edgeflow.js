@@ -1,7 +1,7 @@
 // Horizontal rows (Continue watching): instead of being sliced by the row's edge, cards near either end turn away,
 // shrink and fade into the distance, like a carousel. Transform + opacity only (composited), recomputed once per frame
 // while the row scrolls, from layout positions (offsetLeft), so it never forces extra layout.
-const SEL = '.cont-row, .fy-scroll';
+const SEL = '.cont-row, .fy-scroll, .pf-row';
 const reduce = matchMedia('(prefers-reduced-motion: reduce)');
 const pending = new Set(); let raf = 0;
 // Cards sit on the outside of a cylinder centred on the row: the middle is nearly flat, and towards the ends each card turns
@@ -36,16 +36,20 @@ document.addEventListener('pointerout', (e) => {
 function apply(row) {
   const w = row.clientWidth, sl = row.scrollLeft;
   const off = reduce.matches || document.documentElement.dataset.motion === 'off';
-  const cs = getComputedStyle(row), padL = parseFloat(cs.paddingLeft) || 0;
+  // padding is set by bleed(); read it once, not every frame (getComputedStyle mid-scroll forces a style pass)
+  const padL = row._padL ?? (row._padL = parseFloat(getComputedStyle(row).paddingLeft) || 0);
   for (const c of row.children) {
-    if (c.style.transform) c.style.transform = '';
-    c.style.visibility = '';
-    if (off) { c.style.opacity = ''; continue; }
-    const x = c.offsetLeft - sl, cw = c.offsetWidth;
-    const outR = x + cw - (w - 8), outL = Math.max(0, padL * 0.35) - x; // how far it sticks past each edge
-    const out = Math.max(outR, outL);
-    const o = out <= 0 ? 1 : Math.max(0, 1 - out / (cw * 0.9));
-    c.style.opacity = o < 0.995 ? o.toFixed(3) : '';
+    let v = '';
+    if (!off) {
+      const x = c.offsetLeft - sl, cw = c.offsetWidth;
+      if (x + cw > -cw && x < w + cw) { // only cards near the window: the rest keep what they have
+        const outR = x + cw - (w - 8), outL = Math.max(0, padL * 0.35) - x; // how far it sticks past each edge
+        const out = Math.max(outR, outL);
+        const o = out <= 0 ? 1 : Math.max(0, 1 - out / (cw * 0.9));
+        v = o < 0.995 ? o.toFixed(2) : '';
+      } else continue;
+    }
+    if (c._o !== v) { c._o = v; c.style.opacity = v; } // write only what changed
   }
 }
 // stretch a row to the window's edges while its first card stays lined up with the content column (measured, so it is
@@ -56,6 +60,7 @@ function bleed(row) {
   const L = Math.max(24, Math.round(r.left)), Rt = Math.max(24, Math.round(vw - r.right));
   const key = `${L}|${Rt}`; if (row.dataset.bleed === key) return; row.dataset.bleed = key;
   Object.assign(row.style, { marginLeft: `${-L}px`, marginRight: `${-Rt}px`, paddingLeft: `${L}px`, paddingRight: `${Rt}px`, scrollPaddingLeft: `${L}px` });
+  row._padL = L;
 }
 const flush = () => { raf = 0; for (const r of pending) if (r.isConnected) { bleed(r); apply(r); } pending.clear(); };
 export function edgeflow(row) { if (!row) return; pending.add(row); if (!raf) raf = requestAnimationFrame(flush); }

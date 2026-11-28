@@ -1,5 +1,5 @@
 # Hosts only the relay: friends, rooms, chat and sync messages. No video, no accounts, no ffmpeg.
-# Everyone runs IronHide on their own Mac with their own TorBox key.
+# Everyone runs Orbie on their own Mac with their own TorBox key.
 services:
   - type: web
     name: ironhide-relay

@@ -1,6 +1,6 @@
 {
   "name": "ironhide",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "type": "module",
   "bin": {
     "ironhide": "./bin/ironhide.js"
@@ -16,6 +16,7 @@
   },
   "scripts": {
     "start": "node src/daemon.js",
-    "relay": "node relay/server.js"
+    "relay": "node relay/server.js",
+    "site": "node site/server.js"
   }
 }

@@ -1,4 +1,4 @@
-// Window header for the IronHide Mac app (see appbar.css).
+// Window header for the Orbie Mac app (see appbar.css).
 (() => {
   const inv = window.__TAURI_INTERNALS__?.invoke;
   if (!inv || window.__ihbar) return;
@@ -25,27 +25,31 @@
   const bar = document.createElement('div');
   bar.id = 'ihbar';
   bar.innerHTML = `<div class="l"><button data-a="back" title="Back">${I.back}</button><button data-a="fwd" title="Forward">${I.fwd}</button><button data-a="reload" title="Reload (⌘R)">${I.reload}</button></div>
-    <div class="c">IronHide</div>
-    <div class="r"><button data-a="search" title="Search (⌘K)">${I.search}</button><button class="pill" data-a="resume" title="Continue watching">${I.play}<span>Resume</span></button><button data-a="friends" title="Friends">${I.friends}<b class="dot" data-dot="friends"></b></button><button data-a="bell" title="What's new">${I.bell}<b class="dot warn sm" data-dot="bell"></b></button><button data-a="menu" title="Settings">${I.gear}</button><i class="sep"></i><button class="me" data-a="profile" title="Your profile"><i></i><span></span></button></div>`;
+    <div class="c">Orbie</div>
+    <div class="r"><button data-a="search" title="Search (⌘K)">${I.search}</button><button class="pill" data-a="resume" title="Continue watching">${I.play}<span>Resume</span></button><button data-a="sanctuary" title="A Sanctuary for Cinema" class="btn-sanctuary"><img src="/img/orbie-orb.png" alt="" class="top-orb-img"></button><button data-a="bell" title="What's new">${I.bell}<b class="dot warn sm" data-dot="bell"></b></button><button data-a="menu" title="Settings">${I.gear}</button><i class="sep"></i><button class="me" data-a="profile" title="Your profile"><i></i><span></span></button></div>`;
   const q = (s) => bar.querySelector(s);
 
-  const NAMES = [[/^#\/?$/, 'IronHide'], [/^#\/continue/, 'Continue watching'], [/^#\/shelf/, 'Shelf'], [/^#\/(friends|together)/, 'Friends'], [/^#\/profile/, 'Profile'], [/^#\/settings/, 'Settings'], [/^#\/search\//, 'Search'], [/^#\/feed\/([^?]*)/, null]];
+  const NAMES = [[/^#\/?$/, 'Orbie'], [/^#\/manifesto/, 'A Sanctuary for Cinema'], [/^#\/sanctuary/, 'A Sanctuary for Cinema'], [/^#\/continue/, 'Continue watching'], [/^#\/shelf/, 'Shelf'], [/^#\/(friends|together)/, 'Friends'], [/^#\/profile/, 'Profile'], [/^#\/settings/, 'Settings'], [/^#\/search\//, 'Search'], [/^#\/feed\/([^?]*)/, null]];
   function title() {
     const h = location.hash || '#/';
     for (const [re, name] of NAMES) { const m = h.match(re); if (m) return name || decodeURIComponent(m[1]).replace(/[-_]/g, ' ').replace(/^./, (c) => c.toUpperCase()); }
-    return 'IronHide';
+    return 'Orbie';
   }
   function paint() {
     q('.c').textContent = title();
     const nav = window.navigation;
     q('[data-a=back]').disabled = nav ? !nav.canGoBack : history.length <= 1;
     q('[data-a=fwd]').disabled = nav ? !nav.canGoForward : false;
+    const isSanctuary = (location.hash || '').startsWith('#/manifesto') || (location.hash || '').startsWith('#/sanctuary');
+    q('[data-a=sanctuary]')?.classList.toggle('on', isSanctuary);
   }
   bar.addEventListener('click', (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return;
     closeMenu(); // other popovers close themselves: the page's click-outside handler sees this click too
     ({ back: () => history.back(), fwd: () => history.forward(), reload: () => location.reload(),
-       search: () => document.getElementById('nSearch')?.click(), resume: () => { location.hash = '#/continue'; }, friends: () => { location.hash = '#/friends'; },
+       ask: () => import('./orbie-agent.js').then((m) => m.toggleAsk(b)).catch(() => {}),
+       search: () => document.getElementById('nSearch')?.click(), resume: () => { location.hash = '#/continue'; },
+       sanctuary: () => { const b = q('[data-a=sanctuary]'); import('./orb-seq.js').then((m) => m.playSequence(b)).catch(() => { location.hash = '#/manifesto'; }); }, friends: () => { location.hash = '#/friends'; },
        bell: () => { const pop = document.querySelector('#updBell .ub-pop'); if (pop && !pop.hidden) return; /* open: the click-outside handler closes it */ setTimeout(() => document.querySelector('#updBell .ub-btn')?.click(), 0); }, menu: () => { const wasOn = menu.classList.contains('on'); closeMenu(); if (!wasOn) setTimeout(() => menu.classList.add('on'), 0); },
        profile: () => { location.hash = '#/profile'; } })[b.dataset.a]?.();
   });
@@ -67,7 +71,7 @@
       const s = await (await fetch('/api/social')).json();
       const online = (s.friends || []).filter((f) => f.online).length, pending = (s.incoming || []).length + (s.invites || []).length;
       const d = q('[data-dot=friends]'); d.textContent = pending || online || ''; d.classList.toggle('on', !!(pending || online)); d.classList.toggle('warn', !!pending);
-      q('[data-a=friends]').title = `Friends: ${online} online${pending ? `, ${pending} waiting` : ''}`;
+      if (q('[data-a=friends]')) q('[data-a=friends]').title = `Friends: ${online} online${pending ? `, ${pending} waiting` : ''}`;
     } catch {}
     q('[data-dot=bell]').classList.toggle('on', !!document.querySelector('#updBell .ub-btn.new'));
   }
@@ -75,11 +79,19 @@
   const mount = () => { if (!bar.isConnected) { document.body.append(bar); document.body.append(menu); } paint(); };
   addEventListener('hashchange', () => setTimeout(paint, 0));
   addEventListener('popstate', paint);
-  fetch('/api/settings').then((r) => r.json()).then((s) => {
-    const p = s?.profile || {}, n = p.name || 'You';
-    q('.me span').textContent = n; q('.me i').textContent = (n[0] || '?').toUpperCase();
-    if (p.avatar?.c1) q('.me i').style.setProperty('--av1', p.avatar.c1); if (p.avatar?.c2) q('.me i').style.setProperty('--av2', p.avatar.c2);
-  }).catch(() => {});
+  // the chip at the top right: your picture and name. The page calls this again whenever they change (renderNav)
+  let shown = '';
+  window.__ihMe = async (p = {}) => {
+    const sig = JSON.stringify([p.name, p.avatar]);
+    if (sig === shown) return;
+    shown = sig;
+    const { avatar } = await import('./ui.js');
+    // plain round picture here: decorations and frames fall apart at this size
+    q('.me > i').innerHTML = avatar({ ...p, avatar: { ...p.avatar, deco: '', frame: 'none', shape: 'circle' } }, 22);
+    q('.me > span').textContent = p.name || 'You';
+  };
+  fetch('/api/settings').then((r) => r.json()).then((s) => { if (!shown) window.__ihMe(s?.profile); }).catch(() => {});
   if (document.body) mount(); else addEventListener('DOMContentLoaded', mount);
+  import('./updater.js').then((m) => (document.body ? m.mount(bar) : addEventListener('DOMContentLoaded', () => m.mount(bar)))).catch(() => {});
   setInterval(paint, 1500);
 })();

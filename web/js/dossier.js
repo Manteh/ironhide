@@ -2,10 +2,18 @@
 // came for in order of use: episodes (series), versions (sticky on the right, always one click from playing), about, cast,
 // reviews and more like this. Versions start loading the moment the sheet opens, in parallel with the title details.
 import { api, post } from './api.js';
-import { store, quickPlay, toggleSave } from './main.js';
+import { store, quickPlay, toggleSave, refreshHistory } from './main.js';
 import { $, $$, esc, icon, pad, posterOf, toast, wl } from './ui.js';
 import { social, sapi } from './social.js';
 import { heroIn, heroFill, watchSections, versionsIn, personIn, chain } from './reveal.js';
+
+// Images fade in once loaded and hide if broken. Listeners, not inline onload/onerror: the page's CSP allows no inline script.
+document.addEventListener('load', (e) => { if (e.target.matches?.('img[data-ld]')) e.target.classList.add('ld'); }, true);
+document.addEventListener('error', (e) => {
+  if (e.target.matches?.('img[data-hide-broken]')) e.target.style.display = 'none';
+  const th = e.target.matches?.('.dx-th img') && e.target.closest('.dx-th');
+  if (th) { e.target.style.display = 'none'; th.classList.add('dx-noimg'); }
+}, true);
 
 const TIERS = [['2160p', '4K'], ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['', 'Other']];
 const tierLabel = (r) => (TIERS.find(([k]) => k === (r || ''))?.[1] || 'Other');
@@ -48,7 +56,7 @@ function personHTML(p, back) {
   return `<header class="pv-top"><button class="btn ghost vx-back" data-pback>${icon('back')} ${esc(back)}</button></header>
   <div class="pv-scroll"><div class="pv-body">
     <div class="pv-hero">
-      <div class="pv-photo">${p.photo ? `<img src="${esc(p.photo)}" alt="" decoding="async" onload="this.classList.add('ld')">` : `<span>${esc((p.name || '?')[0])}</span>`}</div>
+      <div class="pv-photo">${p.photo ? `<img src="${esc(p.photo)}" alt="" decoding="async" data-ld>` : `<span>${esc((p.name || '?')[0])}</span>`}</div>
       <div class="pv-id">
         <div class="dx-kick"><span>${esc(dept || 'Person')}</span></div>
         <h2>${esc(p.name)}</h2>
@@ -62,13 +70,13 @@ function personHTML(p, back) {
     </div>
     ${p.bio ? `<section class="dx-sec"><h3 class="dx-h">Biography</h3><p class="pv-bio">${esc(p.bio)}</p><button class="pv-more">Read full biography</button></section>` : ''}
     ${kf.length ? `<section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">Known for</h3></div><div class="dx-row">${kf.map((c) => `
-      <a class="dx-sim" href="#" data-tid="${c.tmdbId}" data-kind="${c.kind}"><i><img src="${esc(c.poster)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ld')"></i>
+      <a class="dx-sim" href="#" data-tid="${c.tmdbId}" data-kind="${c.kind}"><i><img src="${esc(c.poster)}" alt="" loading="lazy" decoding="async" data-ld></i>
         <b>${esc(c.title)}</b><small>${esc([c.year, c.role].filter(Boolean).join(' · '))}</small></a>`).join('')}</div></section>` : ''}
-    ${p.photos?.length > 1 ? `<section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">Photos</h3><span class="dx-count">${p.photos.length}</span></div><div class="dx-row pv-photos">${p.photos.map((u) => `<i><img src="${esc(u)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ld')"></i>`).join('')}</div></section>` : ''}
+    ${p.photos?.length > 1 ? `<section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">Photos</h3><span class="dx-count">${p.photos.length}</span></div><div class="dx-row pv-photos">${p.photos.map((u) => `<i><img src="${esc(u)}" alt="" loading="lazy" decoding="async" data-ld></i>`).join('')}</div></section>` : ''}
     <section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">Filmography</h3>
-      <div class="pv-tabs">${p.crew?.length ? `<div class="seg"><button data-ptab="acting" class="on">Acting <em>${p.acting.length}</em></button><button data-ptab="crew">Behind the camera <em>${p.crew.length}</em></button></div>` : ''}
+      <div class="pv-tabs">${p.crew?.length ? `<div class="seg"><button data-ptab="acting" class="${(!p.acting?.length && p.crew?.length) ? '' : 'on'}">Acting <em>${p.acting.length}</em></button><button data-ptab="crew" class="${(!p.acting?.length && p.crew?.length) ? 'on' : ''}">Behind the camera <em>${p.crew.length}</em></button></div>` : ''}
         <div class="seg"><button data-pkind="all" class="on">All</button><button data-pkind="movie">Films</button><button data-pkind="tv">Series</button></div></div></div>
-      <div class="pv-list" id="pvList">${filmography(p, { tab: 'acting', kind: 'all' })}</div></section>
+      <div class="pv-list" id="pvList">${filmography(p, { tab: (!p.acting?.length && p.crew?.length) ? 'crew' : 'acting', kind: 'all' })}</div></section>
   </div></div>`;
 }
 function filmography(p, st) {
@@ -78,7 +86,7 @@ function filmography(p, st) {
   return list.map((c) => {
     const y = c.year || 'Upcoming', head = y !== last ? `<div class="pv-year">${esc(y)}</div>` : ''; last = y;
     return `${head}<a class="pv-row" href="#" data-tid="${c.tmdbId}" data-kind="${c.kind}">
-      <i>${c.poster ? `<img src="${esc(c.poster)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ld')">` : ''}</i>
+      <i>${c.poster ? `<img src="${esc(c.poster)}" alt="" loading="lazy" decoding="async" data-ld>` : ''}</i>
       <span class="pv-t"><b>${esc(c.title)}</b><small>${esc([c.role && (st.tab === 'crew' ? c.role : `as ${c.role}`), c.kind === 'tv' && c.episodes ? `${c.episodes} episode${c.episodes > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · '))}</small></span>
       <span class="pv-k">${c.kind === 'tv' ? 'Series' : 'Film'}</span>
       ${c.rating ? `<span class="pv-r">${icon('star')} ${esc(c.rating)}</span>` : '<span class="pv-r"></span>'}</a>`;
@@ -90,6 +98,14 @@ function root() {
   scrim = document.createElement('div');
   scrim.className = 'dscrim'; scrim.addEventListener('pointerdown', dismiss);
   document.body.appendChild(scrim);
+  // the versions and cast views each get a history step of their own (same URL), so any "back" (a trackpad swipe,
+  // a mouse side button, Cmd+[) steps out of them into the details first, and only the next one closes the sheet
+  window.addEventListener('popstate', () => {
+    if (!el) return;
+    const s = window.history.state || {};
+    if (el.classList.contains('pmode') && !s.person) el._pback?.(true);
+    if (el.classList.contains('vmode') && !s.vers) el._back?.(true);
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !el?.classList.contains('open')) return;
     if (document.querySelector('.wp, .pal, .nowv, .launch')) return; // those handle Esc themselves
@@ -112,6 +128,14 @@ const SCORE_ICON = { imdb: 'IMDb', tmdb: 'TMDB', rt: '🍅', mc: 'MC', rev: '✎
 // What the sheet shows the instant a card is clicked: the same header layout as the finished sheet, filled from what the card
 // already knows (poster, title, year, rating), with a working Play button. When the details arrive the rest fills in
 // around it without restarting the animation.
+// the poster shown big in the header: TMDB's 780px copy or metahub's large one. The small one the card already loaded shows
+// first (it's cached, so the sheet opens instantly) and the sharp one swaps in when it arrives.
+const hiPoster = (src, id) => (/image\.tmdb\.org/.test(src || '') ? src.replace(/\/w\d+\//, '/w780/') : posterOf(id, 'large'));
+function sharpenPoster(box) {
+  const img = $('.dx-poster img[data-hi]', box); if (!img || img.src === img.dataset.hi) return;
+  const hi = new Image(); hi.decoding = 'async'; hi.src = img.dataset.hi;
+  hi.onload = () => { if (img.isConnected) img.src = hi.src; };
+}
 const shell = (type, id, g = {}) => `<button class="dclose" aria-label="Close">${icon('x')}</button>
   <div class="dx-scroll" id="dScroll"><header class="dx-hero">
     <div class="dx-bgw"></div>
@@ -177,7 +201,7 @@ export async function openDossier({ type, id }) {
   if (meta.background) { const im = new Image(); im.decoding = 'async'; im.src = meta.background; }
   const history = store.history;
   const st = { season: null, episode: null, streams: null, loading: false, tier: null, sort: 'best', more: false, req: 0, info: null };
-  const watched = (s, e) => history.find((h) => h.imdbId === id && h.season === s && h.episode === e);
+  const watched = (s, e) => store.history.find((h) => h.imdbId === id && h.season === s && h.episode === e); // live: marking episodes updates it
   const seasons = Object.keys(meta.seasons || {}).map(Number).filter((n) => n > 0).sort((a, b) => a - b);
   if (type === 'series') {
     const last = history.find((h) => h.imdbId === id && h.season);
@@ -194,19 +218,37 @@ export async function openDossier({ type, id }) {
   // ----- labels -----
   const epTag = () => (type === 'series' && st.episode ? `S${pad(st.season)}E${pad(st.episode)}` : '');
   const epObj = () => (meta.seasons?.[st.season] || []).find((e) => e.episode === st.episode);
-  const playLabel = () => (type === 'series' ? `Play ${epTag()}` : resumeH ? 'Resume' : 'Play');
+  // where you stopped in what Play would start (the film, or the selected episode), if it's worth resuming
+  const resumeNow = () => {
+    const h = type === 'movie' ? resumeH : watched(st.season, st.episode);
+    return h && (h.percent || 0) > 3 && (h.percent || 0) < 90 && (h.position || 0) > 30 ? h : null;
+  };
+  const leftOf = (h) => { const m = h?.duration ? Math.max(0, Math.round((h.duration - (h.position || 0)) / 60)) : 0; return m ? (m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m left` : `${m}m left`) : ''; };
+  const playLabel = () => {
+    const r = resumeNow(), left = leftOf(r);
+    const tail = r && left ? `<span class="dx-left">${left}</span>` : ''; // quieter than the action itself
+    if (type === 'series') return `${r ? 'Resume' : 'Play'} ${epTag()}${tail}`;
+    return r ? `Resume${tail}` : 'Play';
+  };
   const vSub = () => (type === 'series' ? `${epTag()}${epObj()?.name ? ' · ' + epObj().name : ''}` : [meta.year, meta.runtime].filter(Boolean).join(' · '));
-  const setPlay = () => { const b = $('#dPlay', box); if (b) b.innerHTML = `${icon('play')} ${playLabel()}`; const t = $('#dVSub', box); if (t) t.textContent = vSub(); };
+  const setPlay = () => {
+    const b = $('#dPlay', box); if (b) b.innerHTML = `${icon('play')} ${playLabel()}`;
+    const t = $('#dVSub', box); if (t) t.textContent = vSub();
+    const so = $('#dStart', box); if (so) so.hidden = !resumeNow();
+  };
   // Play opens the versions view: it slides over the details inside the same sheet
   function openVersions() {
     setPlay(); box.classList.add('vmode'); $('#dVers', box)?.removeAttribute('aria-hidden');
+    if (!window.history.state?.vers) window.history.pushState({ ...window.history.state, vers: 1 }, '');
     if (st.dirty || !$('#dList .vx-l', box)) { st.dirty = false; renderStreams(); }
     if ($('#dList .rec:not(.sk)', box)) versionsIn(box); else st.animIn = true; // still loading: animate when it arrives
     if (!st.streams && !st.loading) loadStreams();
     const v = $('#dVersScroll', box); if (v) v.scrollTop = 0;
     setTimeout(() => $('#dVers [data-p]', box)?.focus({ preventScroll: true }), 380);
   }
-  function closeVersions() { box.classList.remove('vmode'); $('#dVers', box)?.setAttribute('aria-hidden', 'true'); $('#dPlay', box)?.focus({ preventScroll: true }); }
+  function closeVersions(fromHistory) {
+    if (fromHistory !== true && window.history.state?.vers) { window.history.back(); return; } // popstate comes back here
+    box.classList.remove('vmode'); $('#dVers', box)?.setAttribute('aria-hidden', 'true'); $('#dPlay', box)?.focus({ preventScroll: true }); }
   box._back = closeVersions;
   const saveLabel = () => `${icon(wl.has(id) ? 'check' : 'bookmark')} ${wl.has(id) ? 'On your shelf' : 'Save'}`;
   const playEp = (s, e) => quickPlay({ ...item, ...(type === 'series' ? { season: s, episode: e } : {}) });
@@ -215,14 +257,43 @@ export async function openDossier({ type, id }) {
   const epsHTML = () => (meta.seasons?.[st.season] || []).map((e) => {
     const w = watched(st.season, e.episode), pct = Math.round(w?.percent || 0), done = pct >= 90, soon = e.released && e.released > today;
     return `<div class="dx-ep ${e.episode === st.episode ? 'on' : ''} ${soon ? 'soon' : ''}" data-e="${e.episode}" role="button" tabindex="0">
-      <div class="dx-th">${e.thumbnail ? `<img src="${esc(e.thumbnail)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ld')">` : ''}
+      <div class="dx-th${e.thumbnail ? '' : ' dx-noimg'}">${e.thumbnail ? `<img src="${esc(e.thumbnail)}" alt="" loading="lazy" decoding="async" data-ld>` : ''}
+        <span class="dx-th-empty" aria-hidden="true">${icon('film')}<span>No image yet</span></span>
         ${soon ? '' : `<button class="dx-thp" data-pe="${e.episode}" aria-label="Play episode ${e.episode}">${icon('play')}</button>`}
-        ${w && !done ? `<i class="dx-prog"><u style="width:${Math.max(4, pct)}%"></u></i>` : ''}${done ? `<span class="dx-done">${icon('check')}</span>` : ''}</div>
+        ${w && !done ? `<i class="dx-prog"><u style="width:${Math.max(4, pct)}%"></u></i>` : ''}${done ? `<span class="dx-done" title="Watched">${icon('check')}</span>` : ''}</div>
       <div class="dx-et"><b><span>${e.episode}.</span> ${esc(e.name || `Episode ${e.episode}`)}</b>
-        <small>${soon ? `Out ${fmtDate(e.released)}` : fmtDate(e.released)}${w && !done ? ` · ${pct}% watched` : ''}</small>
+        <small>${soon ? `Out ${fmtDate(e.released)}` : fmtDate(e.released)}${w && !done ? ` · ${pct}% watched` : ''}
+          ${soon ? '' : `<button class="dx-mk ${done ? 'on' : ''}" data-mk="${e.episode}" aria-pressed="${done}" aria-label="${done ? `Mark episode ${e.episode} not watched` : `Mark episode ${e.episode} watched`}">${icon('check')}<span>${done ? 'Watched' : 'Mark watched'}</span></button>`}</small>
         ${e.overview ? `<p>${esc(e.overview)}</p>` : ''}</div></div>`;
   }).join('');
+  // tick episodes off, or back on; a whole season at once from the header
+  async function markEps(eps, on) {
+    try {
+      await post('/api/history/episodes', { imdbId: id, title: meta.title, eps, watched: on });
+      await refreshHistory();
+      // ticked off the episode Play was on: move Play to the next one you haven't watched
+      if (on && eps.some((e) => e.season === st.season && e.episode === st.episode)) {
+        const next = releasedEps().find((e) => e.episode > st.episode && (watched(st.season, e.episode)?.percent || 0) < 90);
+        if (next) { st.episode = next.episode; loadStreams(); }
+      }
+      $('#dEps', box).innerHTML = epsHTML(); bindEps(); paintSeasonMark(); setPlay();
+      const what = eps.length > 1 ? `Season ${eps[0].season}` : `Episode ${eps[0].episode}`;
+      toast(`${what} marked ${on ? 'watched' : 'not watched'}`, 'ok', { action: { label: 'Undo', run: () => markEps(eps, !on) } });
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  const releasedEps = () => (meta.seasons?.[st.season] || []).filter((e) => !e.released || e.released <= today);
+  const seasonDone = () => releasedEps().length > 0 && releasedEps().every((e) => (watched(st.season, e.episode)?.percent || 0) >= 90);
+  function paintSeasonMark() {
+    const b = $('#dSeasonMk', box); if (!b) return;
+    const done = seasonDone(); b.classList.toggle('on', done); b.setAttribute('aria-pressed', String(done));
+    b.innerHTML = `${icon('check')}<span>${done ? 'Season watched' : 'Mark season watched'}</span>`;
+    // the next episode to watch, when it's further down the list than you can see
+    const next = $('.dx-ep.on', box), jump = $('#dJump', box);
+    const idx = next ? [...$$('.dx-ep', box)].indexOf(next) : -1;
+    if (jump) { jump.hidden = idx < 3; jump.textContent = next ? `Up next: E${next.dataset.e} ↓` : ''; }
+  }
   function bindEps() {
+    $$('[data-mk]', box).forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); markEps([{ season: st.season, episode: +b.dataset.mk }], !b.classList.contains('on')); }));
     $$('.dx-ep[data-e]', box).forEach((b) => {
       const pick = () => { if (b.classList.contains('soon')) return; st.episode = +b.dataset.e; $$('.dx-ep', box).forEach((x) => x.classList.toggle('on', x === b)); setPlay(); loadStreams(); };
       b.onclick = (ev) => { if (ev.target.closest('[data-pe]')) return; pick(); };
@@ -233,16 +304,14 @@ export async function openDossier({ type, id }) {
       if (n !== st.episode) { st.episode = n; $$('.dx-ep', box).forEach((x) => x.classList.toggle('on', +x.dataset.e === n)); setPlay(); loadStreams(); }
       quickPlay({ ...item, season: st.season, episode: n });
     }));
-    const on = $('.dx-ep.on', box), list = $('#dEps', box);
-    if (on && list) list.scrollTop = Math.max(0, on.offsetTop - list.offsetTop - 12);
   }
 
   // ----- scores -----
   function scoresHTML() {
     const list = [...(st.info?.scores || [])];
     if (meta.rating && !list.some((s) => s.src === 'imdb')) list.unshift({ src: 'imdb', label: 'IMDb', value: meta.rating, max: '10' });
-    return list.map((s) => `<div class="dx-score s-${s.src}" title="${esc(s.label)}${s.votes ? ' · ' + esc(s.votes) + (/\d$/.test(s.votes) ? ' votes' : '') : ''}${s.note ? ' · ' + esc(s.note) : ''}">
-      <span class="dx-sl">${SCORE_ICON[s.src] || esc(s.label)}</span><b>${esc(s.value)}</b>${s.max ? `<small>/${esc(s.max)}</small>` : ''}${s.votes ? `<em>${esc(s.votes)}${/\d$/.test(s.votes) ? ' votes' : ''}</em>` : `<em>${esc(s.label)}</em>`}</div>`).join('');
+    return list.map((s) => `<${s.src === 'imdb' ? `a href="https://www.imdb.com/title/${esc(id)}/" target="_blank" rel="noopener" aria-label="IMDb ${esc(s.value)}, open on IMDb"` : 'div'} class="dx-score s-${s.src}" title="${esc(s.label)}${s.votes ? ' · ' + esc(s.votes) + (/\d$/.test(s.votes) ? ' votes' : '') : ''}${s.note ? ' · ' + esc(s.note) : ''}">
+      <span class="dx-sl">${SCORE_ICON[s.src] || esc(s.label)}</span><b>${esc(s.value)}</b>${s.max ? `<small>/${esc(s.max)}</small>` : ''}${s.votes ? `<em>${esc(s.votes)}${/\d$/.test(s.votes) ? ' votes' : ''}</em>` : `<em>${esc(s.label)}</em>`}</${s.src === 'imdb' ? 'a' : 'div'}>`).join('');
   }
 
   // ----- the sheet -----
@@ -257,9 +326,9 @@ export async function openDossier({ type, id }) {
     box.innerHTML = `<button class="dclose" aria-label="Close">${icon('x')}</button>
     <div class="dx-scroll" id="dScroll">
       <header class="dx-hero">
-        <div class="dx-bgw">${meta.background ? `<img class="dx-bg" src="${esc(meta.background)}" alt="" decoding="async" onload="this.classList.add('ld')">` : ''}</div>
+        <div class="dx-bgw">${meta.background ? `<img class="dx-bg" src="${esc(meta.background)}" alt="" decoding="async" data-ld>` : ''}</div>
         <div class="dx-head">
-          <div class="dx-poster"><img src="${esc(meta.poster || posterOf(id))}" alt="" decoding="async"></div>
+          <div class="dx-poster"><img src="${esc(meta.poster || posterOf(id))}" data-hi="${esc(hiPoster(meta.poster, id))}" alt="" decoding="async"></div>
           <div class="dx-title">
             <div class="dx-kick" id="dKick"><span>${esc(kick)}</span></div>
             <h2>${esc(meta.title)}</h2>
@@ -270,13 +339,14 @@ export async function openDossier({ type, id }) {
               <button class="btn primary dx-play" id="dPlay">${icon('play')} ${playLabel()}</button>
               <button class="btn dx-sec2" id="dVBtn">${icon('sliders')} Versions</button>
               <button class="btn dx-sec2" id="dSave">${saveLabel()}</button>
+              <span class="dx-ratew"><button class="btn dx-sec2 dx-ratebtn" id="dRateBtn" aria-haspopup="dialog" aria-expanded="false">${icon('star')} Rate</button>
+                <div class="rt-pop" id="dRate" role="dialog" aria-label="Your rating"></div></span>
               <span class="dx-round">
+                <button class="dx-ib" id="dStart" data-tip="Start over" aria-label="Start over from the beginning" ${resumeNow() ? '' : 'hidden'}>${icon('back')}</button>
                 ${meta.trailers?.length ? `<button class="dx-ib" id="dTrailer" data-tip="Trailer" aria-label="Trailer">${icon('trailer')}</button>` : `<a class="dx-ib" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${q}+trailer" data-tip="Trailer" aria-label="Trailer">${icon('trailer')}</a>`}
                 ${canTogether ? `<button class="dx-ib" id="dTogether" data-tip="Watch together" aria-label="Watch together">${icon('users')}</button>` : ''}
-                <a class="dx-ib dx-imdb" target="_blank" rel="noopener" href="https://www.imdb.com/title/${esc(id)}/" data-tip="Open on IMDb" aria-label="Open on IMDb">IMDb</a>
               </span>
             </div>
-            <div class="dx-rate" id="dRate"></div>
             <div class="dx-status">
               <div class="dx-best wait" id="dBest"></div>
               ${resumeH ? `<div class="dx-resume"><i><u style="width:${Math.round(resumeH.percent)}%"></u></i><span>${left ? `${left >= 60 ? `${Math.floor(left / 60)}h ${String(left % 60).padStart(2, '0')}m` : `${left}m`} left` : `${Math.round(resumeH.percent)}% watched`}</span></div>` : ''}
@@ -287,7 +357,7 @@ export async function openDossier({ type, id }) {
       <div class="dx-main ${type === 'series' ? 'is-series' : 'is-movie'}">
         <div class="dx-a">
           ${type === 'series' ? `<section class="dx-sec" id="dEpSec">
-            <div class="dx-sh"><h3 class="dx-h">Episodes</h3>
+            <div class="dx-sh"><h3 class="dx-h">Episodes</h3><button class="dx-jump" id="dJump" hidden></button><button class="dx-mk dx-mks" id="dSeasonMk"></button>
               <div class="seg dx-seasons">${seasons.map((n) => `<button data-s="${n}" class="${n === st.season ? 'on' : ''}">${seasons.length > 6 ? n : 'Season ' + n}</button>`).join('')}</div></div>
             <div class="dx-eps" id="dEps">${epsHTML()}</div></section>` : ''}
         </div>
@@ -306,9 +376,12 @@ export async function openDossier({ type, id }) {
     </section>`;
     $('.dclose', box).onclick = dismiss;
     $('#dPlay', box).onclick = playNow;
+    $('#dStart', box).onclick = () => quickPlay({ ...item, backdrop: meta.background, startOver: true, ...(type === 'series' ? { season: st.season, episode: st.episode } : {}) });
+    $('#dSeasonMk', box)?.addEventListener('click', () => markEps(releasedEps().map((e) => ({ season: st.season, episode: e.episode })), !seasonDone()));
+    $('#dJump', box)?.addEventListener('click', () => $('.dx-ep.on', box)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     $('#dVBtn', box).onclick = openVersions;
     $('#dOver', box).onclick = (e) => e.currentTarget.classList.contains('long') && e.currentTarget.classList.toggle('open');
-    $('#dBack', box).onclick = closeVersions;
+    $('#dBack', box).onclick = () => closeVersions();
     $('#dTrailer', box)?.addEventListener('click', async () => {
       const { openTrailer } = await import('./trailer.js');
       openTrailer({ ids: meta.trailers, title: meta.title, year: meta.year, onPlay: () => playNow() });
@@ -326,12 +399,45 @@ export async function openDossier({ type, id }) {
       const eps = meta.seasons[st.season] || [];
       st.episode = (eps.find((e) => !e.released || e.released <= today) || eps[0])?.episode || 1;
       $$('[data-s]', box).forEach((x) => x.classList.toggle('on', x === b));
-      $('#dEps', box).innerHTML = epsHTML(); bindEps(); setPlay(); loadStreams();
+      $('#dEps', box).innerHTML = epsHTML(); bindEps(); paintSeasonMark(); setPlay(); loadStreams();
       chain($$('#dEps .dx-ep', box), { step: 32, max: 8, y: 12, dur: 460 });
     }));
-    bindEps(); renderStreams(); renderInfo(); renderRate();
+    bindEps(); paintSeasonMark(); renderStreams(); renderInfo(); renderRate(); sharpenPoster(box);
     if (shellShown) heroFill(box); else heroIn(box, 0);
     st.rescan = watchSections($('#dScroll', box), box);
+  }
+
+  // ----- what people say under the trailer (YouTube comments, needs a YouTube key in Connectors) -----
+  st.yt = st.yt || null;
+  if (meta.trailers?.length && !st.ytAsked) {
+    st.ytAsked = true;
+    api(`/api/ytcomments/${meta.trailers.map(encodeURIComponent).join(',')}`).then((d) => {
+      if (my !== token) return; st.yt = d;
+      const el = $('#dYt', box); if (el) { el.outerHTML = ytHTML(); bindYt(); st.rescan?.(); }
+    }).catch(() => {});
+  }
+  const ytCount = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K' : String(n));
+  function ytHTML() {
+    const d = st.yt;
+    if (!meta.trailers?.length || !d) return '<div id="dYt"></div>';
+    if (d.needsKey) return `<div id="dYt"><a class="dx-ythint" href="#/settings/connectors">${icon('trailer')}<span>See what people say under the trailer: add a free YouTube key in <b>Connectors</b></span></a></div>`;
+    if (!d.comments?.length) return '<div id="dYt"></div>';
+    const shown = 12; // fills 2, 3 or 4 columns evenly
+    return `<section class="dx-sec" id="dYt"><div class="dx-sh"><h3 class="dx-h">From the trailer</h3><span class="dx-count">${d.comments.length}</span>
+        <a class="dx-ytsrc" href="https://www.youtube.com/watch?v=${esc(d.videoId)}" target="_blank" rel="noopener">YouTube ${icon('ext')}</a></div>
+      <div class="dx-yts">${d.comments.map((c, i) => `
+        <article class="dx-yt${i >= shown ? ' more' : ''}"><header><span class="dx-av">${c.avatar ? `<img src="${esc(c.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-hide-broken>` : ''}${esc((c.author || '?')[0])}</span>
+          <div><b>${esc(c.author)}</b><small>${esc(c.when)}</small></div></header>
+          <p>${esc(c.text)}</p>
+          <footer><span>${icon('thumb')} ${ytCount(c.likes)}</span>${c.replies ? `<span>${icon('chat')} ${ytCount(c.replies)}</span>` : ''}<a href="${esc(c.url)}" target="_blank" rel="noopener" aria-label="Open on YouTube">${icon('ext')}</a></footer></article>`).join('')}</div>
+      ${d.comments.length > shown ? `<button class="dx-ytmore">Show ${d.comments.length - shown} more</button>` : ''}</section>`;
+  }
+  function bindYt() {
+    const sec = $('#dYt', box); if (!sec) return;
+    const measure = (a) => { const p = $('p', a); a.classList.toggle('clip', p.scrollHeight > p.clientHeight + 2); };
+    $$('.dx-yt', sec).forEach((a) => { requestAnimationFrame(() => measure(a)); $('p', a).onclick = () => a.classList.contains('clip') && a.classList.toggle('open'); });
+    const b = $('.dx-ytmore', sec);
+    if (b) b.onclick = () => { sec.classList.add('all'); b.style.display = 'none'; $$('.dx-yt.more', sec).forEach(measure); };
   }
 
   // ----- about, cast, reviews, more like this (filled in when the details arrive) -----
@@ -366,23 +472,51 @@ export async function openDossier({ type, id }) {
       ${ok && inf.keywords?.length ? `<div class="dx-kw">${inf.keywords.map((k) => `<span>${esc(k)}</span>`).join('')}</div>` : ''}`;
 
     const cast = ok && inf.cast?.length ? inf.cast : (meta.cast || []).map((n) => ({ name: n }));
+    const crew = ok && inf.crew?.length ? inf.crew : [];
     const reviews = ok ? inf.reviews || [] : [];
     const sim = ok ? inf.similar || [] : [];
     more.innerHTML = `
-      ${cast.length ? `<section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">Cast</h3><span class="dx-count">${cast.length}</span></div><div class="dx-row">${cast.map((c) => `
+      ${(cast.length || crew.length) ? `<section class="dx-sec"><div class="dx-sh">
+        ${crew.length ? `<div class="dx-ptabs" role="tablist">
+          <button class="dx-pt on" data-ptab="cast" role="tab" aria-selected="true">Cast <span class="dx-count">${cast.length}</span></button>
+          <button class="dx-pt" data-ptab="crew" role="tab" aria-selected="false">Filmmakers <span class="dx-count">${crew.length}</span></button>
+        </div>` : `<h3 class="dx-h">Cast</h3><span class="dx-count">${cast.length}</span>`}
+      </div>
+      <div class="dx-row dx-prow" id="dxCastRow">${cast.map((c) => `
         <a class="dx-person" ${c.id ? `href="#" data-pid="${c.id}" aria-label="About ${esc(c.name)}"` : ''}>
-          <i>${c.photo ? `<img src="${esc(c.photo)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ld')">` : `<span>${esc((c.name || '?')[0])}</span>`}</i>
-          <b>${esc(c.name)}</b>${c.character ? `<small>${esc(c.character)}</small>` : ''}${c.episodes > 1 ? `<em>${c.episodes} episodes</em>` : ''}</a>`).join('')}</div></section>` : ''}
+          <i>${c.photo ? `<img src="${esc(c.photo)}" alt="" loading="lazy" decoding="async" data-ld>` : `<span>${esc((c.name || '?')[0])}</span>`}</i>
+          <b>${esc(c.name)}</b>${c.character ? `<small>${esc(c.character)}</small>` : ''}${c.episodes > 1 ? `<em>${c.episodes} episodes</em>` : ''}</a>`).join('')}</div>
+      ${crew.length ? `<div class="dx-row dx-prow" id="dxCrewRow" style="display:none">${crew.map((c) => `
+        <a class="dx-person" ${c.id ? `href="#" data-pid="${c.id}" aria-label="About ${esc(c.name)}"` : ''}>
+          <i>${c.photo ? `<img src="${esc(c.photo)}" alt="" loading="lazy" decoding="async" data-ld>` : `<span>${esc((c.name || '?')[0])}</span>`}</i>
+          <b>${esc(c.name)}</b><small title="${esc(c.role)}">${esc(c.role)}</small></a>`).join('')}</div>` : ''}</section>` : ''}
       ${reviews.length ? `<section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">Reviews</h3><span class="dx-count">${reviews.length}</span></div><div class="dx-revs">${reviews.map((r) => `
         <article class="dx-rev"><header><span class="dx-av">${r.avatar ? `<img src="${esc(r.avatar)}" alt="" loading="lazy">` : esc((r.author || '?')[0])}</span>
           <div><b>${esc(r.author)}</b><small>${fmtDate(r.date)}</small></div>${r.rating != null ? `<span class="dx-rr ${r.rating >= 7 ? 'hi' : r.rating >= 5 ? 'mid' : 'lo'}">${icon('star')} ${r.rating}</span>` : ''}</header>
           <p>${esc(r.text)}</p><footer><button class="dx-rm">Read more</button><a href="${esc(r.url)}" target="_blank" rel="noopener">Full review ${icon('ext')}</a></footer></article>`).join('')}</div></section>` : ''}
+      ${ytHTML()}
       ${sim.length ? `<section class="dx-sec"><div class="dx-sh"><h3 class="dx-h">More like this</h3></div><div class="dx-row dx-sims">${sim.map((s) => `
-        <a class="dx-sim" href="#/title/${esc(s.type)}/${esc(s.imdbId)}" data-sim="${esc(s.imdbId)}" data-type="${esc(s.type)}"><i><img src="${esc(s.poster)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ld')"></i>
+        <a class="dx-sim" href="#/title/${esc(s.type)}/${esc(s.imdbId)}" data-sim="${esc(s.imdbId)}" data-type="${esc(s.type)}"><i><img src="${esc(s.poster)}" alt="" loading="lazy" decoding="async" data-ld></i>
           <b>${esc(s.title)}</b><small>${[s.year, s.rating && '★ ' + s.rating].filter(Boolean).join(' · ')}</small></a>`).join('')}</div></section>` : ''}
       ${inf.error && inf.error !== 'offline' ? `<p class="dx-hint">${esc(inf.error)}</p>` : ''}`;
     // review: show the whole text only if it was actually clipped
     $$('.dx-rev', more).forEach((r) => { const p = $('p', r), b = $('.dx-rm', r); requestAnimationFrame(() => { if (p.scrollHeight <= p.clientHeight + 2) b.remove(); }); b.onclick = () => { r.classList.toggle('open'); b.textContent = r.classList.contains('open') ? 'Show less' : 'Read more'; }; });
+    bindYt();
+    $$('.dx-pt', more).forEach((btn) => {
+      btn.onclick = () => {
+        const tab = btn.dataset.ptab;
+        $$('.dx-pt', more).forEach((b) => {
+          const on = b === btn;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        const castRow = $('#dxCastRow', more), crewRow = $('#dxCrewRow', more);
+        if (castRow && crewRow) {
+          castRow.style.display = tab === 'cast' ? 'flex' : 'none';
+          crewRow.style.display = tab === 'crew' ? 'flex' : 'none';
+        }
+      };
+    });
     $$('[data-pid]', more).forEach((a) => {
       a.onclick = (e) => { e.preventDefault(); openPerson(+a.dataset.pid); };
       a.addEventListener('pointerenter', () => personData(+a.dataset.pid), { once: true }); // warm it up
@@ -391,7 +525,7 @@ export async function openDossier({ type, id }) {
     const sc = $('#dScores', box); if (sc) sc.innerHTML = scoresHTML();
     const kk = $('#dKick', box); if (kk && ok) kk.innerHTML = [type === 'series' ? 'Series' : 'Film', type === 'series' && inf.seasonsCount ? `${inf.seasonsCount} season${inf.seasonsCount > 1 ? 's' : ''}` : '', inf.network].filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join('') + (inf.certification ? `<em class="dx-cert">${esc(inf.certification)}</em>` : '');
     about.removeAttribute('data-rv'); st.rescan?.();
-    if (ok && !meta.background && inf.backdrop && !$('.dx-bg', box)) $('.dx-bgw', box).innerHTML = `<img class="dx-bg" src="${esc(inf.backdrop)}" alt="" decoding="async" onload="this.classList.add('ld')">`;
+    if (ok && !meta.background && inf.backdrop && !$('.dx-bg', box)) $('.dx-bgw', box).innerHTML = `<img class="dx-bg" src="${esc(inf.backdrop)}" alt="" decoding="async" data-ld>`;
   }
 
   // ----- your rating: stars, "not for me", and (once rated) what stood out -----
@@ -399,24 +533,42 @@ export async function openDossier({ type, id }) {
   st.mine = st.mine || null;
   api(`/api/rating/${id}`).then((m) => { if (my !== token) return; st.mine = m; renderRate(); }).catch(() => {});
   function renderRate() {
-    const el2 = $('#dRate', box); if (!el2 || !st.mine) return;
+    const el2 = $('#dRate', box), btn = $('#dRateBtn', box); if (!el2 || !btn || !st.mine) return;
     const m = st.mine, label = ['', 'Not for me', 'It was okay', 'Liked it', 'Really liked it', 'Loved it'];
-    el2.innerHTML = `<div class="rt-row"><span class="rt-k">Your rating</span>
+    btn.classList.toggle('rated', !!m.rating); btn.classList.toggle('nope', !!m.hidden && !m.rating);
+    btn.innerHTML = m.rating ? `${icon('star')}<span class="rv">${m.rating}<small>/5</small></span>` : m.hidden ? `${icon('x')} Not for me` : `${icon('star')} Rate`;
+    btn.setAttribute('aria-label', m.rating ? `Your rating: ${m.rating} of 5. Change it` : 'Rate this title');
+    el2.innerHTML = `<div class="rt-head"><span class="rt-k">Your rating</span><span class="rt-l">${m.rating ? esc(label[m.rating]) : m.hidden ? 'Hidden from your picks' : 'Sharpens your picks'}</span></div>
       <span class="rt-stars" role="radiogroup" aria-label="Your rating">${[1, 2, 3, 4, 5].map((n) => `<button class="rt-s ${n <= m.rating ? 'on' : ''}" data-r="${n}" role="radio" aria-checked="${n === m.rating}" aria-label="${n} star${n > 1 ? 's' : ''}">${icon('star')}</button>`).join('')}</span>
-      <span class="rt-l">${m.rating ? esc(label[m.rating]) : 'Rate it to sharpen your picks'}</span>
-      <button class="rt-no ${m.hidden ? 'on' : ''}" id="dNope">${m.hidden ? 'Hidden from your picks · Undo' : 'Not for me'}</button></div>
-      ${m.rating ? `<div class="rt-asp"><span class="rt-k">What stood out?</span>${ASPECTS.map((a) => `<button class="rt-a ${m.liked.includes(a) ? 'on' : ''}" data-a="${a}">${a}</button>`).join('')}</div>` : ''}`;
+      ${m.rating ? `<div class="rt-k rt-k2">What stood out?</div><div class="rt-asp">${ASPECTS.map((a) => `<button class="rt-a ${m.liked.includes(a) ? 'on' : ''}" data-a="${a}">${a}</button>`).join('')}</div>` : ''}
+      <div class="rt-foot"><button class="rt-no ${m.hidden ? 'on' : ''}" id="dNope">${m.hidden ? 'Undo "Not for me"' : 'Not for me'}</button>${m.rating ? '<button class="rt-clear" id="dClear">Clear rating</button>' : ''}</div>`;
     const stars = $$('.rt-s', el2);
     stars.forEach((b) => {
       b.onmouseenter = () => stars.forEach((x) => x.classList.toggle('hov', +x.dataset.r <= +b.dataset.r));
-      b.onclick = () => save(+b.dataset.r === m.rating ? 0 : +b.dataset.r, m.liked);
+      b.onclick = () => save(+b.dataset.r, m.liked);
     });
     $('.rt-stars', el2).onmouseleave = () => stars.forEach((x) => x.classList.remove('hov'));
     $$('.rt-a', el2).forEach((b) => (b.onclick = () => { const a = b.dataset.a; const liked = m.liked.includes(a) ? m.liked.filter((x) => x !== a) : [...m.liked, a]; save(m.rating, liked); }));
+    const clr = $('#dClear', el2); if (clr) clr.onclick = () => save(0, []);
     $('#dNope', el2).onclick = async () => {
       const undo = m.hidden;
-      try { if (window.ihHideTitle) window.ihHideTitle(id, meta.title, undo); else await post('/api/notinterested', { imdbId: id, title: meta.title, undo }); st.mine = { ...m, hidden: !undo, rating: undo ? m.rating : 0 }; renderRate(); toast(undo ? 'Back in your picks' : "Got it. You won't see this in your picks, and similar titles drop", 'ok'); window.browseTasteChanged?.(); } catch (e) { toast(e.message, 'err'); }
+      try { if (window.ihHideTitle) window.ihHideTitle(id, meta.title, undo); else await post('/api/notinterested', { imdbId: id, title: meta.title, undo }); st.mine = { ...m, hidden: !undo, rating: undo ? m.rating : 0 }; renderRate(); toast(undo ? 'Back in your picks' : "Got it. You won't see this in your picks, and similar titles drop", 'ok'); window.browseTasteChanged?.(); if (!undo) ratePop(false); } catch (e) { toast(e.message, 'err'); }
     };
+    if (!btn._bound) { // a new button each time a title opens; the sheet itself is reused
+      btn._bound = true; box.classList.remove('rating');
+      btn.onclick = (e) => { e.stopPropagation(); ratePop(!box.classList.contains('rating')); };
+      el2.addEventListener('click', (e) => e.stopPropagation());
+    }
+    if (!box._rateBound) {
+      box._rateBound = true;
+      box.addEventListener('click', () => box.classList.contains('rating') && box.classList.remove('rating'));
+      box.addEventListener('keydown', (e) => { if (e.key === 'Escape' && box.classList.contains('rating')) { e.stopPropagation(); e.preventDefault(); box.classList.remove('rating'); $('#dRateBtn', box)?.focus(); } }, true);
+    }
+  }
+  function ratePop(open) {
+    const btn = $('#dRateBtn', box); if (!btn) return;
+    box.classList.toggle('rating', open); btn.setAttribute('aria-expanded', String(open));
+    if (open) requestAnimationFrame(() => $('#dRate .rt-s.on:last-of-type, #dRate .rt-s', box)?.focus({ preventScroll: true }));
   }
   async function save(rating, liked) {
     const prev = st.mine; st.mine = { ...prev, rating, liked: rating ? liked : [], hidden: false }; renderRate();
@@ -430,7 +582,8 @@ export async function openDossier({ type, id }) {
     const my3 = ++personTok, pv = $('#dPerson', box); if (!pv) return;
     pv.innerHTML = personShell(meta.title);
     pv.removeAttribute('aria-hidden'); box.classList.add('pmode');
-    $('[data-pback]', pv).onclick = closePerson;
+    if (!window.history.state?.person) window.history.pushState({ ...window.history.state, person: 1 }, '');
+    $('[data-pback]', pv).onclick = () => closePerson();
     const p = await personData(pid);
     if (my3 !== personTok || my !== token) return;
     if (p.error) { $('.pv-body', pv).innerHTML = `<p class="dx-hint">${esc(p.error)}</p>`; return; }
@@ -439,14 +592,16 @@ export async function openDossier({ type, id }) {
     $('.pv-scroll', pv).scrollTop = 0;
     bindPerson(pv, p);
   }
-  function closePerson() { box.classList.remove('pmode'); $('#dPerson', box)?.setAttribute('aria-hidden', 'true'); }
+  function closePerson(fromHistory) {
+    if (fromHistory !== true && window.history.state?.person) { window.history.back(); return; }
+    box.classList.remove('pmode'); $('#dPerson', box)?.setAttribute('aria-hidden', 'true'); }
   box._pback = closePerson;
   function bindPerson(pv, p) {
-    $('[data-pback]', pv).onclick = closePerson;
+    $('[data-pback]', pv).onclick = () => closePerson();
     const bio = $('.pv-bio', pv), more = $('.pv-more', pv);
     if (bio && more) requestAnimationFrame(() => { if (bio.scrollHeight <= bio.clientHeight + 2) more.remove(); });
     more?.addEventListener('click', () => { bio.classList.toggle('open'); more.textContent = bio.classList.contains('open') ? 'Show less' : 'Read full biography'; });
-    const st2 = { tab: 'acting', kind: 'all' };
+    const st2 = { tab: (!p.acting?.length && p.crew?.length) ? 'crew' : 'acting', kind: 'all' };
     const draw2 = () => { const l = $('#pvList', pv); if (l) l.innerHTML = filmography(p, st2); $$('[data-ptab]', pv).forEach((b) => b.classList.toggle('on', b.dataset.ptab === st2.tab)); $$('[data-pkind]', pv).forEach((b) => b.classList.toggle('on', b.dataset.pkind === st2.kind)); };
     $$('[data-ptab]', pv).forEach((b) => (b.onclick = () => { st2.tab = b.dataset.ptab; draw2(); }));
     $$('[data-pkind]', pv).forEach((b) => (b.onclick = () => { st2.kind = b.dataset.pkind; draw2(); }));
@@ -502,13 +657,14 @@ export async function openDossier({ type, id }) {
     s.pack ? '<span class="badge">Season pack</span>' : '',
     s.cached ? '' : '<span class="badge warn">Download</span>',
   ].filter(Boolean).slice(0, max).join('');
-  const headline = (s) => [s.source, s.codec, s.tenbit ? '10-bit' : ''].filter(Boolean).join(' · ') || (s.group ? `Release by ${s.group}` : 'Stream');
-  const plain = (s) => [langLine(s), s.audio && !s.audio.includes(' sound') ? '' : s.audio, s.service, s.fixes].filter(Boolean).join(' · ');
+  const specTitle = (s) => [tierLabel(s.resolution), s.source, s.codec, (s.hdr || []).join(' '), s.audio, s.size].filter(Boolean).join(' · ') || 'Stream';
+  const headline = (s) => [s.source, s.codec, s.tenbit ? '10-bit' : ''].filter(Boolean).join(' · ') || 'Stream';
+  const plain = (s) => [langLine(s), s.audio && !s.audio.includes(' sound') ? '' : s.audio, s.service].filter(Boolean).join(' · ');
   // near-identical copies (same picture, sound, language, size) become one row; the best-seeded working copy plays
   function grouped(list) {
     const m = new Map();
     for (const s of list) {
-      const k = [s.resolution, s.source, s.codec, (s.hdr || []).join(), s.audio, (s.langs || []).join(), s.pack, s.dub, Math.round((s.sizeGb || 0) * 10)].join('|');
+      const k = [s.resolution, s.source, s.codec, (s.hdr || []).join(), s.audio, (s.langs || []).join(), s.pack, s.dub, s.ai60, Math.round((s.sizeGb || 0) * 10)].join('|');
       const g = m.get(k);
       if (!g) { m.set(k, { ...s, copies: 1 }); continue; }
       g.copies++;
@@ -523,6 +679,7 @@ export async function openDossier({ type, id }) {
     const out = new Map(), add = (s, label, why, ic) => { if (!s) return; const p = out.get(s.index); if (p) p.labels.push(label); else out.set(s.index, { s, labels: [label], why, ic }); };
     const top = (f, filt = () => true) => ok.filter(filt).sort((a, b) => f(b) - f(a))[0];
     const bp = top(picScore); if (bp && picScore(bp) > picScore(rec) + 5) add(bp, 'Best picture', [bp.hdr?.[0], bp.source === 'Remux' ? 'untouched disc quality' : '', bp.size].filter(Boolean).join(' · '), 'eye');
+    const ai = top(picScore, (s) => s.ai60); if (ai) add(ai, 'AI 60fps enhanced', `AI upscaled · extra smooth · ${ai.size}`, 'star');
     const ba = top(audScore, (s) => audScore(s) >= 46); if (ba && audScore(ba) > audScore(rec)) add(ba, 'Best sound', `${ba.audio} surround`, 'star');
     for (const l of myLangs) { const bl = top((s) => picScore(s) + (s.seeds || 0) / 10, (s) => s.langs?.includes(l)); if (bl) add(bl, `In ${LANG[l] || l}`, langLine(bl), 'users'); }
     const lt = top((s) => -(s.sizeGb || 99), (s) => RES[s.resolution] >= 3 && s.sizeGb > 0.3 && s.sizeGb < (rec.sizeGb || 99) * 0.55 && !s.dub);
@@ -531,7 +688,7 @@ export async function openDossier({ type, id }) {
     if (ms) add(ms, 'Most shared', `${ms.seeds} people seeding`, 'flame');
     return [...out.values()].slice(0, 4);
   }
-  const FILTERS = [['hdr', 'HDR / Dolby Vision', (s) => s.hdr?.length], ['sound', 'Surround sound', (s) => audScore(s) >= 22], ['en', 'English audio', (s) => !s.dub && (s.original || !(s.langs || []).length)], ['ep', 'Just this episode', (s) => !s.pack]];
+  const FILTERS = [['ai', 'AI 60fps', (s) => s.ai60], ['hdr', 'HDR / Dolby Vision', (s) => s.hdr?.length], ['sound', 'Surround sound', (s) => audScore(s) >= 22], ['en', 'English audio', (s) => !s.dub && (s.original || !(s.langs || []).length)], ['ep', 'Just this episode', (s) => !s.pack]];
 
   function sorted(list) {
     const by = (f) => [...list].sort(f);
@@ -597,7 +754,7 @@ export async function openDossier({ type, id }) {
           <button class="btn ghost" data-back>${icon('back')} Back to details</button></div></div>`;
       $('[data-retry]', out).onclick = () => loadStreams();
       $('[data-shelf]', out).onclick = async (e) => { if (!wl.has(id)) await toggleSave({ ...item }); e.currentTarget.innerHTML = `${icon('check')} On your shelf`; };
-      $('[data-back]', out).onclick = closeVersions;
+      $('[data-back]', out).onclick = () => closeVersions();
       return;
     }
     st.f ||= new Set();
@@ -618,7 +775,8 @@ export async function openDossier({ type, id }) {
 
     // cells
     const qcls = (x) => ({ '2160p': 'q4k', '1080p': 'qhd', '720p': 'q72' }[x.resolution] || 'qsd');
-    const pic = (x) => [x.hdr?.some((h) => /vision/i.test(h)) && '<i class="t dv">DV</i>', x.hdr?.some((h) => /hdr10\+/i.test(h)) ? '<i class="t hdr">HDR10+</i>' : x.hdr?.some((h) => /hdr/i.test(h)) && '<i class="t hdr">HDR</i>', x.tenbit && !x.hdr?.length && '<i class="t">10-bit</i>'].filter(Boolean).join('') || '<i class="t dim">SDR</i>';
+    const gold = (x) => (x.ai60 ? `<i class="t ai60" title="AI-enhanced, 60 frames per second">${icon('star')} AI 60fps</i>` : '');
+    const pic = (x) => gold(x) + [x.hdr?.some((h) => /vision/i.test(h)) && '<i class="t dv">DV</i>', x.hdr?.some((h) => /hdr10\+/i.test(h)) ? '<i class="t hdr">HDR10+</i>' : x.hdr?.some((h) => /hdr/i.test(h)) && '<i class="t hdr">HDR</i>', x.tenbit && !x.hdr?.length && '<i class="t">10-bit</i>'].filter(Boolean).join('') || '<i class="t dim">SDR</i>';
     const snd = (x) => x.audio ? `<i class="t ${audScore(x) >= 46 ? 'atm' : ''}">${esc(x.audio)}</i>` : '<i class="t dim">Stereo</i>';
     const lang = (x) => {
       const mine = (x.langs || []).some((l) => myLangs.includes(l)), foreign = x.dub && !mine;
@@ -639,11 +797,12 @@ export async function openDossier({ type, id }) {
             <span class="vx3-why">${reasons.map((r) => `<span>${icon('check')}${esc(r)}</span>`).join('')}</span></div>
         </div>
         <div class="vx3-meta"><b>${esc(rec.size || '')}</b>${seedBars(rec.seeds)}</div>
-        <button class="btn primary vx3-play" data-p="${rec.index}" title="${esc(rec.quality)}">${icon('play')} Play</button>
+        <div class="vx3-go"><button class="btn primary vx3-play" data-p="${rec.index}" title="${esc(specTitle(rec))}">${icon('play')} Play</button>
+          <button class="btn ghost" id="dPs5" title="Add to Plex. Shift-click any other version to send that one instead.">Send to PS5</button></div>
       </div>
-      ${pk.length ? `<div class="vx3-alts">${pk.map(({ s, labels, why: w, ic }) => `<button class="vx-pick vx3-alt" data-p="${s.index}" title="${esc(s.quality)}">
+      ${pk.length ? `<div class="vx3-alts">${pk.map(({ s, labels, why: w, ic }) => `<button class="vx-pick vx3-alt" data-p="${s.index}" title="${esc(specTitle(s))}">
         <span class="vx3-al">${icon(ic)}${esc(labels.join(' · '))}</span>
-        <span class="vx3-av"><i class="vx2-q sm ${qcls(s)}">${esc(tierLabel(s.resolution))}</i><b>${esc(headline(s))}</b></span>
+        <span class="vx3-av"><i class="vx2-q sm ${qcls(s)}">${esc(tierLabel(s.resolution))}</i><b>${esc(headline(s))}</b>${gold(s)}</span>
         <small>${esc(w)}</small></button>`).join('')}</div>` : ''}
       ${rest.length ? `<div class="vx-head"><h4>All versions <em>${groups.length - 1} different${dupes ? ` · ${dupes} duplicates merged` : ''}</em></h4></div>
       <div class="vx-filters">
@@ -651,8 +810,8 @@ export async function openDossier({ type, id }) {
         ${fl.map(([k, l]) => `<button data-f="${k}" class="vx-f tog ${st.f.has(k) ? 'on' : ''}">${st.f.has(k) ? icon('check') : ''}${l}</button>`).join('')}</div>
       <div class="vx2-table">
         <div class="vx2-hd">${sortHead('best', 'Version', 'c-v')}<span class="vx2-th c-p">Picture</span><span class="vx2-th c-s">Sound</span><span class="vx2-th c-l">Language</span>${sortHead('size', 'Size', 'c-z')}${sortHead('seeds', 'Seeders', 'c-d')}<span class="c-a"></span></div>
-        ${shown.length ? shown.map((x) => `<div class="vx-opt vx2-row ${x.broken ? 'broken' : ''}" title="${esc(x.quality)}" ${x.broken ? '' : `data-p="${x.index}" role="button" tabindex="0"`}>
-          <span class="c-v"><i class="vx2-q sm ${qcls(x)}">${esc(tierLabel(x.resolution))}</i><span class="vx2-src"><b>${esc([x.source, x.codec].filter(Boolean).join(' · ') || 'Stream')}</b><small>${esc([x.service, x.group, x.fixes, x.pack ? 'season pack' : '', x.copies > 1 ? `${x.copies} sources` : ''].filter(Boolean).join(' · '))}</small></span></span>
+        ${shown.length ? shown.map((x) => `<div class="vx-opt vx2-row ${x.broken ? 'broken' : ''}" title="${esc(specTitle(x))}" ${x.broken ? '' : `data-p="${x.index}" role="button" tabindex="0"`}>
+          <span class="c-v"><i class="vx2-q sm ${qcls(x)}">${esc(tierLabel(x.resolution))}</i><span class="vx2-src"><b>${esc([x.source, x.codec].filter(Boolean).join(' · ') || 'Stream')}</b><small>${gold(x)}${esc([x.service, x.pack ? 'season pack' : '', x.copies > 1 ? `${x.copies} sources` : ''].filter(Boolean).join(' · '))}</small></span></span>
           <span class="c-p">${pic(x)}</span><span class="c-s">${snd(x)}</span><span class="c-l">${lang(x)}</span>
           <span class="c-z">${sizeCell(x)}</span><span class="c-d">${seedBars(x.seeds)}</span>
           <span class="c-a">${x.broken ? '<span class="badge warn" title="The debrid server refused this one. It gets another chance in 30 minutes.">Not working</span>' : `<span class="vx2-go">${icon('play')}</span>`}</span></div>`).join('') : '<div class="note" style="padding:18px 4px">Nothing matches these filters.</div>'}
@@ -667,10 +826,18 @@ export async function openDossier({ type, id }) {
     $$('[data-sort]', out).forEach((b) => (b.onclick = () => { const k = b.dataset.sort; st.sort = k === 'size' ? (st.sort === 'size' ? 'small' : 'size') : k; st.reflow = true; renderStreams(); }));
     $$('.vx2-row[data-p]', out).forEach((r) => (r.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); r.click(); } }));
     $('#dMoreV', out)?.addEventListener('click', () => { st.more = true; renderStreams(); });
-    $$('[data-p]', out).forEach((b) => (b.onclick = () => { const s = all.find((x) => x.index === +b.dataset.p); if (s) playStream(s); }));
+    const toPs5 = async (s) => {
+      toast('Sending to PS5…');
+      try { await post('/api/ps5', { index: s.index }); toast('Added. It should show up in Plex in about a minute.', 'ok'); }
+      catch (e) { toast(e.message, 'err'); }
+    };
+    $('#dPs5', out)?.addEventListener('click', () => toPs5(rec));
+    $$('[data-p]', out).forEach((b) => (b.onclick = (e) => { const s = all.find((x) => x.index === +b.dataset.p); if (s) (e.shiftKey ? toPs5 : playStream)(s); }));
   }
 
   draw();
+  // "Pick a version" after a failed start lands here: open the versions straight away
+  if (/[?&]versions=1/.test(location.hash)) { window.history.replaceState(null, '', location.hash.replace(/\?versions=1/, '')); setTimeout(openVersions, 250); }
   const settled = new Promise((r) => setTimeout(r, Math.max(0, openedAt + 180 - performance.now())));
   Promise.all([infoP, settled]).then(([inf]) => { if (my !== token) return; st.info = inf; (window.requestIdleCallback || setTimeout)(() => { if (my === token) renderInfo(); }, { timeout: 200 }); });
   if (meta.trailers?.length) import('./trailer.js').then((m) => m.preload());

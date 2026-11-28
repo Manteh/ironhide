@@ -67,6 +67,7 @@ async function seenPool() {
   for (const h of hist) if (/^tt\d+$/.test(h.imdbId) && (h.percent || 0) > 40 && !ids.has(h.imdbId)) ids.set(h.imdbId, 0);
   for (const r of t.ratings || []) ids.set(r.imdbId, r.rating);
   for (const n of t.notInterested || []) ids.delete(n.imdbId);
+  for (const u of t.unseen || []) ids.delete(u); // said "haven't seen it": never offer it as something you know
   return { t, ids };
 }
 

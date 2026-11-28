@@ -25,6 +25,7 @@ const P = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
   sliders: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
   palette: '<path d="M12 3a9 9 0 100 18c1.5 0 2-1 1.5-2.2-.5-1.2.3-2.3 1.6-2.3H17a4 4 0 004-4c0-5-4-9.5-9-9.5z"/><circle cx="8" cy="11" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="11" r="1"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
   plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 01-12 0zM12 17v4"/>',
   nodes: '<circle cx="12" cy="12" r="2.5"/><circle cx="4.5" cy="5.5" r="2"/><circle cx="19.5" cy="5.5" r="2"/><circle cx="4.5" cy="18.5" r="2"/><circle cx="19.5" cy="18.5" r="2"/><path d="M10 10.5L6 7M14 10.5L18 7M10 13.5L6 17M14 13.5L18 17"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
@@ -48,6 +49,8 @@ const P = {
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   trailer: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9v6l5-3z"/>',
+  thumb: '<path d="M7 11v9H4v-9zM7 11l4-8a2 2 0 012 2v4h5.5a2 2 0 012 2.3l-1.2 7A2 2 0 0117.3 20H7"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
 };
 export const icon = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[name] || P.film}</svg>`;
 export const AVATAR_ICONS = ['film', 'ghost', 'flame', 'star', 'rocket', 'crown', 'heart', 'bolt', 'moon', 'skull', 'eye', 'key', 'gamepad', 'user'];
@@ -71,19 +74,80 @@ export const avatar = (profile, size = 34) => {
   return `<span class="avw fr-${frame}${deco ? ' has-deco' : ''}" style="--s:${size}px;--bw:${bw}px;--fa:${fa};--fb:${fb}"><span class="avx sh-${POLYS[shape] ? 'poly' : shape}" ${poly ? `style="${poly}"` : ''}><span class="avi av-${esc(a.color || 'indigo')}" ${bg && !a.image ? `style="background:${bg}"` : ''}>${face}</span>${overlay}</span>${deco}</span>`;
 };
 
-export const LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8f8cff"/><stop offset="1" stop-color="#4b48d6"/></linearGradient></defs><path d="M16 2l11 4v9c0 7.2-4.6 12.4-11 15C9.6 27.4 5 22.2 5 15V6z" fill="url(#lg)"/><path d="M16 9l2.2 4.8L23 16l-4.8 2.2L16 23l-2.2-4.8L9 16l4.8-2.2z" fill="#fff" fill-opacity=".92"/></svg>';
+export const LOGO = '<img class="orb-logo" src="/img/orbie-orb.png" alt="" width="32" height="32" decoding="async" draggable="false">';
 
-export function toast(msg, kind = '') {
-  const box = $('#toasts');
+// Plain words instead of what a library threw ("Failed to fetch", "HTTP 502", a stack trace)
+export function friendly(msg) {
+  const m = String(msg?.message || msg || '').trim();
+  if (/failed to fetch|networkerror|load failed|fetch failed|ECONNREFUSED/i.test(m)) return "Orbie's service isn't answering. Give it a moment and try again.";
+  if (/timed? ?out|ETIMEDOUT|aborted/i.test(m)) return 'That took too long. Try again.';
+  if (/\b(5\d\d)\b|bad gateway|service unavailable/i.test(m)) return 'A service Orbie uses is having trouble. Try again in a minute.';
+  if (/\b401\b|\b403\b|unauthori[sz]ed|invalid (api )?key/i.test(m)) return 'A key in Settings → Connectors was refused. Check it there.';
+  return m.replace(/^Error:\s*/, '').split('\n')[0].slice(0, 200) || 'Something went wrong';
+}
+
+/**
+ * "Are you sure?" drawn by Orbie itself. The browser's confirm() can't be used: the Mac app's web view never shows it
+ * and answers "no" straight away, so every such button silently did nothing there. Resolves true / false.
+ * opts: { ok: 'Remove', danger: true }
+ */
+export function ask(message, opts = {}) {
+  return new Promise((done) => {
+    const prev = document.activeElement;
+    const wrap = document.createElement('div'); wrap.className = 'askw';
+    wrap.innerHTML = `<div class="ask" role="alertdialog" aria-modal="true" aria-labelledby="askT"><p id="askT"></p>
+      <div class="ask-a"><button class="btn ghost" data-v="0">${esc(opts.cancel || 'Cancel')}</button><button class="btn ${opts.danger ? 'danger' : 'primary'}" data-v="1">${esc(opts.ok || 'OK')}</button></div></div>`;
+    wrap.querySelector('#askT').textContent = message;
+    const finish = (v) => { document.removeEventListener('keydown', keys, true); wrap.classList.remove('in'); setTimeout(() => wrap.remove(), 180); prev?.focus?.(); done(v); };
+    const keys = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); finish(document.activeElement?.dataset?.v !== '0'); }
+      else if (e.key === 'Tab') { const bs = [...wrap.querySelectorAll('button')], i = bs.indexOf(document.activeElement); e.preventDefault(); bs[(i + (e.shiftKey ? bs.length - 1 : 1)) % bs.length].focus(); }
+    };
+    wrap.addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) finish(b.dataset.v === '1'); else if (e.target === wrap) finish(false); });
+    document.addEventListener('keydown', keys, true);
+    document.body.append(wrap); requestAnimationFrame(() => wrap.classList.add('in'));
+    wrap.querySelector(opts.danger ? '[data-v="0"]' : '[data-v="1"]').focus(); // a destructive choice is never the default
+  });
+}
+
+/** A short message at the top. opts: { action: { label, run }, ms } — an action (Retry, Undo) keeps it up longer. */
+export function toast(msg, kind = '', opts = {}) {
+  const box = $('#toasts'); if (!box) return;
   const el = document.createElement('div');
-  el.className = 'toast ' + kind; el.textContent = msg;
-  box.appendChild(el);
-  setTimeout(() => el.remove(), 3800);
+  el.className = 'toast ' + kind; el.setAttribute('role', kind === 'err' ? 'alert' : 'status');
+  // a small mark says what kind of message it is: done, a problem, or just so you know
+  const mark = document.createElement('i'); mark.className = 'toast-mark'; mark.innerHTML = icon(kind === 'err' ? 'info' : kind === 'ok' ? 'check' : 'bolt');
+  const text = document.createElement('span'); text.className = 'toast-text'; text.textContent = kind === 'err' ? friendly(msg) : String(msg);
+  el.append(mark, text);
+  const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 260); };
+  if (opts.action) {
+    const b = document.createElement('button'); b.className = 'toast-act'; b.textContent = opts.action.label;
+    b.onclick = () => { close(); opts.action.run(); }; el.append(b); el.classList.add('has-act');
+  }
+  const ms = opts.ms ?? (opts.action ? 8000 : kind === 'err' ? 6000 : 3800);
+  // a hairline along the bottom runs down while the message stays; it waits while you point at it
+  const bar = document.createElement('b'); bar.className = 'toast-time'; el.append(bar);
+  const run = (d) => { bar.style.animation = 'none'; void bar.offsetWidth; bar.style.animation = `toast-time ${d}ms linear forwards`; };
+  box.appendChild(el); run(ms);
+  let t = setTimeout(close, ms);
+  el.onmouseenter = () => { clearTimeout(t); bar.style.animationPlayState = 'paused'; };
+  el.onmouseleave = () => { t = setTimeout(close, 2500); run(2500); };
+  return close;
 }
 
 export const wl = new Set(); // imdb ids on the watchlist, filled at boot
 
 // Poster card. Whole poster links to the title; hover buttons play or save in one click.
+// The poster card from Home, for any page: same size, tilt, lift and hover, as a link to the title.
+// `sub` is the line under the title, `extra` sits on the poster (a progress bar, a badge).
+export function posterCard(it, { sub = '', extra = '', i = 0 } = {}) {
+  const type = it.type === 'tv' ? 'series' : it.type;
+  return `<a class="bc pc" href="#/title/${esc(type)}/${esc(it.imdbId)}" style="--i:${Math.min(i, 24)}" data-id="${esc(it.imdbId)}" data-type="${esc(type)}" data-title="${esc(it.title)}" data-poster="${esc(it.poster || '')}">
+    <div class="bposter"><img class="bimg ld" src="${esc(it.poster || posterOf(it.imdbId))}" alt="" loading="${i < 8 ? 'eager' : 'lazy'}" decoding="async" draggable="false">${extra}</div>
+    <div class="binfo"><h3>${esc(it.title)}</h3>${sub ? `<div class="bmeta"><span>${sub}</span></div>` : ''}</div></a>`;
+}
+
 export function card(item, extra = '') {
   const type = item.type === 'tv' ? 'series' : item.type;
   const href = `#/title/${esc(type)}/${esc(item.imdbId)}`;

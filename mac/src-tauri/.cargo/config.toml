@@ -1,2 +1,3 @@
 [build]
-rustflags = ["-L", "/opt/homebrew/lib"]
+# headerpad: room to rewrite library paths when the release build bundles libmpv (mac/scripts/release.sh)
+rustflags = ["-L", "/opt/homebrew/lib", "-C", "link-arg=-Wl,-headerpad_max_install_names"]

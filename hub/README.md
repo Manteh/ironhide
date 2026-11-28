@@ -1,6 +1,6 @@
-# IronHide hub (hosted mode)
+# Orbie hub (hosted mode)
 
-Visitors open the site, type a unique name, and land in their own private IronHide. Each name gets its own daemon with its own
+Visitors open the site, type a unique name, and land in their own private Orbie. Each name gets its own daemon with its own
 settings, history, keys and friend identity. The relay for rooms and chat runs inside the same service.
 
 Deploy on Render: New → Blueprint → this repo (uses `render.yaml`). Optional env vars:

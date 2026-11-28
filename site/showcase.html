@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Orbie: a private cinema for the people you trust</title>
+<meta name="description" content="Five things Orbie does, shown instead of told: a home that knows your mood, the best version of every film, instant search, a screening room shared in sync, and a sanctuary made with care.">
+<meta name="theme-color" content="#07070d">
+<meta property="og:title" content="Orbie">
+<meta property="og:description" content="A private cinema for the people you trust.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='g' cx='.35' cy='.3' r='.8'%3E%3Cstop offset='0' stop-color='%23fff'/%3E%3Cstop offset='.25' stop-color='%23a58bff'/%3E%3Cstop offset='1' stop-color='%23311a7a'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='15' fill='url(%23g)'/%3E%3C/svg%3E">
+<style>
+@font-face{font-family:'Outfit';src:url('fonts/Outfit.ttf') format('truetype');font-weight:100 900;font-display:swap}
+:root{
+  --bg:#07070d;--ink:#f3f1ff;--mute:rgba(206,201,236,.68);--dim:rgba(200,195,230,.45);--line:rgba(255,255,255,.12);
+  --violet:#8b6ff0;--cyan:#70d8ff;--gold:#e5b369;--pink:#d452cc;--green:#7be0a6;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Outfit',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit}
+.wrap{max-width:1240px;margin:0 auto;padding:0 clamp(20px,4vw,48px)}
+
+/* ---------- top bar ---------- */
+.nav{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;justify-content:space-between;align-items:center;padding:14px clamp(20px,4vw,48px);
+  background:linear-gradient(180deg,rgba(7,7,13,.85),rgba(7,7,13,0));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  -webkit-mask-image:linear-gradient(180deg,#000 70%,transparent);mask-image:linear-gradient(180deg,#000 70%,transparent)}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:600;font-size:18px;letter-spacing:-.02em}
+.brand img{width:26px;height:26px;border-radius:50%}
+.links{display:flex;gap:4px}
+.links a{padding:9px 14px;border-radius:10px;text-decoration:none;font-size:14px;color:var(--mute);transition:.2s}
+.links a:hover{color:#fff;background:rgba(255,255,255,.08)}
+
+/* ---------- hero ---------- */
+.hero{position:relative;min-height:100svh;display:grid;place-items:center;text-align:center;padding:120px 0 80px}
+#heroOrb{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0;pointer-events:none;-webkit-mask-image:linear-gradient(#000 78%,transparent);mask-image:linear-gradient(#000 78%,transparent)}
+.hero .wrap{position:relative;z-index:1}
+.orbslot{position:relative;width:clamp(170px,22vw,280px);aspect-ratio:1;margin:0 auto 30px}
+.orbslot img{width:100%;height:100%;display:block;border-radius:50%;opacity:0;filter:drop-shadow(0 0 40px rgba(139,111,240,.55))}
+.nogl .orbslot img{opacity:1}
+.eyebrow{display:inline-flex;gap:10px;align-items:center;padding:8px 16px;border-radius:999px;font-size:13px;letter-spacing:.04em;color:#d9d3ff;border:1px solid rgba(165,140,255,.35);background:rgba(255,255,255,.04)}
+.eyebrow i{width:3px;height:3px;border-radius:50%;background:currentColor;opacity:.6}
+h1{margin:26px auto 0;max-width:13em;font-size:clamp(44px,7.4vw,96px);font-weight:700;letter-spacing:-.045em;line-height:1.02;
+  background:linear-gradient(180deg,#fff 35%,#c4baff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{margin:22px auto 0;max-width:34em;font-size:clamp(17px,1.7vw,21px);line-height:1.6;color:var(--mute)}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:36px}
+.btn{display:inline-flex;align-items:center;gap:10px;height:54px;padding:0 26px;border-radius:16px;font:600 16px 'Outfit',system-ui,sans-serif;text-decoration:none;cursor:pointer;border:0;transition:transform .25s,box-shadow .25s,background .25s}
+.btn.pri{background:#f6f5ff;color:#16113a;box-shadow:0 10px 40px rgba(130,100,255,.4)}
+.btn.pri:hover{transform:translateY(-2px);box-shadow:0 16px 52px rgba(150,120,255,.6)}
+.btn.ghost{background:rgba(255,255,255,.06);border:1px solid var(--line);color:#fff;backdrop-filter:blur(10px)}
+.btn.ghost:hover{background:rgba(255,255,255,.12);transform:translateY(-2px)}
+.cue{position:absolute;bottom:28px;left:50%;translate:-50% 0;display:flex;flex-direction:column;align-items:center;gap:10px;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+.cue i{width:1px;height:42px;transform-origin:top;background:linear-gradient(var(--violet),transparent);animation:cue 2.4s ease-in-out infinite}
+@keyframes cue{0%{transform:scaleY(0);opacity:1}55%{transform:scaleY(1);opacity:1}100%{transform:scaleY(1);opacity:0}}
+
+/* ---------- vignettes ---------- */
+.vig{position:relative;padding:clamp(70px,11vw,150px) 0}
+.vig .wrap{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(32px,5vw,80px);align-items:center}
+.vig.rev .wrap{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
+.vig.rev .copy{order:2}
+.no{display:flex;align-items:center;gap:14px;font-size:12px;font-weight:600;letter-spacing:.26em;text-transform:uppercase;color:var(--tint)}
+.no::after{content:"";width:48px;height:1px;background:linear-gradient(90deg,var(--tint),transparent)}
+h2{margin:18px 0 20px;font-size:clamp(34px,4.6vw,60px);font-weight:700;letter-spacing:-.04em;line-height:1.05;color:#fff}
+.copy p{margin:0 0 18px;font-size:clamp(17px,1.5vw,19px);line-height:1.75;color:var(--mute);max-width:30em}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.chips span{padding:7px 13px;border-radius:999px;font-size:13px;font-weight:500;color:#e6e2ff;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.more{display:inline-block;margin-top:14px;font-size:15px;font-weight:500;color:var(--tint);text-decoration:none}
+.more:hover{text-decoration:underline}
+
+/* the clip: no chrome, soft glass edge, a glow underneath */
+.frame{position:relative;margin:0;--r:20px}
+.frame .glow{position:absolute;inset:-14% -10%;z-index:0;border-radius:50%;pointer-events:none;filter:blur(70px);opacity:.55;
+  background:radial-gradient(60% 60% at 50% 55%,var(--tint),transparent 70%);animation:glow 9s ease-in-out infinite}
+@keyframes glow{50%{opacity:.8;transform:scale(1.06)}}
+.glass{position:relative;z-index:1;aspect-ratio:var(--ar,16/10);border-radius:var(--r);overflow:hidden;background:#0b0a14;
+  border:1px solid rgba(255,255,255,.14);box-shadow:0 40px 90px -30px rgba(0,0,0,.85),0 0 0 1px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.1)}
+.glass video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .8s ease;pointer-events:none}
+.frame.live video{opacity:1}
+.ph{position:absolute;inset:0;display:grid;place-content:center;gap:8px;text-align:center;padding:24px;transition:opacity .6s;
+  background:radial-gradient(80% 80% at 50% 40%,color-mix(in srgb,var(--tint) 18%,#0b0a14),#0b0a14)}
+.ph b{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.ph span{font-size:13px;color:var(--dim);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.frame.live .ph{opacity:0}
+
+/* ---------- close ---------- */
+.close{position:relative;text-align:center;padding:clamp(80px,12vw,160px) 0 90px}
+.close::before{content:"";position:absolute;left:50%;top:40%;width:min(800px,100vw);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(110,80,240,.22),transparent 65%)}
+.close h2{margin:0 auto 18px;max-width:12em;font-size:clamp(38px,6vw,76px)}
+.close p{margin:0 auto;max-width:30em;font-size:19px;line-height:1.7;color:var(--mute)}
+.cmd{display:flex;align-items:center;gap:10px;margin:34px auto 0;max-width:640px;padding:8px 8px 8px 18px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid var(--line);text-align:left}
+.cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;scrollbar-width:none;font:13.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#d3ccff}
+.cmd code::-webkit-scrollbar{display:none}
+.cmd button{flex:none;height:38px;padding:0 16px;border-radius:10px;border:0;background:#f6f5ff;color:#16113a;font:600 13px 'Outfit',system-ui,sans-serif;cursor:pointer}
+footer{padding:36px 0 56px;border-top:1px solid rgba(255,255,255,.07);color:var(--dim);font-size:13.5px}
+footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+/* ---------- motion ---------- */
+.rv{opacity:0;transform:translateY(28px);transition:opacity .9s ease,transform .9s cubic-bezier(.2,.7,.2,1)}
+.rv.in{opacity:1;transform:none}
+.frame.rv{transform:translateY(40px) scale(.97)}
+.frame.rv.in{transform:none}
+.btn:focus-visible,a:focus-visible,.cmd button:focus-visible{outline:2px solid #b9a8ff;outline-offset:3px}
+@media (max-height:760px){.cue{display:none}}
+@media (max-width:860px){
+  .vig .wrap,.vig.rev .wrap{grid-template-columns:1fr}
+  .vig.rev .copy{order:0}
+  .glass{aspect-ratio:var(--ar,16/11)}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .rv{opacity:1;transform:none;transition:none}
+  .frame .glow,.cue i{animation:none}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="brand" href="#top"><img src="orb.png" alt="">Orbie</a>
+  <div class="links">
+    <a href="manifest.html">Manifesto</a>
+    <a href="#get">Get in</a>
+    <a href="https://github.com/Manteh/orbie-app/releases/latest">Releases</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <canvas id="heroOrb" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div class="orbslot" id="orbSlot" role="img" aria-label="The Orbie orb"><img src="orb.png" alt=""></div>
+    <div class="eyebrow"><span>Alpha</span><i></i><span>macOS 15+</span><i></i><span>Invite only</span></div>
+    <h1>A private cinema for the people you trust.</h1>
+    <p class="lede">Five things Orbie does, shown instead of told.</p>
+    <div class="cta">
+      <a class="btn pri" href="https://github.com/Manteh/orbie-app/releases/latest">Download for Mac</a>
+      <a class="btn ghost" href="manifest.html">Read the manifesto</a>
+    </div>
+  </div>
+  <div class="cue"><span>Scroll</span><i></i></div>
+</header>
+
+<main>
+
+  <!-- 01 -->
+  <section class="vig" style="--tint:var(--violet)" id="tonight">
+    <div class="wrap">
+      <div class="copy rv">
+        <div class="no">01 &nbsp;Tonight</div>
+        <h2>It knows what you want tonight.</h2>
+        <p>Open Orbie and it already knows what you were watching. Tell it the mood, tense or cozy or mind-bending, and the shelf rearranges itself around you.</p>
+        <p>Every pick carries a match score and says why it was chosen. It is built from your own ratings, and it never leaves your Mac.</p>
+        <div class="chips"><span>Mood shelves</span><span>Match scores</span><span>Your taste, kept local</span></div>
+      </div>
+      <figure class="frame rv" data-clip="home">
+        <div class="glow"></div>
+        <div class="glass">
+          <div class="ph"><b>Tonight</b><span>media/home.webm + .mp4</span></div>
+          <video muted loop playsinline preload="none" aria-label="Orbie home: choosing a mood reshuffles the shelf, each pick with a match score"><source data-src="media/home.webm" type="video/webm"><source data-src="media/home.mp4" type="video/mp4"></video>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 02 -->
+  <section class="vig rev" style="--tint:var(--cyan)" id="version">
+    <div class="wrap">
+      <figure class="frame rv" data-clip="version" style="--ar:1618/1080">
+        <div class="glow"></div>
+        <div class="glass">
+          <div class="ph"><b>The best version</b><span>media/version.webm + .mp4</span></div>
+          <video muted loop playsinline preload="none" aria-label="The best-version card for a film, then pressing Play"><source data-src="media/version.webm" type="video/webm"><source data-src="media/version.mp4" type="video/mp4"></video>
+        </div>
+      </figure>
+      <div class="copy rv">
+        <div class="no">02 &nbsp;The best version</div>
+        <h2>Choose a version, not a file.</h2>
+        <p>Every copy of a film is gathered in one place, duplicates merged and ranked for you: picture, sound, language, size and how fast it starts.</p>
+        <p>The best one is already chosen, with the reason beside it. Something lighter for Wi-Fi is one row down. Press Play and it begins.</p>
+        <div class="chips"><span>4K · Dolby Vision · Atmos</span><span>Ranked for you</span><span>Starts instantly</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 -->
+  <section class="vig" style="--tint:var(--green)" id="search">
+    <div class="wrap">
+      <div class="copy rv">
+        <div class="no">03 &nbsp;Search</div>
+        <h2>Type. Press Enter. Watching.</h2>
+        <p>Press Command and K anywhere in Orbie and start typing. Results appear as you type, Enter plays the first one and the right arrow opens its details.</p>
+        <p>No menus to dig through and no page to load first.</p>
+        <div class="chips"><span>⌘K anywhere</span><span>Enter plays</span><span>→ opens details</span></div>
+      </div>
+      <figure class="frame rv" data-clip="search">
+        <div class="glow"></div>
+        <div class="glass">
+          <div class="ph"><b>Search</b><span>media/search.webm + .mp4</span></div>
+          <video muted loop playsinline preload="none" aria-label="Searching with Command K and playing a title with Enter"><source data-src="media/search.webm" type="video/webm"><source data-src="media/search.mp4" type="video/mp4"></video>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 04 -->
+  <section class="vig rev" style="--tint:var(--pink)" id="together">
+    <div class="wrap">
+      <figure class="frame rv" data-clip="together" style="--ar:1618/1080">
+        <div class="glow"></div>
+        <div class="glass">
+          <div class="ph"><b>Together</b><span>media/together.webm + .mp4</span></div>
+          <video muted loop playsinline preload="none" aria-label="Watching together: the ready countdown, then live cursors and floating reactions"><source data-src="media/together.webm" type="video/webm"><source data-src="media/together.mp4" type="video/mp4"></video>
+        </div>
+      </figure>
+      <div class="copy rv">
+        <div class="no">04 &nbsp;Together</div>
+        <h2>The same frame, everywhere.</h2>
+        <p>Press play together and a countdown holds everyone until each person is ready. Then the film starts at the same moment, in sync to a fraction of a second, whether you share a couch or an ocean.</p>
+        <p>Live cursors and reactions drift across the picture. Everyone streams on their own Mac and only small messages travel between you, so no video is ever shared.</p>
+        <div class="chips"><span>Ready countdown</span><span>In sync</span><span>Live reactions</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 -->
+  <section class="vig" style="--tint:var(--gold)" id="craft">
+    <div class="wrap">
+      <div class="copy rv">
+        <div class="no">05 &nbsp;Craftsmanship</div>
+        <h2>A room made with care.</h2>
+        <p>Click the small orb in the top bar and the sanctuary opens: pixel plates, a short manifesto and a dedication to the people who make films. It is the one screen that exists only to say why Orbie exists.</p>
+        <p>Everything else in the app is built the same way. Slowly, and with the back of the cabinet finished.</p>
+        
+        <a class="more" href="manifest.html">Read the manifesto &rarr;</a>
+      </div>
+      <figure class="frame rv" data-clip="sanctuary">
+        <div class="glow"></div>
+        <div class="glass">
+          <div class="ph"><b>Craftsmanship</b><span>media/sanctuary.webm + .mp4</span></div>
+          <video muted loop playsinline preload="none" aria-label="Clicking the orb in the top bar to open the sanctuary"><source data-src="media/sanctuary.webm" type="video/webm"><source data-src="media/sanctuary.mp4" type="video/mp4"></video>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+</main>
+
+<section class="close" id="get">
+  <div class="wrap">
+    <h2 class="rv">Invite only, on purpose.</h2>
+    <p class="rv">Anyone can download Orbie. It opens with an invite from a member, and each invite carries the name of the person who sent it.</p>
+    <div class="cta rv">
+      <a class="btn pri" href="https://github.com/Manteh/orbie-app/releases/latest">Download for Mac</a>
+    </div>
+    <div class="cmd rv"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/Manteh/orbie-app/HEAD/install.sh | bash</code><button id="copy" type="button">Copy</button></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Built natively for Apple Silicon.</span>
+    <span>Orbie is a player and lookup tool. It doesn't host or index any content.</span>
+  </div>
+</footer>
+
+<script src="orb.js" defer></script>
+<script>
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const all = (s) => [...document.querySelectorAll(s)];
+
+  // quiet reveal
+  const rv = all('.rv');
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.12 });
+    rv.forEach((n) => io.observe(n));
+  } else rv.forEach((n) => n.classList.add('in'));
+
+  // clips: load a little before they are needed, play only while on screen, never show chrome
+  all('.frame[data-clip]').forEach((f) => {
+    const v = f.querySelector('video'); let loaded = false;
+    const load = () => {
+      if (loaded) return; loaded = true;
+      v.querySelectorAll('source[data-src]').forEach((s) => { s.src = s.dataset.src; });
+      v.load();
+    };
+    v.addEventListener('loadeddata', () => f.classList.add('live'));
+    if (!('IntersectionObserver' in window)) { load(); return; }
+    new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) load(); }), { rootMargin: '900px 0px' }).observe(f);
+    new IntersectionObserver((es) => es.forEach((e) => {
+      if (reduce) return;
+      if (e.isIntersecting) { load(); const p = v.play(); if (p && p.catch) p.catch(() => {}); } else v.pause();
+    }), { threshold: 0.35 }).observe(f);
+  });
+
+  // copy the install line
+  const copy = document.getElementById('copy'), cmd = document.getElementById('cmd');
+  copy.onclick = async () => {
+    const txt = cmd.textContent.trim();
+    try { await navigator.clipboard.writeText(txt); } catch { const r = document.createRange(); r.selectNode(cmd); getSelection().removeAllRanges(); getSelection().addRange(r); document.execCommand('copy'); getSelection().removeAllRanges(); }
+    copy.textContent = 'Copied'; setTimeout(() => (copy.textContent = 'Copy'), 1600);
+  };
+})();
+</script>
+</body>
+</html>

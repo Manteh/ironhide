@@ -27,6 +27,26 @@ function cometUrl(path) {
   return `https://comet.elfhosted.com/${b64}/${path}`;
 }
 
+// Is the debrid subscription still active? Cached for 10 minutes; any doubt (network, unknown provider) counts as alive.
+let aliveAt = 0, aliveVal = true, aliveKey = '';
+export async function debridAlive() {
+  const cfg = getConfig(), key = debridKey(cfg), prov = cfg.debrid_provider;
+  if (!key) return false;
+  if (key === aliveKey && Date.now() - aliveAt < 10 * 60e3) return aliveVal;
+  let ok = true;
+  try {
+    if (prov === 'torbox') {
+      const d = (await (await fetch('https://api.torbox.app/v1/api/user/me', { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(6000) })).json()).data;
+      if (d) ok = Number(d.plan) > 0 || Date.parse(d.premium_expires_at || '') > Date.now();
+    } else if (prov === 'realdebrid') {
+      const r = await fetch('https://api.real-debrid.com/rest/1.0/user', { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(6000) });
+      if (r.status === 401 || r.status === 403) ok = false; else if (r.ok) { const d = await r.json(); ok = d.type === 'premium' || Number(d.premium) > 0; }
+    }
+  } catch {}
+  aliveKey = key; aliveAt = Date.now(); aliveVal = ok;
+  return ok;
+}
+
 const TRACKERS = [
   'udp://tracker.opentrackr.org:1337/announce',
   'udp://open.stealth.si:80/announce',
@@ -34,6 +54,8 @@ const TRACKERS = [
   'udp://open.demonii.com:1337/announce',
   'udp://exodus.desync.com:6969/announce',
 ];
+
+export const magnetFor = (infoHash) => `magnet:?xt=urn:btih:${infoHash}${TRACKERS.map((t) => `&tr=${encodeURIComponent(t)}`).join('')}`;
 
 function parseStream(s) {
   const isRD = !!s.url;
@@ -84,7 +106,7 @@ function parseStream(s) {
     seeds,
     size,
     sizeBytes,
-    infoHash: s.infoHash || null,
+    infoHash: s.infoHash || (s.url || '').match(/\/resolve\/\w+\/[^/]+\/([0-9a-f]{40})(?:\/|$)/i)?.[1]?.toLowerCase() || null,
     fileIdx: s.fileIdx != null ? s.fileIdx : null,
   };
 }
@@ -132,9 +154,16 @@ export async function getStreams(imdbId, type = 'movie', season, episode) {
     seen.add(id);
     return true;
   });
-  if (raw.length === 0) return [];
-
-  const streams = raw.map(parseStream);
+  let streams = raw.map(parseStream), fallback = false;
+  // No usable debrid result (key expired, service down, nothing cached): ask Torrentio without a key for plain torrents,
+  // which play straight from their peers (see torrent-stream.js)
+  const hasKey = SERVICE_SLUG[getConfig().debrid_provider] && debridKey(getConfig()), dead = hasKey && !(await debridAlive());
+  if (hasKey && (dead || !streams.length)) {
+    const plain = await fetchStreams(`https://torrentio.strem.fun/${torrentioOpts((await getSettings()).playback)}/${path}`);
+    const peers = plain.filter((s) => s.infoHash).map(parseStream).filter((s) => s.seeds >= 2).map((s) => ({ ...s, fallback: true }));
+    if (dead || peers.length) { streams = peers; fallback = peers.length > 0; } // an expired subscription: its links only lead to an error video
+  }
+  if (!streams.length) return [];
 
   // Sort: deprioritize DUAL/dubbed, debrid first, then by size, then seeds
   const isDual = (q) => /\bDUAL\b|DUBBED|\bDUB\b/i.test(q);
@@ -143,6 +172,7 @@ export async function getStreams(imdbId, type = 'movie', season, episode) {
     const bDual = isDual(b.quality);
     if (aDual && !bDual) return 1;
     if (!aDual && bDual) return -1;
+    if (fallback && a.seeds !== b.seeds) return b.seeds - a.seeds; // streaming from peers: the healthiest swarm first
     if (a.cached !== b.cached) return a.cached ? -1 : 1;
     if (a.isRD && !b.isRD) return -1;
     if (!a.isRD && b.isRD) return 1;

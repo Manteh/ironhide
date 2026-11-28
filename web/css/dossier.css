@@ -1,12 +1,15 @@
 /* Title sheet (js/dossier.js). Opaque surfaces (no backdrop blur over a moving page), lazy images that fade in,
    entrance with opacity/transform only. Grows with the window: near full screen on big displays. */
+html:not(.ihp-on) .dossier.dx:not(#_) { --dh: min(1180px, calc(100vh - var(--bar-h, 0px) - 56px)); top: calc(50% + var(--bar-h, 0px) / 2); } /* centre in the space under the title bar, not the whole window */
+@media (max-width: 900px) { html:not(.ihp-on) .dossier.dx:not(#_) { top: auto; --dh: 94vh; } }
 .dossier.dx { --dh: min(1180px, calc(100vh - 56px)); width: min(1560px, calc(100vw - 72px)); height: var(--dh); border-radius: 28px;
   background: var(--bg-elev); -webkit-backdrop-filter: none; backdrop-filter: none; contain: layout paint;
   transition: transform .5s var(--ease), opacity .3s var(--ease); }
 .dx .dclose { top: 16px; right: 16px; background: rgba(0,0,0,.42); border-color: rgba(255,255,255,.14); backdrop-filter: none; -webkit-backdrop-filter: none; }
-.dx-scroll { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; border-radius: inherit; }
+.dx-scroll { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; border-radius: inherit; }
+.dx-scroll::-webkit-scrollbar, .dx-side::-webkit-scrollbar { display: none; }
 .dx img { -webkit-user-drag: none; user-select: none; }
-.dx img[onload] { opacity: 0; transition: opacity .4s var(--ease); } .dx img.ld { opacity: 1; }
+.dx img[data-ld] { opacity: 0; transition: opacity .4s var(--ease); } .dx img.ld { opacity: 1; }
 
 /* header */
 .dx-hero { position: relative; min-height: clamp(380px, 46vh, 560px); display: flex; align-items: flex-end; padding: 48px clamp(28px, 3.2vw, 56px) 34px; isolation: isolate; }
@@ -39,7 +42,7 @@
 /* body: main column + sticky versions column */
 .dx-main { display: grid; grid-template-columns: minmax(0, 1fr) clamp(380px, 31%, 500px); grid-template-areas: "a s" "b s"; column-gap: clamp(24px, 2.6vw, 44px); padding: 8px clamp(28px, 3.2vw, 56px) 56px; align-items: start; }
 .dx-a { grid-area: a; min-width: 0; } .dx-b { grid-area: b; min-width: 0; }
-.dx-side { grid-area: s; position: sticky; top: 16px; max-height: calc(var(--dh) - 32px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; border-radius: 22px; }
+.dx-side { grid-area: s; position: sticky; top: 16px; max-height: calc(var(--dh) - 32px); overflow-y: auto; scrollbar-width: none; border-radius: 22px; }
 .dx-card { padding: 20px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); }
 .dx-h { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 680; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; }
 .dx-tag { letter-spacing: .06em; color: var(--text); }
@@ -47,18 +50,32 @@
 .dx-sec { margin-top: 36px; animation: dxin .45s var(--ease) backwards; } .dx-a > .dx-sec:first-child { margin-top: 20px; }
 .dx-sh { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; } .dx-sh .dx-h { margin: 0; }
 .dx-count { font-size: 12px; color: var(--muted); font-weight: 600; }
+.dx-ptabs { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,.05); padding: 3px; border-radius: 999px; border: 1px solid rgba(255,255,255,.08); }
+.dx-pt { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px; border-radius: 999px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: background .16s var(--ease), color .16s var(--ease), box-shadow .16s var(--ease); }
+.dx-pt:hover { color: var(--text); }
+.dx-pt.on { background: rgba(255,255,255,.12); color: #fff; font-weight: 680; box-shadow: 0 2px 10px rgba(0,0,0,.4); }
+.dx-pt .dx-count { font-size: 11.5px; padding: 1px 7px; background: rgba(255,255,255,.08); border-radius: 999px; color: var(--text-2); font-variant-numeric: tabular-nums; transition: background .16s, color .16s; }
+.dx-pt.on .dx-count { background: rgba(255,255,255,.18); color: #fff; }
+@keyframes dxrowfade { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: none; } }
+.dx-prow { animation: dxrowfade .22s var(--ease); }
 @keyframes dxin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 /* episodes */
 .dx-seasons { overflow-x: auto; scrollbar-width: none; max-width: 70%; } .dx-seasons::-webkit-scrollbar { display: none; }
 .dx-seasons button { white-space: nowrap; }
-.dx-eps { display: flex; flex-direction: column; gap: 6px; max-height: min(560px, calc(var(--dh) * .55)); overflow-y: auto; overscroll-behavior: contain; padding-right: 6px; margin-right: -6px; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+/* episodes flow in the page: one scroll for the whole title, nothing that traps the wheel */
+.dx-eps { display: flex; flex-direction: column; gap: 6px; }
 .dx-ep { display: grid; grid-template-columns: clamp(140px, 13vw, 190px) minmax(0, 1fr); gap: 16px; align-items: center; padding: 8px; border-radius: 16px; cursor: pointer; border: 1px solid transparent; transition: background .18s var(--ease), border-color .18s var(--ease); content-visibility: auto; contain-intrinsic-size: auto 104px; }
 .dx-ep:hover { background: var(--hover); } .dx-ep.on { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .dx-ep:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dx-ep.soon { cursor: default; opacity: .55; }
 .dx-th { position: relative; aspect-ratio: 16/9; border-radius: 11px; overflow: hidden; background: var(--surface-2); }
 .dx-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dx-th.dx-noimg { border: 1px solid rgba(255,255,255,.06); }
+.dx-th-empty { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 550; letter-spacing: .01em; pointer-events: none; transition: opacity .18s var(--ease); }
+.dx-th.dx-noimg .dx-th-empty { display: flex; }
+.dx-th-empty .i { width: 18px; height: 18px; opacity: .65; }
+.dx-ep:hover .dx-th:has(.dx-thp) .dx-th-empty, .dx-ep.on .dx-th:has(.dx-thp) .dx-th-empty { opacity: 0; }
 .dx-thp { position: absolute; inset: 0; margin: auto; width: 42px; height: 42px; border-radius: 50%; border: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); color: #fff; opacity: 0; transform: scale(.85); transition: opacity .18s var(--ease), transform .25s var(--ease); }
 .dx-thp .i { width: 18px; height: 18px; fill: currentColor; stroke: none; margin-left: 2px; }
 .dx-ep:hover .dx-thp, .dx-ep.on .dx-thp, .dx-thp:focus-visible { opacity: 1; transform: none; } .dx-thp:hover { background: var(--accent); color: var(--on-accent, #000); }
@@ -287,7 +304,9 @@
 
 /* ================= header, take two ================= */
 .dx-hero { min-height: clamp(460px, 58vh, 660px); padding-top: 72px; }
-.dx-bg { filter: brightness(.86) saturate(1.05); }
+/* no filter on the big backdrop: WebKit redraws a filtered full-width image on every frame its layer changes, which is
+   what dragged opening a card down to ~10 fps on the Mac app. A 14% dim from the layer behind looks the same. */
+.dx-bg { filter: none; } .dx img.dx-bg.ld { opacity: .86; }
 /* scrim: solid behind the text column, opening up to the right; dark top for the close button; melts into the sheet below */
 .dx-bgw::after { background:
   linear-gradient(90deg, var(--bg-elev) 0%, color-mix(in srgb, var(--bg-elev) 94%, transparent) 22%, color-mix(in srgb, var(--bg-elev) 72%, transparent) 42%, color-mix(in srgb, var(--bg-elev) 18%, transparent) 72%, transparent 100%),
@@ -395,7 +414,7 @@
 /* ================= header, compact ================= */
 .dx-hero { min-height: clamp(330px, 40vh, 450px); padding: 44px clamp(28px, 3vw, 52px) 26px; }
 .dx-head { gap: clamp(20px, 2.2vw, 34px); align-items: flex-end; }
-.dx-poster { width: clamp(132px, 10.5vw, 184px); border-radius: 14px; box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 24px 50px -22px #000; }
+.dx-poster { width: clamp(150px, 13vw, 236px); border-radius: 16px; box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 24px 50px -22px #000; }
 .dx-title { max-width: 780px; }
 .dx-kick { font-size: 11px; letter-spacing: .12em; color: rgba(255,255,255,.62); }
 .dx-cert { font-size: 10px; padding: 1px 5px; border-width: 1px; border-radius: 4px; margin-left: 10px; }
@@ -470,6 +489,10 @@ html.ihp-on .dossier.dx, html.ihp-on .dscrim { visibility: hidden; opacity: 0; p
 .vx-pick small { margin-top: 0; }
 /* tags (picture / sound) */
 .vx2 .t { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 6px; font-size: 11.5px; font-weight: 700; font-style: normal; letter-spacing: .01em; background: rgba(255,255,255,.07); color: var(--text-2); white-space: nowrap; }
+.vx2 .t.ai60 { display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #ffe08a, #f0b429); color: #2a1c00; font-weight: 800; box-shadow: 0 0 10px rgba(240,180,41,.45); white-space: nowrap; }
+.vx2 .t.ai60 .i { width: 11px; height: 11px; fill: currentColor; }
+.vx2 .c-v small .t.ai60 { margin-right: 6px; }
+.vx2 .c-p .t.ai60 { display: none; }
 .vx2 .t.dv { background: rgba(168,85,247,.18); color: #c9a2ff; } .vx2 .t.hdr { background: rgba(59,130,246,.18); color: #8fb8ff; }
 .vx2 .t.atm { background: rgba(45,212,191,.16); color: #67e8d5; } .vx2 .t.dim { background: none; color: var(--muted); font-weight: 600; padding: 0; }
 .vx2-lang { font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -516,6 +539,7 @@ button.vx2-th { cursor: pointer; } button.vx2-th:hover, .vx2-th.on { color: var(
   background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 11%, var(--surface)) 0%, var(--surface) 55%); border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border)); box-shadow: none; }
 .rec.vx3-best.sk { height: 104px; display: block; background: linear-gradient(100deg, var(--surface) 30%, var(--surface-2) 50%, var(--surface) 70%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; border-color: var(--border); }
 .vx3-info { min-width: 0; }
+.vx3-go { display: grid; gap: 8px; }
 .vx3-k { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: color-mix(in srgb, var(--accent) 80%, #fff); }
 .vx3-k .i { width: 13px; height: 13px; fill: currentColor; stroke: none; } .vx3-k span { color: var(--muted); letter-spacing: .02em; text-transform: none; font-weight: 600; }
 .vx3-info > b { display: block; margin: 5px 0 8px; font-size: 19px; font-weight: 700; letter-spacing: -.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -557,3 +581,40 @@ button.vx2-th { cursor: pointer; } button.vx2-th:hover, .vx2-th.on { color: var(
 .vx-empty h3 { margin: 0 0 8px; font-size: 22px; font-weight: 700; letter-spacing: -.015em; }
 .vx-empty p { margin: 0 0 22px; color: var(--text-2); font-size: 14.5px; line-height: 1.6; }
 .vx-empty-b { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; } .vx-empty-b .btn { height: 42px; }
+
+/* ---- From the trailer: YouTube comments ---- */
+.dx-sh .dx-ytsrc { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); text-decoration: none; } .dx-ytsrc:hover { color: var(--text); } .dx-ytsrc .i { width: 12px; height: 12px; }
+.dx-yts { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: stretch; }
+.dx-yt { display: flex; flex-direction: column; text-align: left; padding: 14px 16px 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); transition: border-color .15s linear; }
+.dx-yt:hover { border-color: var(--border-strong); }
+.dx-yt.more { display: none; } #dYt.all .dx-yt.more { display: flex; }
+.dx-yt header { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; } .dx-yt header div { min-width: 0; flex: 1; display: flex; align-items: baseline; gap: 8px; }
+.dx-yt header b { font-size: 13px; font-weight: 640; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .dx-yt header small { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.dx-yt .dx-av { position: relative; width: 26px; height: 26px; font-size: 11px; flex: none; overflow: hidden; } .dx-yt .dx-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dx-yt p { font-size: 13.5px; line-height: 1.55; color: var(--text-2); white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; text-align: left; }
+.dx-yt footer { margin-top: auto !important; padding-top: 10px; }
+.dx-yt.clip p { cursor: pointer; } .dx-yt.open p { -webkit-line-clamp: unset; display: block; }
+.dx-yt footer { display: flex; align-items: center; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dx-yt footer span { display: inline-flex; align-items: center; gap: 5px; } .dx-yt footer .i { width: 13px; height: 13px; }
+.dx-yt footer a { margin-left: auto; color: var(--muted); opacity: 0; transition: opacity .12s linear; } .dx-yt:hover footer a { opacity: 1; } .dx-yt footer a:hover { color: var(--text); }
+.dx-ytmore { display: block; margin: 14px auto 0; padding: 9px 18px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; } .dx-ytmore:hover { background: var(--surface-2); }
+.dx-ythint { display: flex; align-items: center; gap: 12px; margin: 4px 0 26px; padding: 14px 16px; border-radius: 16px; border: 1px dashed var(--border-strong); color: var(--muted); font-size: 13px; text-decoration: none; transition: color .12s linear, border-color .12s linear; }
+.dx-ythint:hover { color: var(--text); border-color: rgba(255,255,255,.3); } .dx-ythint b { color: var(--text-2); font-weight: 620; } .dx-ythint .i { width: 18px; height: 18px; flex: none; }
+
+/* Frosted glass for the score chips and round action buttons, so they stay readable over bright artwork */
+.dx-score, .dx-ib { background: rgba(16, 14, 26, .58); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); border-color: rgba(255,255,255,.16); box-shadow: 0 6px 22px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08); }
+.dx-ib:hover { background: rgba(44, 40, 66, .72); }
+.dx-score small, .dx-score em { color: rgba(255,255,255,.72); }
+
+/* Choose a version: a quieter, smaller header, a back link that does not shout, and a scroll edge that fades instead of cutting */
+.vx-top { gap: 14px; padding: 14px clamp(24px, 3vw, 44px) 8px; padding-right: 76px; }
+.vx-back, .vx-back:hover { background: none !important; border: 0 !important; box-shadow: none !important; }
+.vx-back { height: 32px; padding: 0 8px 0 2px; gap: 4px; border-radius: 10px; color: var(--muted); font-size: 13.5px; font-weight: 550; opacity: .8; transition: color .2s, opacity .2s; }
+.vx-back:hover { color: var(--text); opacity: 1; }
+.vx-back .i { width: 15px; height: 15px; }
+.vx-who { gap: 12px; }
+.vx-who img { width: 30px; border-radius: 6px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .12), 0 6px 14px -8px #000; }
+.vx-who small { font-size: 10px; letter-spacing: .16em; margin-bottom: 1px; }
+.vx-who b { font-size: 19px; letter-spacing: -.025em; }
+.vx-who span { font-size: 12.5px; }
+.vx-scroll { padding-top: 10px; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 26px); mask-image: linear-gradient(180deg, transparent 0, #000 26px); }

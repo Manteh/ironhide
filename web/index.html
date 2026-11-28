@@ -3,19 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IronHide</title>
-  <script>
-    // Apply cached appearance before first paint to avoid a theme flash.
-    try {
-      var a = JSON.parse(localStorage.getItem('ih-appearance') || 'null');
-      if (a) {
-        var r = document.documentElement, t = a.theme;
-        if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-        r.dataset.theme = t; r.dataset.accent = a.accent; r.dataset.density = a.density;
-        r.dataset.radius = a.radius; r.dataset.motion = a.motion; r.dataset.poster = a.posterSize; r.dataset.layout = a.layout || 'grid'; r.dataset.hero = a.showHero === false ? 'off' : 'on';
-      }
-    } catch (e) {}
-  </script>
+  <title>Orbie</title>
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/intro-boot.js"></script>
+  <link rel="preload" href="/fonts/Outfit.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="/css/font.css" />
   <link rel="stylesheet" href="/css/tokens.css" />
   <link rel="stylesheet" href="/css/app.css" />
   <link rel="stylesheet" href="/css/browse.css" />
@@ -27,10 +20,10 @@
   <link rel="stylesheet" href="/css/accent.css" />
 </head>
 <body>
-  <div id="gate"></div>
   <div id="app"></div>
   <div class="toasts" id="toasts"></div>
-  <script type="module" src="/js/main.js"></script>
+  <script type="module" src="/js/main.js?v=20261127-profile-fix"></script>
+  <script type="module" src="/js/fps.js"></script>
   <script type="module" src="/js/accent-auto.js"></script>
   <script type="module" src="/js/cards3d.js"></script>
   <script type="module" src="/js/edgeflow.js"></script>
@@ -38,6 +31,10 @@
   <link rel="stylesheet" href="/css/search.css" />
   <link rel="stylesheet" href="/css/lab.css" />
   <link rel="stylesheet" href="/css/perf.css" />
+  <link rel="stylesheet" href="/css/discover.css" />
+  <link rel="stylesheet" href="/css/agent.css" />
+  <link rel="stylesheet" href="/css/folders.css" />
+  <link rel="stylesheet" href="/css/watch.css" />
   <script type="module" src="/js/ambient.js"></script>
 </body>
 </html>

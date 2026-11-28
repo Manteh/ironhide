@@ -95,6 +95,8 @@ export const CHARTS = {
   },
 };
 
+export { shape, page, getJson, TMDB, key as tmdbKey };
+
 export async function chart(id, { type = '', genre = '', skip = 0 } = {}) {
   if (!key() || !CHARTS[id]) return null;
   return cached(`chart:${id}:${type}:${genre}:${skip}`, () => CHARTS[id]({ type, genre, skip: Number(skip) || 0 }), 10 * 60e3);

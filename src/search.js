@@ -27,22 +27,25 @@ async function imdbOf(kind, id) {
 
 // ---- understanding the query ----
 const LANGS = { korean: 'ko', japanese: 'ja', anime: 'ja', french: 'fr', spanish: 'es', german: 'de', italian: 'it', indian: 'hi', hindi: 'hi', bollywood: 'hi', swedish: 'sv', danish: 'da', norwegian: 'no', chinese: 'zh', turkish: 'tr', thai: 'th', british: 'en', english: 'en', lithuanian: 'lt', russian: 'ru', polish: 'pl', brazilian: 'pt', portuguese: 'pt' };
-const GENRE_WORDS = { action: 'Action', adventure: 'Adventure', animation: 'Animation', animated: 'Animation', anime: 'Animation', cartoon: 'Animation', comedy: 'Comedy', comedies: 'Comedy', funny: 'Comedy', crime: 'Crime', documentary: 'Documentary', docs: 'Documentary', drama: 'Drama', family: 'Family', kids: 'Family', fantasy: 'Fantasy', history: 'History', historical: 'History', horror: 'Horror', scary: 'Horror', music: 'Music', musical: 'Music', mystery: 'Mystery', romance: 'Romance', romantic: 'Romance', 'sci-fi': 'Science Fiction', scifi: 'Science Fiction', 'science fiction': 'Science Fiction', space: 'Science Fiction', thriller: 'Thriller', thrillers: 'Thriller', war: 'War', western: 'Western' };
+const GENRE_WORDS = { action: 'Action', adventure: 'Adventure', animation: 'Animation', animated: 'Animation', anime: 'Animation', cartoon: 'Animation', comedy: 'Comedy', comedies: 'Comedy', funny: 'Comedy', crime: 'Crime', detective: 'Mystery', investigation: 'Mystery', whodunit: 'Mystery', noir: 'Crime', 'neo-noir': 'Crime', documentary: 'Documentary', docs: 'Documentary', drama: 'Drama', family: 'Family', kids: 'Family', fantasy: 'Fantasy', history: 'History', historical: 'History', horror: 'Horror', scary: 'Horror', music: 'Music', musical: 'Music', mystery: 'Mystery', romance: 'Romance', romantic: 'Romance', 'sci-fi': 'Science Fiction', scifi: 'Science Fiction', 'science fiction': 'Science Fiction', space: 'Science Fiction', thriller: 'Thriller', thrillers: 'Thriller', war: 'War', western: 'Western' };
 const TV_IDS = { 'Science Fiction': 10765, Fantasy: 10765, Action: 10759, Adventure: 10759, War: 10768 };
 const genreId = (name, kind) => (kind === 'tv' && TV_IDS[name]) || Object.entries(GENRES).find(([, n]) => n === name)?.[0];
 
 function parse(q) {
   let s = ` ${q.toLowerCase()} `;
-  const intent = { genres: [], lang: '', year: null, decade: null, kind: null, like: '', rest: '' };
+  const intent = { genres: [], lang: '', year: null, decade: null, kind: null, like: '', recent: false, rest: '' };
   const like = /^\s*(?:movies?|films?|shows?|series)?\s*(?:like|similar to)\s+(.+)$/.exec(s.trim());
   if (like) { intent.like = like[1].trim(); return intent; }
   s = s.replace(/\b(tv shows?|series|shows?)\b/g, () => { intent.kind = 'tv'; return ' '; }).replace(/\b(movies?|films?)\b/g, () => { intent.kind = 'movie'; return ' '; });
   s = s.replace(/\b(19[2-9]\d|20[0-3]\d)\b/g, (m) => { intent.year = +m; return ' '; });
   s = s.replace(/\b(?:the\s+)?(\d0)'?s\b/g, (m, d) => { intent.decade = +d < 30 ? 2000 + +d : 1900 + +d; return ' '; });
+  s = s.replace(/\b(coming out right now|in cinemas?|in theaters?|now playing|right now|latest|recent|new releases?|just released)\b/g, () => { intent.recent = true; return ' '; });
   for (const w of Object.keys(GENRE_WORDS).sort((a, b) => b.length - a.length)) { const re = new RegExp(`\\b${w.replace('-', '\\-')}\\b`, 'g'); if (re.test(s)) { intent.genres.push(GENRE_WORDS[w]); s = s.replace(re, ' '); } }
   for (const [w, code] of Object.entries(LANGS)) { const re = new RegExp(`\\b${w}\\b`); if (re.test(s)) { intent.lang = code; s = s.replace(re, ' '); break; } }
-  intent.rest = s.replace(/\b(best|good|top|new|the|a|with|some)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  s = s.replace(/\b(best|good|top|new|the|a|an|with|some|any|interesting|cool|great|check|find|look up|show me|can you)\b/g, ' ');
+  intent.rest = s.replace(/\s+/g, ' ').trim();
   intent.genres = [...new Set(intent.genres)];
+  if (intent.recent && !intent.year) intent.year = new Date().getFullYear();
   return intent;
 }
 const isFilter = (i) => !i.rest && (i.genres.length || i.lang || i.year || i.decade);

@@ -1,0 +1,38 @@
+/* Only in the Orbie Mac app (loaded by web/js/native.js). */
+html { overscroll-behavior: none; }
+/* mpv has its own controls in the app, so the floating now-playing pill is not needed */
+#np, .nowv { display: none !important; }
+/* (the Outfit font and the heading style now live in font.css, loaded first) */
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea, [contenteditable], .selectable { -webkit-user-select: text; user-select: text; }
+/* Hide all scrollbars across the app while keeping natural scrolling */
+html, body, * {
+  scrollbar-width: none !important;
+  scrollbar-gutter: auto !important;
+}
+::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+  background: transparent !important;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-corner {
+  display: none !important;
+  background: transparent !important;
+}
+
+/* "A new version is ready" card, bottom left */
+#ihupd { position: fixed; left: 18px; bottom: 18px; z-index: 9000; display: flex; align-items: center; gap: 14px; max-width: 420px;
+  padding: 12px 12px 12px 16px; border-radius: 14px; background: rgba(28,28,31,.96); border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 12px 40px rgba(0,0,0,.45); color: #e9e9ea; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif;
+  transform: translateY(12px); opacity: 0; transition: transform .25s ease, opacity .25s ease; }
+#ihupd.on { transform: none; opacity: 1; }
+#ihupd b { display: block; font-weight: 600; }
+#ihupd small { color: #8c8c90; }
+#ihupd button { border: 0; border-radius: 9px; padding: 7px 12px; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
+#ihupd .go { background: #f2f2f3; color: #111; }
+#ihupd .x { background: transparent; color: #8c8c90; padding: 7px 8px; }
+html.ihp-on #ihupd { display: none; }

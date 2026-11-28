@@ -1,0 +1,5 @@
+/* The Outfit headings font, declared up front (it used to arrive late, with the Mac-only styles, so headings first drew in the system font and then changed).
+   font-display: block holds the text back for a moment rather than showing it in another font. */
+@font-face { font-family: 'Outfit'; src: url('/fonts/Outfit.ttf') format('truetype'); font-weight: 100 900; font-display: block; }
+/* Bold, round geometric headings */
+h1, h1.title, .greet h1, .pf-who h1, .ninfo h2 { font-family: 'Outfit', 'Inter', sans-serif !important; font-weight: 700 !important; letter-spacing: -.02em !important; }

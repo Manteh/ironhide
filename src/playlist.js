@@ -208,7 +208,7 @@ async function playItem(playlistId, items, index, resumeFrom = 0) {
     return;
   }
 
-  const subs = await fetchSubtitles(item.imdbId, item.season, item.episode);
+  const subs = await fetchSubtitles(item.imdbId, item.season, item.episode, ranked[0]?.quality).catch(() => []);
   skipRequested = false;
 
   let torrentTimeoutId = null;

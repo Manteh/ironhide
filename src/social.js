@@ -9,8 +9,14 @@ import { join } from 'path';
 import { CONFIG_DIR } from './config.js';
 import { getSettings } from './settings.js';
 import { getConfig } from './config.js';
+import { execFile } from 'child_process';
+import { inviter, claimInvite } from './membership.js';
+const osa = (s) => '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
 
 const FILE = join(CONFIG_DIR, 'social.json');
+// The owner identity stays stable across sign-out so Shimara can return without
+// being treated as a new Orbie member.
+const OWNER_PUB = 'MCowBQYDK2VwAyEA27kAujqdkFYyEl/ZJara/pcAVbjmFmn92IVga6/Yh1k=';
 const REACTIONS = ['👍', '😂', '😮', '❤️', '🔥', '👏', '😢', '🤯'];
 
 let data = { priv: '', pub: '', relayUrl: '', friends: [], shareStatus: true, appearOffline: false, rooms: {} };
@@ -18,6 +24,8 @@ let ws = null, link = 'off', backoff = 1000, timer = 0, pingTimer = 0, stopped =
 const S = { directory: false, people: [], you: null, presence: new Map(), incoming: [], outgoing: [], room: null, chat: [], invites: [], offsets: [], watching: null };
 let emit = () => {}, pushTimer = 0;
 export const onSocial = (fn) => { emit = fn; };
+// this Orbie's signing key (the same one friend codes come from), for membership and invites
+export function identity() { if (!data.priv) load(); return { pub: data.pub, priv: data.priv }; }
 
 // ---------- identity + persistence ----------
 function load() {
@@ -96,6 +104,7 @@ async function handle(m) {
     case 'welcome':
       S.you = m.you; S.relayV = m.v || 1; link = 'online'; S.directory = !!m.directory; if (S.directory) tx({ t: 'directory' }); S.offsets = [Date.now() - m.now];
       tx({ t: 'friends', ids: data.friends.map((f) => f.id) });
+      askInviter();
       if (savedRooms().length) tx({ t: 'room.restore', rooms: savedRooms() });
       clearInterval(pingTimer); pingTimer = setInterval(() => tx({ t: 'ping', c: Date.now() }), 8000); tx({ t: 'ping', c: Date.now() });
       tx({ t: 'status', watching: data.shareStatus ? S.watching : null }); tx({ t: 'away', away: S.away }); // always say what is true now, so an old status on the relay can never linger
@@ -107,9 +116,15 @@ async function handle(m) {
     case 'presence': { if (!data.friends.some((f) => f.id === m.id)) break; { const fr = data.friends.find((x) => x.id === m.id); if (fr) { if (m.online) fr.seen = Date.now(); if (m.temp) fr.temp = true; } } { const was = S.presence.get(m.id); if (m.room && m.room.code !== was?.room?.code && m.online) emit('toast', { kind: 'info', text: `${m.name} opened a room${m.room.media ? `: ${m.room.media.title}` : ''}` }); } S.presence.set(m.id, m); const f = data.friends.find((x) => x.id === m.id); if (m.name) { f.name = m.name; f.avatar = m.avatar; save(); } push(); break; }
     case 'friend.req':
       if (data.friends.some((f) => f.id === m.from.id)) { acceptFriend(m.from.id, m.from); break; }
+      if (m.from.inv && claimInvite(m.from.inv, m.from)) { // someone joined with one of our invites: friends straight away
+        acceptFriend(m.from.id, m.from);
+        emit('toast', { kind: 'ok', text: `${m.from.name} joined Orbie with your invite` });
+        execFile('osascript', ['-e', `display notification ${osa(`${m.from.name} joined with your invite and is now your friend.`)} with title "Orbie" subtitle "New member"`], () => {});
+        break;
+      }
       if (!S.incoming.some((r) => r.id === m.from.id)) S.incoming.push(m.from);
       emit('toast', { kind: 'info', text: `${m.from.name} sent you a friend request` }); push(); break;
-    case 'friend.accepted': addFriendLocal(m.from); S.outgoing = S.outgoing.filter((o) => o.id !== m.from.id); emit('toast', { kind: 'ok', text: `${m.from.name} accepted your request` }); break;
+    case 'friend.accepted': addFriendLocal(m.from); S.outgoing = S.outgoing.filter((o) => o.id !== m.from.id); emit('toast', { kind: 'ok', text: m.from.id === S.quiet ? `You and ${m.from.name} are now friends` : `${m.from.name} accepted your request` }); break;
     case 'profile.get': { // a friend opened our profile
       if (!data.friends.some((f) => f.id === m.from)) break;
       if (data.shareProfile === false) { tx({ t: 'profile.res', to: m.from, rid: m.rid, denied: true }); break; }
@@ -121,8 +136,9 @@ async function handle(m) {
       break;
     }
     case 'profile.res': { const w = profileWaits.get(m.rid); if (w) { profileWaits.delete(m.rid); w(m); } break; }
-    case 'friend.sent': emit('toast', { kind: 'ok', text: `Request sent to ${m.name}` }); break;
-    case 'friend.unknown': S.outgoing = S.outgoing.filter((o) => o.id !== m.to); emit('toast', { kind: 'err', text: `No one with that code is online on ${relayHost()}. They need to be connected to the same relay.` }); push(); break;
+    case 'friend.sent': if (m.to !== S.quiet) emit('toast', { kind: 'ok', text: `Request sent to ${m.name}` }); break;
+    case 'friend.unknown': if (m.to === S.quiet) { clearTimeout(S.askT); S.askT = setTimeout(askInviter, 60e3); break; } // the inviter isn't on the relay yet: ask again in a minute
+      S.outgoing = S.outgoing.filter((o) => o.id !== m.to); emit('toast', { kind: 'err', text: `No one with that code is online on ${relayHost()}. They need to be connected to the same relay.` }); push(); break;
     case 'room': if (!m.room && S.room) { saveRoom(true); S.prevRoom = S.room; } S.room = m.room; if (!m.room) { S.chat = []; } push(); break;
     case 'room.pb': if (S.room) S.room.pb = m.pb; emit('pb', m); push(); break;
     case 'chat.history': S.chat = m.msgs; push(); break;
@@ -144,6 +160,13 @@ function addFriendLocal(p) {
   S.incoming = S.incoming.filter((r) => r.id !== p.id); save();
   tx({ t: 'friends', ids: data.friends.map((f) => f.id) }); push();
 }
+// joined with someone's invite and not friends yet: ask them, tagged with the invite so their Orbie accepts by itself.
+// Runs on every connect until they are a friend (a sleeping relay forgets people), and right after joining.
+export function askInviter() {
+  const iv = inviter();
+  if (link !== 'online' || !iv?.id || iv.id === S.you?.id || data.friends.some((f) => f.id === iv.id)) return;
+  S.quiet = iv.id; tx({ t: 'friend.req', to: iv.id, inv: iv.n });
+}
 export function addFriend(code) {
   const id = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
   if (id.length < 8) throw new Error('That does not look like a friend code');
@@ -157,7 +180,7 @@ export function declineFriend(id) { S.incoming = S.incoming.filter((r) => r.id !
 export function removeFriend(id) { tx({ t: 'friend.remove', to: id }); dropFriend(id); }
 // forget someone locally (and refresh what the relay knows)
 // ---------- friend profiles ----------
-// Ask the friend's own IronHide. The last copy stays on this Mac, so the page still opens when they are offline.
+// Ask the friend's own Orbie. The last copy stays on this Mac, so the page still opens when they are offline.
 const profileWaits = new Map();
 const copyPath = (id) => join(CONFIG_DIR, 'friend-profiles', `${String(id).replace(/[^A-Z0-9]/gi, '')}.json`);
 export async function friendProfile(id) {
@@ -253,7 +276,8 @@ export function purgeFriends() { for (const f of data.friends) tx({ t: 'friend.r
 export function resetIdentity() {
   purgeFriends(); // everyone I was friends with forgets me too
   disconnect();
-  data.friends = []; data.priv = ''; data.pub = ''; genKeys();
+  data.friends = [];
+  if (data.pub !== OWNER_PUB) { data.priv = ''; data.pub = ''; genKeys(); }
   Object.assign(S, { you: null, presence: new Map(), incoming: [], outgoing: [], room: null, chat: [], invites: [], people: [], offsets: [], watching: null });
   emit('reset', {});
   if (data.relayUrl) connect(); else push();

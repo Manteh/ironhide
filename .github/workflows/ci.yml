@@ -1,0 +1,41 @@
+# Checks on every push and pull request: the service starts and guards its API, and the Mac app compiles.
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  service:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Syntax
+        run: for f in src/*.js mcp/*.js web/js/*.js web/js/pages/*.js; do node --check "$f"; done
+      - name: The service starts and refuses other sites
+        run: |
+          export HOME=$(mktemp -d) IRONHIDE_PORT=7699 IRONHIDE_NO_BRIDGE=1
+          node src/daemon.js > daemon.log 2>&1 &
+          for i in $(seq 1 50); do curl -fsS http://127.0.0.1:7699/api/health && break; sleep 0.2; done
+          curl -fsS http://127.0.0.1:7699/api/health | grep -q '"service":"ironhide"'
+          # another site may not change settings, a rebinding hostname may not reach the API
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H 'Origin: https://evil.example' -d '{}' http://127.0.0.1:7699/api/settings)" = 403
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:7699/api/settings)" = 403
+          curl -sI http://127.0.0.1:7699/ | grep -qi '^content-security-policy:'
+      - if: failure()
+        run: cat daemon.log
+
+  mac-app:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install mpv
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: mac/src-tauri }
+      - name: Versions match
+        run: test "$(node -p "require('./package.json').version")" = "$(sed -n 's/^version = "\(.*\)"/\1/p' mac/src-tauri/Cargo.toml | head -1)"
+      - run: cargo check --locked
+        working-directory: mac/src-tauri

@@ -106,6 +106,7 @@ async function cineFeed(id, { genre = '', skip = 0, type = 'movie', year = '', s
 }
 
 export async function getFeed(feedId, { genre = '', skip = 0, type = '', year = '', seed = 0 } = {}) {
+  if (feedId.startsWith('col_')) { const { getCollection } = await import('./collections.js'); return getCollection(feedId.slice(4), { skip, type: type === 'all' ? '' : type }); }
   const feed = FEEDS.find(f => f.id === feedId);
   if (!feed) return null;
   if (feed.tmdb) { const { chart } = await import('./charts.js'); const t = type === 'all' ? '' : type; const out = await chart(feedId, { type: t, genre, skip }).catch(() => null); if (out) return out; }

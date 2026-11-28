@@ -51,10 +51,11 @@ body.is-browse { background: var(--bg); }
 .rail .ri[data-tip]::after { display: none; }
 #browse, #page { padding-left: 108px; }
 
-.bwrap { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 32px var(--page-pad) 170px; }
+/* full width beside the sidebar: rows already run to the right edge, so the left starts right after the rail */
+.bwrap { position: relative; z-index: 1; max-width: none; margin: 0; padding: 20px clamp(var(--page-pad), 3vw, 64px) 170px; }
 
-/* hero */
-.hero2 { position: relative; height: 440px; border-radius: 28px; overflow: hidden; margin-bottom: 44px; background: var(--surface); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); animation: rise .7s var(--ease) backwards; }
+/* hero - permanently disabled */
+#hero, .hero2 { display: none !important; }
 .h2bg { position: absolute; inset: -12%; background-size: cover; background-position: center 30%; filter: blur(34px) brightness(.8) saturate(1.35); transform: scale(1.02) translate(calc(var(--px, 0) * -10px), calc(var(--py, 0) * -8px)); transition: transform .9s var(--ease); }
 .hero2::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(8,8,10,.62) 0%, rgba(8,8,10,.28) 52%, rgba(8,8,10,.1) 100%), linear-gradient(0deg, rgba(8,8,10,.4) 0%, transparent 45%); }
 .hero2 { box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
@@ -329,7 +330,7 @@ body.is-browse { background: var(--bg); }
 @media (max-width: 720px) { [data-layout="detail"] .bgrid { grid-template-columns: 1fr; } }
 
 /* lock the page behind any open overlay; keep inner scrolling inside the overlay */
-html { scrollbar-gutter: stable; }
+html { scrollbar-gutter: auto; }
 html:has(.dossier.open, .wp:not(.parked), .pal, .nowv, .launch), html:has(.dossier.open, .wp:not(.parked), .pal, .nowv, .launch) body { overflow: hidden; }
 .dleft, .dright, .dgrid, .pal-r, .wp-menu { overscroll-behavior: contain; }
 
@@ -501,3 +502,31 @@ html[data-motion="off"] .rpeek { transition: opacity .1s; clip-path: none; trans
 .pk-a .i { width: 14px; height: 14px; } .pk-a.main .i { fill: currentColor; stroke: none; }
 .pk-who { display: flex; align-items: center; margin-top: 6px; } .pk-who > span { display: grid; margin-left: -6px; border-radius: 50%; box-shadow: 0 0 0 2px #17171c; } .pk-who > span:first-child { margin-left: 0; } .pk-who small { margin-left: 9px; font-size: 11.5px; }
 .rpeek { width: 312px; }
+
+/* Home header, redesigned: a smaller greeting with Search beside it, and the thing you were watching as a single card above the row it belongs to */
+.greet { align-items: center; padding: 44px 0 14px; flex-wrap: nowrap; }
+.greet h1 { font-size: clamp(26px, 2.8vw, 36px); font-weight: 620 !important; letter-spacing: -.03em !important; }
+.greet-empty { margin: 0 0 26px; font-size: 15px; color: var(--text-2); }
+.resume-strip { display: flex; align-items: center; gap: 18px; max-width: 780px; margin: 0 0 34px; padding: 14px 16px 14px 14px; border-radius: 22px; background: rgba(255, 255, 255, .055); border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 24px 50px -30px rgba(0, 0, 0, .8); }
+.rs-p { flex: none; width: 58px; aspect-ratio: 2 / 3; border-radius: 10px; background: var(--surface-2) center / cover; box-shadow: 0 12px 28px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .12); }
+.rs-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rs-t small { font-size: 11px; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.rs-t b { font-size: 20px; font-weight: 640; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-t span { font-size: 13.5px; color: var(--text-2); }
+.rs-bar { display: block; height: 3px; margin-top: 9px; border-radius: 3px; background: rgba(255, 255, 255, .14); overflow: hidden; max-width: 340px; }
+.rs-bar u { display: block; height: 100%; border-radius: 3px; background: rgba(255, 255, 255, .85); text-decoration: none; }
+.resume-strip .pill { flex: none; height: 44px; padding: 0 22px; }
+html[data-hero="on"] .resume-strip, html[data-hero="on"] .greet-empty { display: none; }
+@media (max-width: 720px) { .greet-b { width: auto; } .resume-strip { max-width: none; } }
+
+/* Home header, one tidy row (replaces the card version above) */
+.greet { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: nowrap; padding: 38px 0 24px; }
+.greet-l { min-width: 0; }
+.greet h1 { margin: 0; font-size: clamp(26px, 2.6vw, 34px); font-weight: 620 !important; letter-spacing: -.03em !important; line-height: 1.1; }
+.greet p { margin: 7px 0 0; font-size: 14px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.greet p b { color: var(--text); font-weight: 600; }
+.greet-b { display: flex; align-items: center; gap: 8px; flex: none; }
+.greet-b .pill { height: 40px; padding: 0 20px; font-size: 14px; }
+.greet-b .pill.sq { width: 40px; padding: 0; display: grid; place-items: center; }
+.resume-strip { display: none; }
+@media (max-width: 720px) { .greet { flex-wrap: wrap; } }

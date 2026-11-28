@@ -1,7 +1,6 @@
 {
   "identifier": "default",
-  "description": "IronHide window, including the page served by the local daemon",
+  "description": "The start-up screen (bundled with the app): retry and show the log if the service does not start. The daemon's pages get their own capability at run time (main.rs), limited to its exact address and port.",
   "windows": ["main"],
-  "remote": { "urls": ["http://127.0.0.1:*/*", "http://localhost:*/*"] },
-  "permissions": ["allow-player-cmd", "allow-player-set", "allow-player-close", "allow-player-fullscreen", "allow-player-pip", "allow-player-drag", "allow-win-zoom"]
+  "permissions": ["allow-retry-boot", "allow-open-log"]
 }

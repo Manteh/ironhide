@@ -5,7 +5,16 @@
 .tg-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: var(--s5); align-items: start; }
 @media (max-width: 900px) { .tg-grid { grid-template-columns: 1fr; } }
 .tg-friends, .tg-room { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
-.tg-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 18px 20px; min-width: 0; }
+.tg-card {
+  background: rgba(14, 14, 18, 0.48);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  backdrop-filter: blur(28px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 20px 22px;
+  box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  min-width: 0;
+}
 .tg-card h2 { font-size: 22px; letter-spacing: -.02em; margin: 2px 0 8px; }
 .tg-card h3 { font-size: 19px; margin: 2px 0 4px; letter-spacing: -.01em; }
 .tg-k { font-size: 11.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; gap: 8px; }
@@ -357,3 +366,149 @@ a.fr-link { color: inherit; text-decoration: none; } a.fr-link:hover { text-deco
 .tg-grid { grid-template-columns: 372px minmax(0, 1fr); }
 @media (max-width: 900px) { .tg-grid { grid-template-columns: 1fr; } }
 .fr .fi .pl { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .fr .fi .pl .pdot { flex: none; } .fr .fr-act { flex: none; }
+
+/* invite step and Discord sign-in */
+.welcome .wl-orb { display: flex; justify-content: center; } .welcome .wl-orb img { width: 76px; height: 76px; filter: drop-shadow(0 8px 22px rgba(120, 80, 255, .55)); }
+.welcome .wl-code { min-height: 84px; resize: none; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; padding: 12px 14px; }
+.welcome .wl-discord { display: flex; align-items: center; justify-content: center; gap: 10px; background: #5865f2; color: #fff; border: 0; font-weight: 650; }
+.welcome .wl-discord:hover:not(:disabled) { background: #4752c4; } .welcome .wl-discord:disabled { opacity: .7; cursor: wait; } .welcome .wl-discord svg { width: 20px; height: 20px; }
+.welcome .wl-dc .wl-msg { margin: 0 0 14px; justify-content: center; text-align: center; }
+.welcome .wl-dc .wl-skip { margin-top: 10px; }
+.welcome .wl-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; } .welcome .wl-or::before, .welcome .wl-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* invite step spacing: the orb gets room to breathe, the heading block is centred under it, and no empty gaps */
+.welcome .wl-msg:empty { display: none; }
+.welcome .wl-invite { gap: 0; }
+.welcome .wl-invite .wl-steps { margin-bottom: 30px; }
+.welcome .wl-invite .wl-orb { margin-bottom: 30px; }
+.welcome .wl-invite .wl-orb img { width: 84px; height: 84px; }
+.welcome .wl-invite h1 { margin: 0 0 8px; text-align: center; }
+.welcome .wl-invite > p { margin: 0 0 22px; text-align: center; }
+.welcome .wl-invite .wl-code { min-height: 76px; }
+.welcome .wl-invite .wl-msg { margin-top: 12px; }
+.welcome .wl-invite #wgo { margin-top: 18px; }
+
+/* =====================================================================================================
+   Together, redesigned: the same feel as the orb. Slow, soft motion; glass that is easy to read; one clear thing per card.
+   Motion is transform and opacity only, so it stays smooth. */
+.together { max-width: 1240px; }
+.tg-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: center; gap: 12px; min-height: 420px; padding: 4px 0 18px; }
+.tg-copy { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; animation: tgIn .8s var(--ease, cubic-bezier(.2,.7,.2,1)) backwards; }
+.tg-eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 650; letter-spacing: .22em; text-transform: uppercase; color: #a99cff; }
+.tg-eyebrow::after { content: ""; width: 44px; height: 1px; background: linear-gradient(90deg, #a99cff, transparent); }
+.tg-h1 { margin: 16px 0 10px; max-width: 11em; font-size: clamp(34px, 4.6vw, 62px); font-weight: 700; letter-spacing: -.04em; line-height: 1.04; background: linear-gradient(180deg, #fff 35%, #c8beff); -webkit-background-clip: text; background-clip: text; color: transparent; text-wrap: balance; }
+.tg-copy .sub { font-size: 16px; color: var(--muted); }
+.tg-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.tg-big { height: 50px; padding: 0 24px; border-radius: 15px; font-size: 15.5px; display: inline-flex; align-items: center; gap: 9px; }
+.tg-copy .badge { margin-top: 14px; }
+
+/* the stage: orb in the middle, people circling it */
+.tg-stage { position: relative; height: 420px; display: grid; place-items: center; animation: tgIn 1s .1s var(--ease, cubic-bezier(.2,.7,.2,1)) backwards; }
+.tg-stage::before { content: ""; position: absolute; width: 520px; height: 520px; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, rgba(120, 90, 250, .34), rgba(120, 90, 250, .12) 42%, transparent 68%); animation: tgBreathe 7s ease-in-out infinite; }
+.tg-core { position: relative; z-index: 2; width: 118px; height: 118px; animation: tgFloat 8s ease-in-out infinite; }
+.tg-core img { width: 100%; height: 100%; display: block; border-radius: 50%; filter: drop-shadow(0 0 34px rgba(139, 111, 240, .65)); }
+.tg-orbit { position: absolute; border-radius: 50%; border: 1px solid rgba(190, 175, 255, .13); pointer-events: none; }
+.tg-orbit.o1 { width: 304px; height: 304px; } .tg-orbit.o2 { width: 356px; height: 356px; border-color: rgba(190, 175, 255, .07); }
+.tg-ring { position: absolute; left: 50%; top: 50%; width: 0; height: 0; animation: tgSpin 80s linear infinite; }
+.tg-ring.r2 { animation-duration: 110s; animation-direction: reverse; }
+.tg-p { position: absolute; left: 0; top: 0; transform: rotate(calc(var(--i) * 360deg / var(--n))) translateX(var(--r)) rotate(calc(var(--i) * -360deg / var(--n))); }
+.tg-pi { position: relative; display: grid; justify-items: center; gap: 5px; width: 120px; margin: -34px 0 0 -60px; animation: tgSpin 80s linear infinite reverse; }
+.tg-ring.r2 .tg-pi { animation-direction: normal; animation-duration: 110s; }
+.tg-av { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 2px rgba(8, 8, 14, .9), 0 0 0 3.5px rgba(61, 220, 132, .85), 0 0 22px rgba(61, 220, 132, .45); }
+.tg-p.away .tg-av { box-shadow: 0 0 0 2px rgba(8, 8, 14, .9), 0 0 0 3.5px rgba(148, 163, 184, .6); opacity: .8; }
+.tg-pi b { font-size: 12.5px; font-weight: 650; padding: 3px 10px; border-radius: 999px; background: rgba(12, 11, 20, .72); border: 1px solid rgba(255, 255, 255, .1); white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.tg-pi small { max-width: 130px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg-empty { position: absolute; bottom: 8px; margin: 0; font-size: 13.5px; color: var(--muted); }
+
+/* cards: calm glass, one soft edge, a gentle lift on hover, and they arrive one after the other */
+.tg-card { border-radius: 24px; padding: 22px 24px; background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .02)); border: 1px solid rgba(255, 255, 255, .09); box-shadow: 0 24px 50px -24px rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .07); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: tgIn .7s var(--ease, cubic-bezier(.2,.7,.2,1)) backwards; }
+.tg-friends > :nth-child(1), .tg-room > :nth-child(1) { animation-delay: .12s; } .tg-friends > :nth-child(2), .tg-room > :nth-child(2) { animation-delay: .2s; } .tg-friends > :nth-child(3), .tg-room > :nth-child(3) { animation-delay: .28s; } .tg-friends > :nth-child(4), .tg-room > :nth-child(4) { animation-delay: .36s; }
+.tg-k { font-size: 11.5px; letter-spacing: .14em; color: #a99cff; }
+.tg-grid { grid-template-columns: 380px minmax(0, 1fr); gap: 22px; }
+
+/* friends */
+.fr { padding: 12px 10px; margin: 0 -10px; border-radius: 16px; border-top-color: transparent !important; transition: background .25s; }
+.fr:hover { background: rgba(255, 255, 255, .04); }
+.fr .av { border-radius: 50%; transition: transform .3s var(--ease, cubic-bezier(.2,.7,.2,1)); } .fr:hover .av { transform: scale(1.06); }
+.av.live { box-shadow: 0 0 0 2px rgba(8, 8, 14, .9), 0 0 0 3.5px rgba(61, 220, 132, .8), 0 0 16px rgba(61, 220, 132, .4); } .av.live::after { display: none; }
+.fw-strip { border-radius: 15px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); }
+.fw-strip:hover { transform: translateY(-2px); border-color: rgba(169, 156, 255, .5); }
+.fw-strip .fw, .fr-x .fw { width: 40px; border-radius: 8px; box-shadow: 0 8px 20px rgba(0, 0, 0, .5); }
+
+/* rooms: each one is a small film poster glowing behind a card */
+.sr { position: relative; isolation: isolate; overflow: hidden; gap: 16px; padding: 14px 16px; margin-top: 12px; border: 1px solid rgba(255, 255, 255, .09) !important; border-radius: 20px; background: rgba(10, 9, 18, .55); transition: transform .35s var(--ease, cubic-bezier(.2,.7,.2,1)), border-color .3s; }
+.sr::before { content: ""; position: absolute; inset: -30%; z-index: -1; background: var(--bg) center / cover; filter: blur(40px) saturate(1.4); opacity: .32; transform: scale(1.1); }
+.sr::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(8, 8, 14, .45), rgba(8, 8, 14, .85)); }
+.sr:hover { transform: translateY(-3px); border-color: rgba(169, 156, 255, .45) !important; }
+.sr-p { width: 62px; border-radius: 11px; box-shadow: 0 14px 30px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .12); }
+.sr-i b { font-size: 16.5px; letter-spacing: -.01em; }
+.tg-rooms .sr:first-of-type { margin-top: 16px; }
+
+/* the lobby: members as cards, the film as a backdrop */
+.mem { gap: 12px; }
+.mb { padding: 10px 18px 10px 10px; gap: 13px; border-radius: 20px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); transition: border-color .3s, transform .3s var(--ease, cubic-bezier(.2,.7,.2,1)); }
+.mb:hover { transform: translateY(-2px); }
+.mb .av { border-radius: 50%; box-shadow: 0 0 0 2px rgba(8, 8, 14, .9), 0 0 0 3.5px rgba(245, 165, 36, .7); transition: box-shadow .4s; }
+.mb.ready .av { box-shadow: 0 0 0 2px rgba(8, 8, 14, .9), 0 0 0 3.5px rgba(61, 220, 132, .9), 0 0 20px rgba(61, 220, 132, .45); }
+.mb.ready { border-color: rgba(61, 220, 132, .35); }
+.mb i { display: none; }
+.tg-card.now { position: relative; isolation: isolate; overflow: hidden; }
+.tg-card.now::before { content: ""; position: absolute; inset: -25%; z-index: -1; background: var(--bg) center / cover; filter: blur(46px) saturate(1.4); opacity: .3; }
+.tg-card.now::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(8, 8, 14, .4), rgba(8, 8, 14, .8)); }
+.nposter2 { width: 128px; border-radius: 14px; box-shadow: 0 22px 44px rgba(0, 0, 0, .65), 0 0 0 1px rgba(255, 255, 255, .14); }
+.nwi h3 { font-size: 26px; letter-spacing: -.03em; }
+.room-head h2 { font-size: 26px; letter-spacing: -.03em; }
+
+@keyframes tgIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes tgSpin { to { transform: rotate(360deg); } }
+@keyframes tgFloat { 50% { transform: translateY(-9px); } }
+@keyframes tgBreathe { 50% { transform: scale(1.08); opacity: .8; } }
+@media (max-width: 1000px) { .tg-hero { grid-template-columns: 1fr; } .tg-stage { height: 380px; } .tg-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .tg-ring, .tg-pi, .tg-core, .tg-stage::before { animation: none !important; } .tg-card, .tg-copy, .tg-stage { animation: none; } }
+html[data-motion="off"] .tg-ring, html[data-motion="off"] .tg-pi, html[data-motion="off"] .tg-core { animation: none !important; }
+
+/* ---------- Together, round two: calmer. Neutral colours (no purple text), a compact header, no re-playing animations, friend codes tucked away ---------- */
+.together { max-width: 1120px; }
+.tg-hero { min-height: 250px; gap: 8px; padding: 0 0 22px; }
+.tg-eyebrow { color: var(--muted); letter-spacing: .18em; font-weight: 600; }
+.tg-eyebrow::after { background: linear-gradient(90deg, rgba(255, 255, 255, .28), transparent); }
+.tg-h1 { margin: 12px 0 8px; font-size: clamp(30px, 3.4vw, 44px); max-width: 14em; background: none; -webkit-text-fill-color: #fff; color: #fff; letter-spacing: -.035em; }
+.tg-copy .sub { font-size: 15px; }
+.tg-cta { margin-top: 20px; }
+.tg-big { height: 44px; padding: 0 20px; border-radius: 13px; font-size: 14.5px; }
+.tg-k { color: var(--muted); letter-spacing: .12em; }
+.tg-stage { height: 250px; }
+.tg-stage::before { width: 360px; height: 360px; background: radial-gradient(circle, rgba(255, 255, 255, .07), rgba(255, 255, 255, .025) 45%, transparent 70%); }
+.tg-core { width: 84px; height: 84px; animation-delay: var(--cd, 0s); }
+.tg-core img { filter: drop-shadow(0 0 22px rgba(255, 255, 255, .14)); }
+.tg-orbit { border-color: rgba(255, 255, 255, .07); } .tg-orbit.o1 { width: 208px; height: 208px; } .tg-orbit.o2 { width: 272px; height: 272px; border-color: rgba(255, 255, 255, .04); }
+.tg-ring, .tg-pi { animation-delay: var(--d, 0s); }
+.tg-pi { gap: 4px; width: 100px; margin: -26px 0 0 -50px; }
+.tg-pi b { font-size: 12px; padding: 2px 9px; }
+.tg-pi small { font-size: 10.5px; }
+.tg-av { box-shadow: 0 0 0 2px rgba(8, 8, 14, .9), 0 0 0 3px rgba(61, 220, 132, .8); }
+.tg-p.away .tg-av { box-shadow: 0 0 0 2px rgba(8, 8, 14, .9), 0 0 0 3px rgba(148, 163, 184, .5); }
+
+/* the cards arrive once, when you open the page, and are never replayed when it updates */
+.tg-card, .tg-copy, .tg-stage { animation: none; }
+.together.enter .tg-card { animation: tgIn .6s var(--ease, cubic-bezier(.2,.7,.2,1)) backwards; }
+.together.enter .tg-copy, .together.enter .tg-stage { animation: tgIn .7s var(--ease, cubic-bezier(.2,.7,.2,1)) backwards; }
+
+.tg-card { background: rgba(255, 255, 255, .03); border-color: rgba(255, 255, 255, .07); box-shadow: 0 18px 40px -26px rgba(0, 0, 0, .8); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.tg-grid { grid-template-columns: 360px minmax(0, 1fr); gap: 18px; }
+.tg-friends { display: flex; flex-direction: column; } .tg-friends .people { order: 2; } .tg-friends .add { order: 3; }
+.fw-strip:hover, .sr:hover { border-color: rgba(255, 255, 255, .25) !important; }
+.sr::before { opacity: .22; }
+.mb:hover { transform: none; }
+.mb.ready { border-color: rgba(61, 220, 132, .3); }
+.mb .av { box-shadow: 0 0 0 2px rgba(8, 8, 14, .9), 0 0 0 3px rgba(245, 165, 36, .6); }
+.mb.ready .av { box-shadow: 0 0 0 2px rgba(8, 8, 14, .9), 0 0 0 3px rgba(61, 220, 132, .85); }
+
+/* friend codes: out of the way until you need them */
+.tg-codes summary { cursor: pointer; list-style: none; font-size: 13px; font-weight: 600; color: var(--text-2); display: flex; align-items: center; justify-content: space-between; }
+.tg-codes summary::-webkit-details-marker { display: none; }
+.tg-codes summary::after { content: "+"; font-size: 18px; font-weight: 400; color: var(--muted); }
+.tg-codes[open] summary::after { content: "−"; }
+.tg-codes summary:hover { color: var(--text); }
+@media (max-width: 1000px) { .tg-hero { min-height: 0; } .tg-stage { height: 240px; } }
+.together .switch.on { background: #3ddc84; } .together .seg button.on { background: rgba(255, 255, 255, .12); }

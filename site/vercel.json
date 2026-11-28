@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/join", "destination": "/" },
+    { "source": "/invite", "destination": "/" },
+    { "source": "/manifest", "destination": "/manifest" },
+    { "source": "/showcase", "destination": "/showcase" }
+  ],
+  "redirects": [
+    { "source": "/downloads/Orbie.dmg", "destination": "https://github.com/Manteh/orbie-app/releases/latest/download/Orbie.dmg", "permanent": false },
+    { "source": "/downloads/Orbie.zip", "destination": "https://github.com/Manteh/orbie-app/releases/latest/download/Orbie.zip", "permanent": false }
+  ]
+}

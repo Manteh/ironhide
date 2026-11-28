@@ -1,7 +1,7 @@
 {
   "name": "ironhide-relay",
   "version": "1.0.0",
-  "description": "Tiny WebSocket relay for IronHide friends, rooms and playback sync. Never touches video.",
+  "description": "Tiny WebSocket relay for Orbie friends, rooms and playback sync. Never touches video.",
   "type": "module",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
